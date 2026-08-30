@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lattice-gateway"
+version = "0.0.1-alpha0"
+description = "Lattice gateway: bridge between the Lattice protocol and conventional email (SMTP/IMAP)."
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "Lattice contributors" },
+]
+license = { text = "Apache-2.0" }
+dependencies = [
+    "lattice-node",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gateway*"]

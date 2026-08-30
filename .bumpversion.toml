@@ -38,32 +38,37 @@ first_value = 0
 # --- File Configuration ---
 
 [[tool.bumpversion.files]]
-filename = "server/pyproject.toml"
+filename = "node/pyproject.toml"
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "app/package.json"
+filename = "gateway/pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "client/package.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "app/src-tauri/tauri.conf.json"
+filename = "client/src-tauri/tauri.conf.json"
 serialize = ["{major}.{minor}.{patch}"]
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "app/src-tauri/Cargo.toml"
+filename = "client/src-tauri/Cargo.toml"
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "docs/INSTALLATION.md"
+filename = "docs/architecture/INSTALLATION.md"
 search = "v{current_version}"
 replace = "v{new_version}"
 
 [[tool.bumpversion.files]]
-filename = "docs/ROADMAP.md"
+filename = "docs/architecture/ROADMAP.md"
 search = "v{current_version}"
 replace = "v{new_version}"

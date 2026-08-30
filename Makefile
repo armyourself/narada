@@ -1,8 +1,24 @@
+.PHONY: help install install-win run-node run-client test-node
+
+help:
+	@echo "Lattice — available targets:"
+	@echo "  make install      Install node + client (Linux/macOS, via install.sh)"
+	@echo "  make install-win  Install node + client on Windows (scripts/install.ps1)"
+	@echo "  make run-node     Run the Lattice node (Python)"
+	@echo "  make run-client   Run the Lattice desktop client (Bun + Tauri)"
+	@echo "  make test-node    Run the Lattice node test suite (pytest)"
+
 install:
 	./install.sh
 
-run-server:
-	cd server && uv run -m src.main.py
+install-win:
+	pwsh -File scripts/install.ps1
 
-run-app:
-	cd app && bun run tauri dev
+run-node:
+	cd node && uv run -m src.main
+
+run-client:
+	cd client && bun run tauri dev
+
+test-node:
+	cd node && uv run pytest

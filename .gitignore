@@ -1,1 +1,33 @@
+# Repo-local notes
 /notes.txt
+
+# Editor / OS junk
+.DS_Store
+.vscode/
+.idea/
+
+# Python (applies to node/ and gateway/)
+**/__pycache__/
+**/.venv/
+**/credentials.json
+**/*.pyc
+
+# Node / Bun / Tauri (applies to client/)
+**/node_modules/
+**/build/
+**/dist/
+**/.svelte-kit/
+**/package/
+src-tauri/target/
+**/src-tauri/target/
+.vite/
+**/.vite/
+.env
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# uv
+node/.venv/
+gateway/.venv/
