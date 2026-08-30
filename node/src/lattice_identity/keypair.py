@@ -15,10 +15,9 @@ entropy plus checksum) while still giving us a strong encryption key.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 from dataclasses import dataclass
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PrivateKey,
     X25519PublicKey,
@@ -28,7 +27,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
     NoEncryption,
@@ -97,8 +96,17 @@ class Keypair:
             raise LatticeIdentityError(
                 f"X25519 public key must be 32 bytes, got {len(peer_x25519_public_bytes)}"
             )
-        peer = X25519PublicKey.from_public_bytes(peer_x25519_public_bytes)
-        return self.x25519_private.exchange(peer)
+        try:
+            peer = X25519PublicKey.from_public_bytes(peer_x25519_public_bytes)
+            return self.x25519_private.exchange(peer)
+        except (ValueError, TypeError) as exc:
+            # cryptography raises ValueError on small-subgroup /
+            # invalid-curve points. Surface as a typed Lattice error
+            # so callers (including the HTTP router) get a 4xx, not a
+            # 500 stack trace.
+            raise LatticeIdentityError(
+                "Invalid X25519 public key"
+            ) from exc
 
     def public_bytes(self) -> bytes:
         """Return the raw public-key bytes (32 + 32 = 64 bytes)."""
@@ -108,11 +116,23 @@ class Keypair:
 def generate_keypair() -> Keypair:
     """Generate a fresh, random Lattice keypair."""
     ed = Ed25519PrivateKey.generate()
-    return keypair_from_seed(ed.private_bytes(
+    # Use the private key directly; no need to round-trip through
+    # private_bytes() + keypair_from_seed().
+    ed_pub = ed.public_key()
+    seed = ed.private_bytes(
         encoding=Encoding.Raw,
         format=PrivateFormat.Raw,
         encryption_algorithm=NoEncryption(),
-    ))
+    )
+    x_seed = _hkdf_x25519_seed(seed)
+    x_priv = X25519PrivateKey.from_private_bytes(x_seed)
+    x_pub = x_priv.public_key()
+    return Keypair(
+        ed25519_private=ed,
+        ed25519_public=ed_pub,
+        x25519_private=x_priv,
+        x25519_public=x_pub,
+    )
 
 
 def keypair_from_seed(seed: bytes) -> Keypair:
@@ -152,8 +172,13 @@ def verify_signature(
     try:
         Ed25519PublicKey.from_public_bytes(public_key_bytes).verify(signature, data)
         return True
-    except Exception:
+    except InvalidSignature:
         return False
+    except (ValueError, TypeError) as exc:
+        # Malformed public key bytes -> treat as signature failure, not
+        # a crash. Real callers should not pass invalid keys; this is
+        # belt-and-suspenders.
+        raise LatticeIdentityError("Invalid Ed25519 public key") from exc
 
 
 __all__ = [

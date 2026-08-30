@@ -19,11 +19,18 @@ from .encoding import (
     is_valid_public_id,
 )
 from .errors import LatticeIdentityError, LatticeKeystoreError, LatticeMnemonicError
-from .identity import LatticeIdentity, generate_identity, identity_from_mnemonic
+from .identity import (
+    LatticeIdentity,
+    generate_identity,
+    identity_from_keystore,
+    identity_from_mnemonic,
+    rotate_identity,
+)
 from .keypair import (
     Keypair,
     generate_keypair,
     keypair_from_seed,
+    verify_signature,
 )
 from .keystore import (
     InMemoryKeystore,
@@ -48,10 +55,12 @@ __all__ = [
     "encode_public_id",
     "generate_identity",
     "generate_keypair",
-    "generate_mnemonic",
+    "identity_from_keystore",
     "identity_from_mnemonic",
     "is_valid_public_id",
     "keypair_from_seed",
     "mnemonic_to_seed",
+    "rotate_identity",
     "validate_mnemonic",
+    "verify_signature",
 ]

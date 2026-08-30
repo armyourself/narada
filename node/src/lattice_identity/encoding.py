@@ -129,7 +129,11 @@ def encode_public_id(
             f"X25519 public key must be 32 bytes, got {len(x25519_public_key)}"
         )
     payload = bytes([version.value]) + ed25519_public_key + x25519_public_key
-    assert len(payload) == _PAYLOAD_LEN
+    if len(payload) != _PAYLOAD_LEN:
+        # Defensive: explicit check so this also holds under ``python -O``.
+        raise LatticeIdentityError(
+            f"Internal error: payload length is {len(payload)}, expected {_PAYLOAD_LEN}"
+        )
     data = _convertbits(payload, 8, 5, pad=True)
     return _bech32_encode(_HRP, data, "bech32m")
 

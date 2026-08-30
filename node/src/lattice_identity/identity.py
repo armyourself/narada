@@ -7,7 +7,7 @@ from typing import Optional
 
 from .encoding import encode_public_id, decode_public_id
 from .errors import LatticeIdentityError
-from .keypair import Keypair, generate_keypair, keypair_from_seed, verify_signature
+from .keypair import Keypair, keypair_from_seed, verify_signature
 from .keystore import LatticeKeystore
 from .mnemonic import generate_mnemonic, mnemonic_to_seed
 
