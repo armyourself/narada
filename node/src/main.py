@@ -15,7 +15,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from src.internal.client_handler import ClientHandler
 from src.internal.account_manager import AccountManager
 from src.internal.file_system import FileObject, Root
-from src.routers import account_tasks, mailbox_tasks
+from src.routers import account_tasks, mailbox_tasks, lattice_identity_tasks
 from src.helpers.uvicorn_logger import UvicornLogger
 from src.helpers.port_scanner import PortScanner
 
@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(account_tasks.router)
 app.include_router(mailbox_tasks.router)
+app.include_router(lattice_identity_tasks.router)
 
 def setup_api_middlewares(**kwargs):
     app.add_middleware(

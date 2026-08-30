@@ -9,8 +9,11 @@
 # Python (applies to node/ and gateway/)
 **/__pycache__/
 **/.venv/
+**/.pytest_cache/
 **/credentials.json
 **/*.pyc
+**/*.egg-info/
+**/*.egg
 
 # Node / Bun / Tauri (applies to client/)
 **/node_modules/

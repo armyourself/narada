@@ -292,6 +292,21 @@ The inherited application provides functionality including:
 * Bulk operations
 * Undo actions
 
+Lattice-specific work landed so far (under `node/` and `protocol/`):
+
+* **Mail Abstraction layer** (`node/src/mail_abstraction/`): a single
+  `MailAdapter` interface with an IMAP/SMTP adapter and a stub
+  Lattice-protocol adapter. The interface is exercised by tests; the
+  router migration is the next step.
+* **Cryptographic identity** (`node/src/lattice_identity/`,
+  `protocol/identity.md`): per-account Ed25519 + X25519 keypair with a
+  `lattice1...` bech32m public id, 12-word BIP-39 mnemonic recovery,
+  and three keystore backends (in-memory, OS keyring, passphrase
+  fallback). Exposed via a FastAPI router and a CLI.
+* The decentralized protocol (node-to-node transport, message
+  envelope, peer discovery, relays) is **not yet implemented**. The
+  adapter and identity pieces are the seam where it will plug in.
+
 The decentralized protocol is being developed separately from these existing components.
 
 ---
@@ -334,13 +349,13 @@ lattice/
 
 ## Phase 1 — Cryptographic Identity
 
-* [ ] Generate keypairs
-* [ ] Secure private-key storage
-* [ ] Public-key identities
-* [ ] Identity format
-* [ ] Identity persistence
-* [ ] Key rotation
-* [ ] Key recovery
+* [x] Generate keypairs
+* [x] Secure private-key storage
+* [x] Public-key identities
+* [x] Identity format
+* [x] Identity persistence
+* [ ] Key rotation (basic rotate-API only; on-the-wire rotation is Phase 2+)
+* [x] Key recovery (BIP-39 mnemonic)
 
 ## Phase 2 — Lattice Protocol
 
