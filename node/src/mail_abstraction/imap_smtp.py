@@ -206,10 +206,11 @@ def convert_email(raw: OpenmailEmail, folder: str) -> Message:
     Exposed at module level so future router migrations can reuse the
     conversion without holding an adapter instance.
     """
+    source_value = getattr(raw, "source", None) or "imap"
     return Message(
         uid=str(raw.uid or ""),
         folder=folder,
-        source=MessageSource.IMAP,
+        source=MessageSource.IMAP if source_value == "imap" else MessageSource.LATTICE,
         subject=raw.subject or "",
         from_address=_address_from_string(raw.sender or ""),
         to_addresses=[_address_from_string(a) for a in (raw.receivers or "").split(",") if a.strip()],

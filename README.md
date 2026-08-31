@@ -295,17 +295,22 @@ The inherited application provides functionality including:
 Lattice-specific work landed so far (under `node/` and `protocol/`):
 
 * **Mail Abstraction layer** (`node/src/mail_abstraction/`): a single
-  `MailAdapter` interface with an IMAP/SMTP adapter and a stub
-  Lattice-protocol adapter. The interface is exercised by tests; the
-  router migration is the next step.
+  `MailAdapter` interface with an IMAP/SMTP adapter and a Lattice
+  adapter.
 * **Cryptographic identity** (`node/src/lattice_identity/`,
   `protocol/identity.md`): per-account Ed25519 + X25519 keypair with a
   `lattice1...` bech32m public id, 12-word BIP-39 mnemonic recovery,
   and three keystore backends (in-memory, OS keyring, passphrase
   fallback). Exposed via a FastAPI router and a CLI.
-* The decentralized protocol (node-to-node transport, message
-  envelope, peer discovery, relays) is **not yet implemented**. The
-  adapter and identity pieces are the seam where it will plug in.
+* **Lattice protocol MVP** (`node/src/lattice/`,
+  `protocol/message-format.md`): two Lattice nodes on the same
+  machine can exchange end-to-end encrypted messages over loopback
+  HTTP. The envelope is X25519-ECDH-sealed and Ed25519-signed; the
+  body is ChaCha20-Poly1305. A persistent outbox with
+  exponential-backoff retry handles the recipient being offline.
+* Peer discovery, distributed routing, relays, and the
+  Lattice↔SMTP/IMAP gateway are **not yet implemented**. The
+  protocol layer above is the seam where they will plug in.
 
 The decentralized protocol is being developed separately from these existing components.
 
@@ -359,14 +364,15 @@ lattice/
 
 ## Phase 2 — Lattice Protocol
 
-* [ ] Define protocol specification
-* [ ] Define message format
-* [ ] Define node identity
-* [ ] Secure handshake
-* [ ] Encrypted transport
-* [ ] Message authentication
-* [ ] Delivery acknowledgements
-* [ ] Replay protection
+* [x] Define protocol specification
+* [x] Define message format
+* [ ] Define node identity (lands in Phase 3 with peer discovery)
+* [x] Secure handshake (X25519 ECDH + Ed25519 signature on the canonical header)
+* [x] Encrypted transport (ChaCha20-Poly1305 over loopback HTTP)
+* [x] Message authentication (Ed25519 signature on canonical header)
+* [ ] Delivery acknowledgements (transport raises on failure; outbox is the MVP's
+      de-facto ack mechanism)
+* [ ] Replay protection (timestamp window only; persistence deferred)
 
 ## Phase 3 — Distributed Network
 

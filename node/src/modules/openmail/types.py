@@ -65,6 +65,7 @@ class Email():
     references: Optional[str] = ""
     list_unsubscribe: Optional[str] = ""
     list_unsubscribe_post: Optional[str] = ""
+    source: Optional[str] = "imap"  # "imap" for IMAP/SMTP; "lattice" for Lattice protocol
 
     def __getitem__(self, item):
         """Allows dictionary-like access to dataclass attributes."""

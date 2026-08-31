@@ -1,4 +1,4 @@
-# Changelog
+  # Changelog
 
 All notable changes to Lattice will be documented in this file.
 
@@ -167,6 +167,82 @@ release. Highlights:
   `default_keystore`, and the `try/except/continue` patterns).
 - Total test count: **65 new tests, all passing** (42 from the
   previous commit, 23 from this one).
+
+## [Unreleased]
+
+### Added
+
+- **Lattice protocol MVP** under `node/src/lattice/`. The Phase 2
+  protocol is now real on loopback HTTP between two Lattice nodes
+  running on the same machine.
+  - `envelope.py` - sealed-and-signed message format. Sign-then-
+    encrypt: Ed25519 over a canonical-JSON header, then X25519 ECDH
+    + HKDF-SHA256 + ChaCha20-Poly1305 for the body. The recipient
+    verifies the signature before doing AEAD work.
+  - `transport.py` - `LatticeTransport` ABC + a loopback HTTP
+    implementation (`HttpLatticeTransport`). Future transports
+    (QUIC, libp2p, relays) plug in behind the same ABC.
+  - `directory.py` - `LatticeDirectory` ABC + a JSON-backed
+    `LocalContactList` and an `InMemoryDirectory` for tests. The
+    directory maps `lattice1...` public ids to base URLs.
+  - `outbox.py` - persistent JSONL outbox with exponential
+    backoff (1m / 5m / 30m / 2h / 12h) and a dead-letter file for
+    messages that exceeded the retry budget. Per-account queues.
+  - `inbox.py` - receiver-side helper: verify signature, decrypt
+    body, persist to a per-account mailbox JSONL with
+    `source="lattice"`. Replay dedup is in-memory (5-minute TTL).
+  - `adapter.py` - the Lattice-protocol `MailAdapter` that ties
+    the above together. Replaces the Phase B stub in
+    `mail_abstraction/lattice.py`.
+  - `cli/lattice_send.py` - manual CLI: `python -m src.cli.lattice_send
+    <account> <recipient_public_id> --subject ... --body ...`.
+  - `routers/lattice_protocol_tasks.py` - `POST /lattice/inbox`,
+    `GET /lattice/inbox/{account_id}`, `POST /lattice/outbox/retry`.
+  - A 30-second background drainer in the FastAPI lifespan that
+    flushes every due outbox entry.
+- **`OpenmailEmail.source` field** added to the existing Email
+  dataclass, defaulting to `"imap"`. The IMAP/SMTP adapter
+  (`convert_email`) and the new `LatticeAdapter` (mailbox JSONL)
+  both set this so the client UI can tell messages apart later.
+- `docs/security/README.md` placeholder stays; the threat model
+  is being updated separately.
+- 51 new tests covering envelope seal/open, directory, outbox
+  (including persistence and dead-letter), inbox (including replay
+  dedup), the LatticeAdapter end-to-end (with an in-process
+  `InMemoryTransport`), and the HTTP router (including idempotency
+  and account_id validation).
+
+### Changed
+
+- `node/src/mail_abstraction/lattice.py` removed. The Phase B stub
+  is replaced by the full implementation in `node/src/lattice/adapter.py`.
+- `node/src/mail_abstraction/__init__.py` no longer re-exports
+  `LatticeAdapter`; import it from `src.lattice` instead.
+- `node/src/routers/lattice_identity_tasks.py` no longer requires
+  any change, but the new router `lattice_protocol_tasks` is
+  mounted alongside it in `node/src/main.py`.
+- `node/src/main.py` now starts a background outbox-drain task in
+  the FastAPI lifespan. The task is async-cancelled on shutdown.
+- `protocol/message-format.md` promoted from stub to concrete spec.
+  Includes the JSON envelope shape, the canonical-JSON recipe, the
+  cryptographic recipe, the recipient validation order, and a
+  list of properties explicitly deferred to later phases
+  (replay persistence, forward secrecy, post-quantum, MIME).
+
+### Notes
+
+- Total test count: **116 new tests, all passing** (65 from
+  previous commits, 51 from this one). Existing
+  `test_account_manager.py` pre-existing failure is unchanged and
+  documented in the prior commit.
+- The Phase 2 work is bounded: loopback HTTP only, no P2P discovery,
+  no relays, no SMTP/IMAP gateway, no client UI changes. Phase 3+
+  builds on this surface.
+- No CVE entries in the dependency tree. Three low-severity bandit
+  findings remain from the prior security audit (the `"memory"`
+  CLI sentinel, the `try/except/pass` fall-through in
+  `default_keystore`, the `try/except/continue` patterns). They are
+  intentional design choices.
 
 ## [0.0.1-alpha0] - initial Openmail release and Lattice restructure
 
