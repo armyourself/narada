@@ -60,8 +60,8 @@ def _drain_narada_outbox_once() -> None:
     Narada package is partially uninitialised in a future state.
     """
     try:
-        from src.Narada.adapter import NaradaAdapter
-        from src.Narada.outbox import Outbox
+        from src.narada.adapter import NaradaAdapter
+        from src.narada.outbox import Outbox
         from src.narada_identity.keystore import default_keystore
     except Exception as exc:  # noqa: BLE001
         uvicorn_logger.error(f"Narada drain: import failed: {exc}")

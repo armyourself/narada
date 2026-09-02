@@ -50,6 +50,11 @@ class OutboxEntry:
     next_attempt_at: int
     attempt_count: int = 0
     last_error: Optional[str] = None
+    # Set when the recipient's node returns a signed delivery ack.
+    # A non-None value is the recipient-node timestamp at which the
+    # envelope was accepted; ``None`` means "still pending delivery".
+    acked_at: Optional[int] = None
+    ack_node_id: Optional[str] = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), separators=(",", ":"))
@@ -65,6 +70,8 @@ class OutboxEntry:
             next_attempt_at=int(data["next_attempt_at"]),
             attempt_count=int(data.get("attempt_count", 0) or 0),
             last_error=data.get("last_error"),
+            acked_at=(int(data["acked_at"]) if data.get("acked_at") is not None else None),
+            ack_node_id=data.get("ack_node_id"),
         )
 
     def next_delay_seconds(self) -> int:
@@ -158,6 +165,32 @@ class Outbox:
             self._rewrite(self._path_for(account_id), kept)
             return True
 
+    def mark_acked(
+        self,
+        account_id: str,
+        message_id: str,
+        *,
+        acked_at: int,
+        ack_node_id: str,
+        ack_signature: Optional[bytes] = None,
+    ) -> Optional[OutboxEntry]:
+        """Record a recipient-signed delivery acknowledgement and remove the entry.
+
+        Removes the entry once the ack has been recorded (callers do
+        not need to call ``mark_delivered`` separately). Returns the
+        removed entry, or None if ``message_id`` was not in the queue.
+        """
+        with self._lock:
+            entries = self._read_all(account_id)
+            for i, e in enumerate(entries):
+                if e.message_id != message_id:
+                    continue
+                e.acked_at = int(acked_at)
+                e.ack_node_id = ack_node_id
+                kept = entries[:i] + entries[i + 1 :]
+                self._rewrite(self._path_for(account_id), kept)
+                return e
+            return None
     def mark_failed(
         self,
         account_id: str,

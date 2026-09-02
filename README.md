@@ -310,6 +310,27 @@ Narada-specific work landed so far (under `node/` and `protocol/`):
   HTTP. The envelope is X25519-ECDH-sealed and Ed25519-signed; the
   body is ChaCha20-Poly1305. A persistent outbox with
   exponential-backoff retry handles the recipient being offline.
+* **Per-node identity** (`node/src/narada/node_identity.py`): each
+  node daemon has its own Ed25519 keypair (`node1...` bech32m id)
+  used to attribute envelopes and sign delivery acks. Persistent by
+  default (`<data_dir>/node_identity/seed`, 0600), or `ephemeral=True`
+  for a fresh keypair per envelope (no linkability across sends).
+  Wire-format fields `sender_node_id` / `sender_node_signature` are
+  **optional and additive**: older Narada nodes that do not recognise
+  them still verify the user-key signature and accept the message.
+* **Delivery acknowledgements** (`node/src/narada/ack.py`): a
+  successful envelope accept returns a signed `NaradaAck` (Ed25519
+  over `(sender_public_id, recipient_public_id, message_id,
+  timestamp, status)`) tied to the recipient's node identity. The
+  sender's outbox transitions the entry to *acked* and removes it.
+  The ack is best-effort: a missing ack still counts as a successful
+  delivery, with the outbox entry removed for compatibility with
+  pre-R3 nodes.
+* **Replay protection** (Narada inbox): an envelope's `(sender,
+  message_id)` pair is recorded in a per-recipient dedup window
+  (`<data_dir>/etc/seen.<account>.json`, default TTL 5 min) that
+  survives process restarts. Re-submissions within the window are
+  acknowledged but not re-persisted.
 * Peer discovery, distributed routing, relays, and the
   Narada↔SMTP/IMAP gateway are **not yet implemented**. The
   protocol layer above is the seam where they will plug in.
@@ -361,20 +382,23 @@ Narada/
 * [x] Public-key identities
 * [x] Identity format
 * [x] Identity persistence
-* [ ] Key rotation (basic rotate-API only; on-the-wire rotation is Phase 2+)
+* [ ] Key rotation (basic rotate-API only; on-the-wire rotation is Phase 3+)
 * [x] Key recovery (BIP-39 mnemonic)
 
 ## Phase 2 — Narada Protocol
 
 * [x] Define protocol specification
 * [x] Define message format
-* [ ] Define node identity (lands in Phase 3 with peer discovery)
+* [x] Define node identity (per-daemon Ed25519 with `node1...` bech32m id;
+      optional `sender_node_id`/`sender_node_signature` fields on envelopes)
 * [x] Secure handshake (X25519 ECDH + Ed25519 signature on the canonical header)
 * [x] Encrypted transport (ChaCha20-Poly1305 over loopback HTTP)
 * [x] Message authentication (Ed25519 signature on canonical header)
-* [ ] Delivery acknowledgements (transport raises on failure; outbox is the MVP's
-      de-facto ack mechanism)
-* [ ] Replay protection (timestamp window only; persistence deferred)
+* [x] Replay protection: persistent (sender, message_id) window stored on disk per
+      recipient (default TTL = 5 minutes); expired entries are reaped on every check
+* [x] Delivery acknowledgements (recipient node signs an ack over
+      `(sender, recipient, message_id, timestamp, status)`; sender outbox
+      transitions to *acked* on valid signature)
 
 ## Phase 3 — Distributed Network
 
@@ -460,8 +484,13 @@ algorithms. The composition and wire format, however, are **alpha-grade**:
 * the formal protocol specification has not been published (Phase 6)
 * the threat model has not been published (`docs/security/` is a stub)
 * no third-party security audit has been performed
-* key rotation, replay protection beyond a timestamp window, and delivery
-  acknowledgements are partial or deferred (see the Roadmap)
+* key rotation is partial (rotate-API exists; on-the-wire rotation is not
+  specified yet — Phase 3+)
+* replay protection covers a 5-minute window with persistent (sender,
+  message_id) dedup; longer-horizon replay and forward secrecy are
+  not yet specified
+* delivery acknowledgements are best-effort: a missing ack still counts
+  as a successful delivery for backward compatibility
 * metadata protection is not yet specified
 
 Until those items are closed, treat Narada as a **research-grade reference

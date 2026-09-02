@@ -20,8 +20,11 @@ called by the FastAPI lifespan task.
 from __future__ import annotations
 
 import json
+import os
+import re
 import re
 from typing import Any, Mapping, Optional
+from pathlib import Path
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -29,9 +32,9 @@ from pydantic import BaseModel
 from src._types import Response
 from src.narada_identity.keystore import default_keystore
 
-from ..Narada.adapter import NaradaAdapter
-from ..Narada.envelope import NaradaEnvelope, NaradaEnvelopeError
-from ..Narada.inbox import NaradaInbox
+from ..narada.adapter import NaradaAdapter
+from ..narada.envelope import NaradaEnvelope, NaradaEnvelopeError
+from ..narada.inbox import NaradaInbox
 
 router = APIRouter(tags=["Narada Protocol"])
 
@@ -58,7 +61,7 @@ def _safe(account_id: str) -> str:
     return "".join(c if c.isalnum() or c in "._@+-" else "_" for c in account_id) or "unknown"
 
 
-@router.post("/Narada/inbox")
+@router.post("/narada/inbox")
 def receive_envelope(envelope: Mapping[str, Any]) -> Response:
     """Receive a sealed Narada envelope from another node."""
     try:
@@ -90,15 +93,48 @@ def receive_envelope(envelope: Mapping[str, Any]) -> Response:
     except NaradaEnvelopeError as exc:
         return Response(success=False, message=f"envelope rejected: {exc}")
 
+    # On a successful (non-duplicate) accept, include a signed ack so the
+    # sender's transport can transition the outbox entry to "acked".
+    # We always sign with the recipient's persistent node identity
+    # (best-effort: a node-identity load failure here does not block
+    # delivery — the ack is an optimisation, not a security primitive).
+    ack_dict: Optional[dict] = None
+    if not was_duplicate:
+        try:
+            from src.narada.ack import make_ack
+            from src.narada.node_identity import load_or_create
+
+            if data_dir is None:
+                from src.consts import APP_NAME
+                import os
+                ack_data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
+            else:
+                ack_data_dir = data_dir
+            node = load_or_create(ack_data_dir)
+            ack = make_ack(
+                node,
+                env.sender_public_id,
+                env.recipient_public_id,
+                env.message_id,
+            )
+            ack_dict = ack.as_dict()
+        except Exception:  # noqa: BLE001
+            # Ack generation failure is non-fatal.
+            ack_dict = None
+
+    response_data: dict = {
+        "message_id": env.message_id,
+        "duplicate": was_duplicate,
+        "subject": body.subject,
+        "from": body.sender or env.sender_public_id,
+    }
+    if ack_dict is not None:
+        response_data["ack"] = ack_dict
+
     return Response(
         success=True,
         message=("envelope accepted (duplicate, no re-persist)" if was_duplicate else "envelope accepted"),
-        data={
-            "message_id": env.message_id,
-            "duplicate": was_duplicate,
-            "subject": body.subject,
-            "from": body.sender or env.sender_public_id,
-        },
+        data=response_data,
     )
 
 
@@ -119,7 +155,7 @@ def list_inbox(account_id: str) -> Response:
     return Response(
         success=True,
         message=f"inbox for {account_id}",
-        data={"messages": [m.__dict__ | {"source": m.source.value} for m in messages]},
+        data={"messages": [m.__dict__ | {"source": str(m.source)} for m in messages]},
     )
 
 

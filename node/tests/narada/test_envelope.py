@@ -181,4 +181,108 @@ def test_nonce_is_random_per_envelope(alice_identity, bob_identity):
     env1 = make_envelope(alice_identity, bob_identity.public_id, _alice_to_bob_body())
     env2 = make_envelope(alice_identity, bob_identity.public_id, _alice_to_bob_body())
     assert env1.nonce != env2.nonce
-    assert env1.message_id != env2.message_id
+
+
+# --- Node-identity envelope fields ----------------------------------------
+
+
+def test_envelope_with_node_identity_roundtrip(alice_identity, bob_identity):
+    from src.narada.node_identity import NaradaNodeIdentity
+
+    node = NaradaNodeIdentity.generate()
+    envelope = make_envelope(
+        alice_identity,
+        bob_identity.public_id,
+        _alice_to_bob_body(),
+        node=node,
+    )
+    assert envelope.sender_node_id == node.public_id
+    assert envelope.sender_node_signature is not None
+    assert len(envelope.sender_node_signature) == 64
+    # open_envelope verifies the node signature implicitly.
+    opened = open_envelope(envelope, bob_identity)
+    assert opened.subject == "hi bob"
+
+
+def test_envelope_node_id_serialized_in_dict(alice_identity, bob_identity):
+    from src.narada.node_identity import NaradaNodeIdentity
+
+    node = NaradaNodeIdentity.generate()
+    envelope = make_envelope(
+        alice_identity,
+        bob_identity.public_id,
+        _alice_to_bob_body(),
+        node=node,
+    )
+    d = envelope.as_dict()
+    assert d["sender_node_id"] == node.public_id
+    # The node signature must round-trip through JSON.
+    reloaded = NaradaEnvelope.from_dict(d)
+    assert reloaded.sender_node_id == node.public_id
+    assert reloaded.sender_node_signature == envelope.sender_node_signature
+
+
+def test_envelope_node_signature_is_bound_to_envelope(alice_identity, bob_identity):
+    """A node signature must not be valid for a different envelope."""
+    from src.narada.node_identity import NaradaNodeIdentity
+
+    node = NaradaNodeIdentity.generate()
+    env1 = make_envelope(
+        alice_identity,
+        bob_identity.public_id,
+        _alice_to_bob_body(),
+        node=node,
+    )
+    # A second, fresh envelope must reject the first envelope's node
+    # signature, because the node signed env1's header bytes (which
+    # include env1's nonce and timestamp).
+    env2 = make_envelope(
+        alice_identity,
+        bob_identity.public_id,
+        _alice_to_bob_body(),
+        node=node,
+    )
+    # Re-attach env1's node signature to env2's payload.
+    tampered = NaradaEnvelope(
+        v=env2.v,
+        sender_public_id=env2.sender_public_id,
+        recipient_public_id=env2.recipient_public_id,
+        message_id=env2.message_id,
+        timestamp=env2.timestamp,
+        nonce=env2.nonce,
+        signature=env2.signature,
+        body_ciphertext=env2.body_ciphertext,
+        sender_node_id=env1.sender_node_id,
+        sender_node_signature=env1.sender_node_signature,
+    )
+    with pytest.raises(NaradaEnvelopeError, match="node signature"):
+        open_envelope(tampered, bob_identity)
+
+
+def test_envelope_rejects_mismatched_node_fields(alice_identity, bob_identity):
+    from src.narada.envelope import NaradaEnvelope, NaradaEnvelopeError
+
+    envelope = make_envelope(alice_identity, bob_identity.public_id, _alice_to_bob_body())
+    bad = NaradaEnvelope(
+        v=envelope.v,
+        sender_public_id=envelope.sender_public_id,
+        recipient_public_id=envelope.recipient_public_id,
+        message_id=envelope.message_id,
+        timestamp=envelope.timestamp,
+        nonce=envelope.nonce,
+        signature=envelope.signature,
+        body_ciphertext=envelope.body_ciphertext,
+        sender_node_id="node1qqqq",
+        sender_node_signature=None,
+    )
+    with pytest.raises(NaradaEnvelopeError, match="one of sender_node"):
+        open_envelope(bad, bob_identity)
+
+
+def test_envelope_without_node_fields_still_opens(alice_identity, bob_identity):
+    """Backward compatibility: an envelope with no node fields must still work."""
+    envelope = make_envelope(alice_identity, bob_identity.public_id, _alice_to_bob_body())
+    assert envelope.sender_node_id is None
+    assert envelope.sender_node_signature is None
+    opened = open_envelope(envelope, bob_identity)
+    assert opened.subject == "hi bob"

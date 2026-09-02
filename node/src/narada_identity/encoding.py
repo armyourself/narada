@@ -170,9 +170,54 @@ def is_valid_public_id(public_id: str) -> bool:
     return True
 
 
+def encode_node_id(ed25519_public_key: bytes) -> str:
+    """Encode a Narada node public id (Ed25519-only) as a ``node1...`` string.
+
+    Node identities are distinct from user identities: the user identity
+    (in :func:`encode_public_id`) carries both an Ed25519 signing key
+    and an X25519 encryption key, and is owned by an account. A node
+    identity is owned by a node daemon and only needs to sign, so the
+    payload is just the 32-byte Ed25519 public key.
+    """
+    if len(ed25519_public_key) != 32:
+        raise NaradaIdentityError(
+            f"Ed25519 public key must be 32 bytes, got {len(ed25519_public_key)}"
+        )
+    data = _convertbits(ed25519_public_key, 8, 5, pad=True)
+    return _bech32_encode("node", data, "bech32m")
+
+
+def decode_node_id(public_id: str) -> bytes:
+    """Decode a ``node1...`` string into a 32-byte Ed25519 public key."""
+    hrp, data, spec = _bech32_decode(public_id)
+    if hrp != "node":
+        raise NaradaIdentityError(f"Expected node hrp 'node', got {hrp!r}")
+    if spec != "bech32m":
+        raise NaradaIdentityError(
+            f"Node identities must use bech32m, got {spec!r}"
+        )
+    payload = bytes(_convertbits(data, 5, 8, pad=False))
+    if len(payload) != 32:
+        raise NaradaIdentityError(
+            f"Expected payload of 32 bytes, got {len(payload)}"
+        )
+    return payload
+
+
+def is_valid_node_id(public_id: str) -> bool:
+    try:
+        decode_node_id(public_id)
+        return True
+    except NaradaIdentityError:
+        return False
+
+
 __all__ = [
     "IdentityVersion",
     "decode_public_id",
     "encode_public_id",
     "is_valid_public_id",
+    "encode_node_id",
+    "decode_node_id",
+    "is_valid_node_id",
 ]

@@ -7,7 +7,7 @@ envelope to. It:
      (delegated to :func:`src.narada.envelope.open_envelope`).
   2. Decrypts the body.
   3. Persists the message into the recipient's account store, with
-     ``source='Narada'`` so the rest of the Narada node (and the
+     ``source='narada'`` so the rest of the Narada node (and the
      desktop client) can render it as a Narada-delivered message.
 
 Persistence uses the existing per-account mailbox store
@@ -102,16 +102,22 @@ class NaradaInbox:
         tmp.write_text(json.dumps(self._seen, sort_keys=True), encoding="utf-8")
         tmp.replace(self._seen_path)
 
-    def _is_duplicate(self, message_id: str, ttl_seconds: int) -> bool:
+    def _is_duplicate(
+        self, sender_public_id: str, message_id: str, ttl_seconds: int
+    ) -> bool:
+        # Key on (sender, message_id): two different senders picking the
+        # same UUID (vanishingly rare but cheap to defend against) would
+        # otherwise be incorrectly deduped.
+        key = f"{sender_public_id}|{message_id}"
         now = int(time.time())
         with self._seen_lock:
             # Drop expired entries.
             expired = [k for k, exp in self._seen.items() if exp < now]
             for k in expired:
                 del self._seen[k]
-            if message_id in self._seen:
+            if key in self._seen:
                 return True
-            self._seen[message_id] = now + ttl_seconds
+            self._seen[key] = now + ttl_seconds
             self._save_seen()
             return False
 
@@ -152,7 +158,9 @@ class NaradaInbox:
         if envelope.recipient_public_id != identity.public_id:
             raise NaradaEnvelopeError("envelope addressed to a different recipient")
 
-        is_dup = self._is_duplicate(envelope.message_id, seen_ttl_seconds)
+        is_dup = self._is_duplicate(
+            envelope.sender_public_id, envelope.message_id, seen_ttl_seconds
+        )
         if is_dup:
             # Still verify + decrypt so the caller has the body; just
             # do not persist again.
@@ -175,7 +183,7 @@ class NaradaInbox:
         """
         record = {
             "uid": envelope.message_id,
-            "source": "Narada",
+            "source": "narada",
             "sender": body.sender or envelope.sender_public_id,
             "receivers": ", ".join(body.to) if body.to else self._account_id,
             "to": list(body.to),
