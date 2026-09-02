@@ -44,10 +44,14 @@ from src.narada_identity.identity import NaradaIdentity, verify_public_id_signat
 # --- Constants -------------------------------------------------------------
 
 ENVELOPE_VERSION = 1
+# v=3 carries an on-the-wire key rotation announcement. The wire
+# format is identical to v=1 except that the body subject is the
+# "__narada_key_update__" sentinel and the body text is a
+# JSON-serialised KeyUpdateBody (see src.narada.key_update).
+SUPPORTED_ENVELOPE_VERSIONS = frozenset({1, 3})
 _ENVELOPE_HKDF_INFO = b"Narada-envelope-v1"
 _NONCE_LEN = 16  # 128 bits; we use the first 12 for ChaCha20-Poly1305.
                   # Random per message -> collision risk negligible.
-
 # Public field names. Used both for canonical JSON ordering and for input
 # validation; this is the wire format.
 _FIELDS = (
@@ -343,7 +347,7 @@ def open_envelope(
     """
     if envelope.recipient_public_id != recipient.public_id:
         raise NaradaEnvelopeError("envelope addressed to a different recipient")
-    if envelope.v != ENVELOPE_VERSION:
+    if envelope.v not in SUPPORTED_ENVELOPE_VERSIONS:
         raise NaradaEnvelopeError(f"unsupported envelope version: {envelope.v}")
 
     current = int(now) if now is not None else int(time.time())
@@ -417,13 +421,11 @@ def open_envelope(
         raise NaradaEnvelopeError("envelope body is not a JSON object")
     return NaradaBody.from_dict(body_dict)
 
-
 __all__ = [
     "ENVELOPE_VERSION",
+    "SUPPORTED_ENVELOPE_VERSIONS",
     "NaradaBody",
     "NaradaEnvelope",
     "NaradaEnvelopeError",
-    "make_envelope",
-    "open_envelope",
 ]
 
