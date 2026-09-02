@@ -183,17 +183,47 @@ class PeerBook:
 
 
 class WatermarkStore:
-    """Per-sender sequence number seen by this node."""
+    """Per-sender sequence number seen by this node.
 
-    def __init__(self, path: Path) -> None:
+    On-disk state is HMAC-protected (see :mod:`src.narada_security.hmac_io`)
+    to mitigate threat T8: a disk-level attacker who can rewrite
+    ``watermarks.json`` cannot forge a valid sidecar without the
+    node-identity seed. A failed HMAC check on load falls back to
+    the empty store; subsequent updates overwrite the bad file.
+    """
+
+    def __init__(self, path: Path, *, key: Optional[bytes] = None) -> None:
         self._path = path
         self._lock = threading.RLock()
         self._data: dict[str, int] = {}
+        self._key = key
         self._load()
 
     def _load(self) -> None:
         if not self._path.exists():
             return
+        # If a sidecar is present, verify it; refuse to load if the
+        # sidecar is missing or wrong (defence against silent
+        # rollback by a disk attacker).
+        if self._key is not None:
+            from src.narada_security.hmac_io import (
+                HmacIntegrityError,
+                read_json_protected,
+            )
+
+            try:
+                data = read_json_protected(self._path, self._key)
+            except (HmacIntegrityError, FileNotFoundError):
+                return
+            if not isinstance(data, dict):
+                return
+            for k, v in data.items():
+                try:
+                    self._data[str(k)] = int(v)
+                except (TypeError, ValueError):
+                    continue
+            return
+        # No key provided: legacy plaintext path.
         try:
             data = json.loads(self._path.read_bytes())
         except (json.JSONDecodeError, OSError):
@@ -208,9 +238,14 @@ class WatermarkStore:
 
     def _save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
-        tmp.write_text(json.dumps(self._data, sort_keys=True))
-        tmp.replace(self._path)
+        if self._key is None:
+            tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+            tmp.write_text(json.dumps(self._data, sort_keys=True))
+            tmp.replace(self._path)
+            return
+        from src.narada_security.hmac_io import write_json_protected
+
+        write_json_protected(self._path, self._data, self._key)
 
     def seen(self, sender_public_id: str, watermark: int) -> bool:
         with self._lock:

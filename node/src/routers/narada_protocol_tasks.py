@@ -48,6 +48,13 @@ _keystore_factory = default_keystore
 _data_dir_factory = None  # None means "use default node data dir"
 
 
+def _hmac_key(data_dir) -> bytes:  # type: ignore[no-untyped-def]
+    """Return the HMAC key for ``data_dir``, derived from the node-identity seed."""
+    from src.narada_security.hmac_io import load_key
+
+    return load_key(data_dir)
+
+
 def _validate_account_id(account_id: str) -> Optional[Response]:
     if not isinstance(account_id, str) or not _ACCOUNT_ID_PATTERN.match(account_id):
         return Response(
@@ -189,7 +196,7 @@ def _do_sync(account_id: str, since: int) -> Response:
         import os
 
         data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
-    wm = WatermarkStore(data_dir / "watermarks.json")
+    wm = WatermarkStore(data_dir / "watermarks.json", key=_hmac_key(data_dir))
 
     def getter() -> dict[str, str]:
         return {account_id: str((data_dir / "etc" / f"mailbox.{account_id}.jsonl"))}

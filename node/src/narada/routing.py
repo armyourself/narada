@@ -132,9 +132,20 @@ class DistributedDirectory(NaradaDirectory):
             return None
         if answer is None:
             return None
-        pid, base_url, account_id = answer
+        # Mitigate threat T2: the peer must sign its answer with the
+        # very node id the hint claims to host the recipient on. A
+        # directory client returning a different ack_node_id is
+        # either buggy or adversarial; refuse the answer either way.
+        pid, base_url, account_id, ack_node_id = answer
         if pid != public_id:
             log.warning("peer %s returned mismatched public id %r", hint, pid)
+            return None
+        if ack_node_id != hint:
+            log.warning(
+                "hint %s claimed by peer but signed by %s; refusing (T2)",
+                hint,
+                ack_node_id,
+            )
             return None
         try:
             self._inner.add(public_id, base_url, account_id)
@@ -142,19 +153,35 @@ class DistributedDirectory(NaradaDirectory):
             pass
         return base_url
 
-    def _consult_peers(self, public_id: str) -> Optional[str]:
+    def _consult_peers(self, public_id: str) -> list[str]:
+        """Ask every known peer; return all answers that pass T2 checks.
+
+        Each answer's ``ack_node_id`` is verified against any
+        ``node_id_hint`` embedded in the public id. Answers with no
+        hint pass; answers where the hint does not match the signing
+        node are dropped.
+        """
+        hint = decode_node_hint(public_id)
+        results: list[str] = []
         for answer in self._peer.ask_all(public_id):
             if answer is None:
                 continue
-            pid, base_url, account_id = answer
+            pid, base_url, account_id, ack_node_id = answer
             if pid != public_id:
+                continue
+            if hint and ack_node_id != hint:
+                log.warning(
+                    "peer answer signed by %s but public id hints %s; dropping (T2)",
+                    ack_node_id,
+                    hint,
+                )
                 continue
             try:
                 self._inner.add(public_id, base_url, account_id)
             except Exception:  # noqa: BLE001
                 pass
-            return base_url
-        return None
+            results.append(base_url)
+        return results
 
     def lookup(self, public_id: str) -> Optional[str]:
         local = self._inner.lookup(public_id)
@@ -163,7 +190,10 @@ class DistributedDirectory(NaradaDirectory):
         hinted = self._consult_hint(public_id)
         if hinted is not None:
             return hinted
-        return self._consult_peers(public_id)
+        answers = self._consult_peers(public_id)
+        if answers:
+            return answers[0]
+        return None
 
     def add(self, public_id: str, base_url: str, account_id: str) -> None:
         self._inner.add(public_id, base_url, account_id)

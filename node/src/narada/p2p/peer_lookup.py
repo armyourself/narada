@@ -56,32 +56,37 @@ class InMemoryPeerLookupClient:
 
     def ask_node(
         self, node_id: str, public_id: str
-    ) -> Optional[tuple[str, str, str]]:
+    ) -> Optional[tuple[str, str, str, str]]:
+        """Return ``(public_id, base_url, account_id, ack_node_id)``.
+
+        ``ack_node_id`` is the node id that *signed* the response.
+        Mitigates threat T2: a directory client can refuse an answer
+        where the peer claims to host a user but signs as a
+        different node.
+        """
         with self._lock:
             entries = self._by_node.get(node_id, {})
             entry = entries.get(public_id)
             if entry is None:
                 return None
-            return (entry.public_id, entry.base_url, entry.account_id)
+            return (entry.public_id, entry.base_url, entry.account_id, node_id)
 
-    def ask_all(self, public_id: str) -> list[Optional[tuple[str, str, str]]]:
+    def ask_all(self, public_id: str) -> list[Optional[tuple[str, str, str, str]]]:
         with self._lock:
             pairs = list(self._by_public.get(public_id, []))
-        out: list[Optional[tuple[str, str, str]]] = []
-        for _node_id, entry in pairs:
-            out.append((entry.public_id, entry.base_url, entry.account_id))
+        out: list[Optional[tuple[str, str, str, str]]] = []
+        for nid, entry in pairs:
+            out.append((entry.public_id, entry.base_url, entry.account_id, nid))
         return out
 
 
 class NoopPeerLookupClient:
-    """A peer-lookup client that always says 'I don't know'."""
-
     def ask_node(
         self, node_id: str, public_id: str
-    ) -> Optional[tuple[str, str, str]]:
+    ) -> Optional[tuple[str, str, str, str]]:
         return None
 
-    def ask_all(self, public_id: str) -> list[Optional[tuple[str, str, str]]]:
+    def ask_all(self, public_id: str) -> list[Optional[tuple[str, str, str, str]]]:
         return []
 
 

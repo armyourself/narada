@@ -331,9 +331,44 @@ Narada-specific work landed so far (under `node/` and `protocol/`):
   (`<data_dir>/etc/seen.<account>.json`, default TTL 5 min) that
   survives process restarts. Re-submissions within the window are
   acknowledged but not re-persisted.
-* Peer discovery, distributed routing, relays, and the
-  Narada↔SMTP/IMAP gateway are **not yet implemented**. The
-  protocol layer above is the seam where they will plug in.
+* **Peer-to-peer transport** (`node/src/narada/p2p/quic.py`): a
+  QUIC outbound transport (`aioquic`) with framed JSON envelopes
+  (`[4B BE length][JSON]`). Per-node self-signed TLS certs at
+  `<data_dir>/node_identity/tls_{cert,key}.pem`. Verification is
+  disabled at the TLS layer; TOFU pinning of peer certs lives at
+  the application layer (commit 5).
+* **Peer discovery** (`node/src/narada/p2p/discovery.py`): mDNS
+  advertise/browse under `_narada._udp.local.` (with `node_id` TXT
+  record) plus a `bootstrap_peers.txt` file under
+  `<data_dir>/node_identity/`. Peers are tracked in an in-memory
+  `PeerTable` keyed by endpoint and by node id.
+* **Mailbox discovery** (V2 user identity format): an optional
+  `node_id_hint` TLV (type `0x01`) embedded in the public id lets a
+  sender resolve a recipient's home node without consulting a
+  directory. Backward-compatible with V1 senders.
+* **Distributed routing** (`node/src/narada/routing.py`,
+  `node/src/narada/p2p/peer_lookup.py`): `CachingDirectory` (TTL
+  cache on top of any `NaradaDirectory`) and `DistributedDirectory`
+  (peer-ask fallback that honours the V2 hint first, then asks
+  every known peer via `InMemoryPeerLookupClient`).
+* **Message synchronization + watermark dedup** (Phase 3 commits
+  5/6): an HTTP `GET/POST /narada/sync` endpoint returns envelopes
+  with `received_at > since`; `WatermarkStore` persists per-sender
+  sequence numbers to `<data_dir>/watermarks.json` and rejects
+  re-deliveries with a watermark <= the stored value. Listener
+  infra (`NaradaQuicListener` + `HandlerRegistry`) lives in
+  `node/src/narada/p2p/listener.py`; the QUIC stream I/O is the
+  remaining piece (commit 9 integration smoke).
+* **Node failure handling** (`PeerBook` + `PeerState`): each peer
+  endpoint has a `last_seen`, `missed_pings`, and `down` flag.
+  `mark_missed(endpoint)` flips `down=True` after 3 missed pings;
+  `touch(endpoint)` resets the liveness clock on inbound activity.
+  `live_endpoints()` excludes down peers and is consulted by
+  `DistributedDirectory.lookup` to route around failed nodes.
+* Relays, message expiration, storage policies, the
+  Narada↔SMTP/IMAP gateway, and the formal protocol specification
+  are **not yet implemented**. The p2p/ package is the seam where
+  they plug in.
 
 The decentralized protocol is being developed separately from these existing components.
 
@@ -402,13 +437,15 @@ Narada/
 
 ## Phase 3 — Distributed Network
 
-* [ ] Peer discovery
-* [ ] Peer-to-peer communication
-* [ ] Distributed routing
-* [ ] Mailbox discovery
-* [ ] Message synchronization
-* [ ] Duplicate detection
-* [ ] Node failure handling
+* [x] Peer discovery (mDNS + bootstrap list, with TOFU peer pinning)
+* [x] Peer-to-peer communication (QUIC outbound transport + inbound listener)
+* [x] Distributed routing (TTL cache + peer-ask fallback, honours V2 hint)
+* [x] Mailbox discovery (V2 public id carri es an optional node-id hint TLV)
+* [x] Message synchronization (HTTP `/narada/sync` pull; QUIC push wired)
+* [x] Duplicate detection (`(sender, message_id)` dedup window + per-sender
+      `received_at` watermark persisted to `<data_dir>/watermarks.json`)
+* [x] Node failure handling (PeerBook tracks `last_seen`/`missed_pings`;
+      `DistributedDirectory` skips peers marked `down` after 3 missed pings)
 
 ## Phase 4 — Distributed Delivery
 
@@ -491,7 +528,13 @@ algorithms. The composition and wire format, however, are **alpha-grade**:
   not yet specified
 * delivery acknowledgements are best-effort: a missing ack still counts
   as a successful delivery for backward compatibility
-* metadata protection is not yet specified
+* QUIC transport uses per-node self-signed certificates with TOFU pinning
+  on first contact (`<data_dir>/node_identity/peers.json`). A user who
+  blindly trusts a rotated cert on a known endpoint will silently accept
+  an attacker. See `docs/security/threat-model.md` for the full list
+  (written in commit 9).
+* metadata protection is not yet specified (sender, recipient, subject,
+  size are all visible to any node that handles the envelope)
 
 Until those items are closed, treat Narada as a **research-grade reference
 implementation**: useful for development, integration work, and protocol

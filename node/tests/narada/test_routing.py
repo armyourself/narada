@@ -121,7 +121,8 @@ def test_distributed_directory_hint_path():
     assert dd.lookup(bob_v2) == "host-hinted:4440"
 
 
-def test_distributed_directory_hint_path_falls_back_to_broadcast():
+def test_distributed_directory_drops_hint_mismatch_t2():
+    """T2: when the hinted node signs with a different id, refuse the answer."""
     from src.narada_identity.encoding import (
         IdentityVersion,
         encode_public_id,
@@ -135,7 +136,8 @@ def test_distributed_directory_hint_path_falls_back_to_broadcast():
 
     inner = InMemoryDirectory()
     peer = InMemoryPeerLookupClient()
-    # Different node publishes the answer.
+    # A peer claims to host bob but signs as node1other (NOT node1absent,
+    # the node the hint claims). The directory must refuse the answer.
     peer.publish(
         node_id="node1other",
         entry=DirectoryEntry(
@@ -145,7 +147,9 @@ def test_distributed_directory_hint_path_falls_back_to_broadcast():
         ),
     )
     dd = DistributedDirectory(inner, peer_client=peer)
-    assert dd.lookup(bob_v2) == "host-other:4440"
+    assert dd.lookup(bob_v2) is None
+    # Inner directory must not have been poisoned with the bad answer.
+    assert inner.lookup(bob_v2) is None
 
 
 def test_distributed_directory_handles_peer_lookup_error():
