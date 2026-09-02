@@ -1,9 +1,9 @@
-"""Base interface for Lattice mail adapters.
+"""Base interface for Narada mail adapters.
 
-A :class:`MailAdapter` is the single object a Lattice node uses to talk to a
+A :class:`MailAdapter` is the single object a Narada node uses to talk to a
 mail source. Today the only production adapter is
 :class:`src.mail_abstraction.imap_smtp.IMAPSMTPAdapter`; future adapters will
-speak the Lattice protocol or, eventually, other transports.
+speak the Narada protocol or, eventually, other transports.
 
 The interface is intentionally narrow: enough to send, fetch, list folders,
 and watch for new messages. The existing Openmail IMAP/SMTP surface is
@@ -26,14 +26,14 @@ class MailAdapterError(Exception):
 class MessageSource(str, Enum):
     """Where a message came from.
 
-    Used by the Lattice client UI to show a small indicator distinguishing
+    Used by the Narada client UI to show a small indicator distinguishing
     messages delivered over conventional email (IMAP) from those delivered
-    over the Lattice protocol. Today only ``IMAP`` is produced; ``LATTICE``
+    over the Narada protocol. Today only ``IMAP`` is produced; ``Narada``
     will appear in Phase 2+.
     """
 
     IMAP = "imap"
-    LATTICE = "lattice"
+    Narada = "Narada"
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class Message:
     """A minimal cross-adapter message view.
 
     Adapters may carry more information; this is the projection the rest of
-    the Lattice node should rely on. ``raw`` is the adapter-specific blob
+    the Narada node should rely on. ``raw`` is the adapter-specific blob
     (e.g. RFC822 bytes for IMAP) for callers that need it.
     """
 

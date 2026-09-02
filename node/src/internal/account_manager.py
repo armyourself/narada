@@ -21,7 +21,7 @@ class Account(BaseModel):
     email_address: str
     avatar: Optional[dict] = None
     fullname: Optional[str] = None
-    lattice_identity_id: Optional[str] = None
+    narada_identity_id: Optional[str] = None
 
 class AccountWithPassword(Account):
     encrypted_password: str = ""

@@ -1,4 +1,4 @@
-<h1 align="center">Lattice</h1>
+<h1 align="center">Narada</h1>
 
 <p align="center">
   Decentralized email infrastructure.
@@ -9,15 +9,15 @@
 </p>
 
 > [!WARNING]
-> Lattice is experimental software under active development.
+> Narada is experimental software under active development.
 > The protocol, architecture, APIs, and data formats are subject to change.
 > It is not currently suitable for production or security-critical communication.
 
 ---
 
-## What is Lattice?
+## What is Narada?
 
-Lattice is an open-source project exploring a decentralized alternative to conventional email infrastructure.
+Narada is an open-source project exploring a decentralized alternative to conventional email infrastructure.
 
 Traditional email depends on centralized infrastructure:
 
@@ -35,10 +35,10 @@ Bob's Mail Provider
 Bob
 ```
 
-Lattice aims to replace this model with a distributed network of independently operated nodes:
+Narada aims to replace this model with a distributed network of independently operated nodes:
 
 ```text
-              Lattice Network
+              Narada Network
 
         ┌───────────────┐
         │     Alice     │
@@ -77,7 +77,7 @@ Yet modern email infrastructure relies heavily on centralized providers to:
 * provide search and synchronization
 * control access to infrastructure
 
-Lattice explores a different model.
+Narada explores a different model.
 
 Users operate their own nodes. Nodes communicate with one another. Messages are authenticated and encrypted. Infrastructure can be distributed across independently operated participants.
 
@@ -89,11 +89,11 @@ The goal is to build the **infrastructure underneath the interface**.
 
 # Architecture
 
-Lattice is designed as several independent layers.
+Narada is designed as several independent layers.
 
 ```text
 ┌─────────────────────────────────────────────┐
-│                 Lattice Client              │
+│                 Narada Client              │
 │                                             │
 │  Inbox · Compose · Search · Accounts        │
 └──────────────────────┬──────────────────────┘
@@ -108,17 +108,17 @@ Lattice is designed as several independent layers.
              │                   │
              ▼                   ▼
       ┌──────────────┐    ┌───────────────┐
-      │ IMAP / SMTP  │    │ Lattice       │
+      │ IMAP / SMTP  │    │ Narada       │
       │ Adapter      │    │ Protocol      │
       └──────────────┘    └───────┬───────┘
                                   │
                            ┌──────▼──────┐
-                           │ Lattice     │
+                           │ Narada     │
                            │ Network     │
                            └─────────────┘
 ```
 
-The client should not need to know whether a message arrived through conventional email infrastructure or the Lattice protocol.
+The client should not need to know whether a message arrived through conventional email infrastructure or the Narada protocol.
 
 ---
 
@@ -128,7 +128,7 @@ The client should not need to know whether a message arrived through conventiona
 
 No single organization should be required to operate the entire network.
 
-Anyone should be able to operate a Lattice node.
+Anyone should be able to operate a Narada node.
 
 ## User Ownership
 
@@ -158,13 +158,13 @@ Offline users should not necessarily mean undeliverable messages.
 
 ## Interoperability
 
-Lattice should coexist with existing email infrastructure rather than requiring the entire world to migrate immediately.
+Narada should coexist with existing email infrastructure rather than requiring the entire world to migrate immediately.
 
 ---
 
 # Identity
 
-Lattice is intended to use cryptographic identities rather than relying exclusively on centralized usernames and passwords.
+Narada is intended to use cryptographic identities rather than relying exclusively on centralized usernames and passwords.
 
 Conceptually:
 
@@ -184,7 +184,7 @@ The exact identity format and cryptographic architecture are still under develop
 
 # Message Delivery
 
-A Lattice message may eventually travel through several independently operated nodes.
+A Narada message may eventually travel through several independently operated nodes.
 
 ```text
 Alice
@@ -214,7 +214,7 @@ They should not require access to its plaintext.
 
 A decentralized network still needs to solve the problem that users are not always online.
 
-Lattice therefore explores encrypted relay nodes.
+Narada therefore explores encrypted relay nodes.
 
 ```text
 Alice
@@ -249,9 +249,9 @@ The protocol must eventually define:
 
 # Conventional Email
 
-Lattice is not intended to exist in isolation.
+Narada is not intended to exist in isolation.
 
-A future gateway could allow communication between Lattice and conventional email:
+A future gateway could allow communication between Narada and conventional email:
 
 ```text
 Gmail
@@ -259,26 +259,26 @@ Gmail
   │ SMTP
   ▼
 ┌─────────────────┐
-│ Lattice Gateway │
+│ Narada Gateway │
 └────────┬────────┘
          │
-         │ Lattice Protocol
+         │ Narada Protocol
          ▼
-   Lattice Network
+   Narada Network
          │
          ▼
-   Lattice User
+   Narada User
 ```
 
-Likewise, Lattice users should eventually be able to communicate with conventional email addresses.
+Likewise, Narada users should eventually be able to communicate with conventional email addresses.
 
-The gateway lives in [`gateway/`](gateway/) and is currently a skeleton; the Lattice-side delivery pipeline must land first.
+The gateway lives in [`gateway/`](gateway/) and is currently a skeleton; the Narada-side delivery pipeline must land first.
 
 ---
 
 # Current Status
 
-Lattice currently builds upon an existing self-hosted email client/server architecture.
+Narada currently builds upon an existing self-hosted email client/server architecture.
 
 The inherited application provides functionality including:
 
@@ -292,24 +292,24 @@ The inherited application provides functionality including:
 * Bulk operations
 * Undo actions
 
-Lattice-specific work landed so far (under `node/` and `protocol/`):
+Narada-specific work landed so far (under `node/` and `protocol/`):
 
 * **Mail Abstraction layer** (`node/src/mail_abstraction/`): a single
-  `MailAdapter` interface with an IMAP/SMTP adapter and a Lattice
+  `MailAdapter` interface with an IMAP/SMTP adapter and a Narada
   adapter.
-* **Cryptographic identity** (`node/src/lattice_identity/`,
+* **Cryptographic identity** (`node/src/narada_identity/`,
   `protocol/identity.md`): per-account Ed25519 + X25519 keypair with a
-  `lattice1...` bech32m public id, 12-word BIP-39 mnemonic recovery,
+  `narada1...` bech32m public id, 12-word BIP-39 mnemonic recovery,
   and three keystore backends (in-memory, OS keyring, passphrase
   fallback). Exposed via a FastAPI router and a CLI.
-* **Lattice protocol MVP** (`node/src/lattice/`,
-  `protocol/message-format.md`): two Lattice nodes on the same
+* **Narada protocol MVP** (`node/src/narada/`,
+  `protocol/message-format.md`): two Narada nodes on the same
   machine can exchange end-to-end encrypted messages over loopback
   HTTP. The envelope is X25519-ECDH-sealed and Ed25519-signed; the
   body is ChaCha20-Poly1305. A persistent outbox with
   exponential-backoff retry handles the recipient being offline.
 * Peer discovery, distributed routing, relays, and the
-  Lattice↔SMTP/IMAP gateway are **not yet implemented**. The
+  Narada↔SMTP/IMAP gateway are **not yet implemented**. The
   protocol layer above is the seam where they will plug in.
 
 The decentralized protocol is being developed separately from these existing components.
@@ -319,10 +319,10 @@ The decentralized protocol is being developed separately from these existing com
 # Repository Structure
 
 ```text
-lattice/
+Narada/
 ├── client/         # Desktop client (SvelteKit + Tauri)
-├── node/           # Lattice node daemon (Python / FastAPI; Openmail-derived)
-├── gateway/        # Lattice <-> SMTP/IMAP bridge (skeleton)
+├── node/           # Narada node daemon (Python / FastAPI; Openmail-derived)
+├── gateway/        # Narada <-> SMTP/IMAP bridge (skeleton)
 ├── protocol/       # Protocol spec, identity format, message envelope (stubs)
 ├── docs/
 │   ├── architecture/   # Installation, roadmap, screenshots
@@ -362,7 +362,7 @@ lattice/
 * [ ] Key rotation (basic rotate-API only; on-the-wire rotation is Phase 2+)
 * [x] Key recovery (BIP-39 mnemonic)
 
-## Phase 2 — Lattice Protocol
+## Phase 2 — Narada Protocol
 
 * [x] Define protocol specification
 * [x] Define message format
@@ -398,8 +398,8 @@ lattice/
 
 * [ ] SMTP gateway
 * [ ] IMAP gateway
-* [ ] Lattice → SMTP
-* [ ] SMTP → Lattice
+* [ ] Narada → SMTP
+* [ ] SMTP → Narada
 * [ ] Identity mapping
 * [ ] Spam prevention
 
@@ -433,7 +433,7 @@ Encryption
 Ciphertext
     │
     ▼
-Lattice Network
+Narada Network
     │
     ▼
 Ciphertext
@@ -450,11 +450,11 @@ Plaintext
 
 However:
 
-> **Lattice is not currently considered secure.**
+> **Narada is not currently considered secure.**
 
 The cryptographic design, threat model, key management, metadata protection, and protocol security are still being developed.
 
-Do not use experimental Lattice implementations for sensitive communication.
+Do not use experimental Narada implementations for sensitive communication.
 
 ---
 
@@ -501,7 +501,7 @@ Convenience targets via the included `Makefile`:
 
 ```sh
 make install      # run install.sh (Linux/macOS)
-make run-node     # run the Lattice node
+make run-node     # run the Narada node
 make run-client   # run the desktop client
 make test-node    # run the node's test suite
 ```
@@ -510,7 +510,7 @@ make test-node    # run the node's test suite
 
 # Contributing
 
-Lattice is experimental and architectural decisions are still being made.
+Narada is experimental and architectural decisions are still being made.
 
 Contributions are welcome, particularly around:
 
@@ -530,9 +530,9 @@ Before implementing major protocol changes, review the relevant design documenta
 
 # Origin
 
-Lattice began as a fork of **Openmail**, an open-source self-hosted email client/server.
+Narada began as a fork of **Openmail**, an open-source self-hosted email client/server.
 
-The original project provided the foundation for the client and existing email functionality. Lattice extends that foundation toward a decentralized communication protocol.
+The original project provided the foundation for the client and existing email functionality. Narada extends that foundation toward a decentralized communication protocol.
 
 The original project's license and attribution requirements remain applicable to the code derived from it.
 
@@ -542,13 +542,13 @@ See [`LICENSE`](LICENSE) for the applicable license terms (Apache License 2.0). 
 
 # License
 
-Lattice is distributed under the terms of the project's license.
+Narada is distributed under the terms of the project's license.
 
 See [`LICENSE`](LICENSE) for details.
 
 ---
 
 <p align="center">
-  <strong>Lattice</strong><br>
+  <strong>Narada</strong><br>
   Decentralized email infrastructure.
 </p>

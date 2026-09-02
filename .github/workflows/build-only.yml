@@ -51,7 +51,7 @@ jobs:
             uv pip install pyinstaller
             uv run pyinstaller \
                 --onefile \
-                --name lattice-node \
+                --name narada-node \
                 --icon=${{ matrix.icon }} \
                 --paths=. \
                 src/main.py
@@ -59,7 +59,7 @@ jobs:
       - name: Rename executable to include version and OS
         run: |
           mkdir -p dist
-          mv node/dist/lattice-node${{ matrix.ext }} dist/Lattice-Node_${{ env.VERSION }}_${{ matrix.simple_os }}${{ matrix.ext }}
+          mv node/dist/narada-node${{ matrix.ext }} dist/narada-Node_${{ env.VERSION }}_${{ matrix.simple_os }}${{ matrix.ext }}
 
   build-client:
     name: Build Client (${{ matrix.platform }})
@@ -135,7 +135,7 @@ jobs:
             echo "ARCH_NAME=$ARCH_NAME" >> $GITHUB_ENV
 
             mv client/src-tauri/target/*-apple-darwin/release/bundle/dmg/*.dmg \
-            dist/Lattice_${{ env.VERSION }}_${ARCH_NAME}.dmg
+            dist/narada_${{ env.VERSION }}_${ARCH_NAME}.dmg
 
       - name: Rename client executable (Linux)
         if: startsWith(matrix.platform, 'ubuntu')
@@ -144,11 +144,11 @@ jobs:
             mkdir -p dist
             echo "ARCH_NAME=linux" >> $GITHUB_ENV
             mv client/src-tauri/target/release/bundle/appimage/*.AppImage \
-            dist/Lattice_${{ env.VERSION }}_linux.AppImage
+            dist/narada_${{ env.VERSION }}_linux.AppImage
             mv client/src-tauri/target/release/bundle/deb/*.deb \
-            dist/Lattice_${{ env.VERSION }}_linux.deb
+            dist/narada_${{ env.VERSION }}_linux.deb
             mv client/src-tauri/target/release/bundle/rpm/*.rpm \
-            dist/Lattice_${{ env.VERSION }}_linux.rpm
+            dist/narada_${{ env.VERSION }}_linux.rpm
 
       - name: Rename client executable (Windows)
         if: startsWith(matrix.platform, 'windows')
@@ -157,4 +157,4 @@ jobs:
             New-Item -ItemType Directory -Force -Path dist | Out-Null
             echo "ARCH_NAME=windows" >> $env:GITHUB_ENV
             Move-Item "client/src-tauri/target/release/bundle/nsis/*.exe" `
-            "dist/Lattice_${{ env.VERSION }}_windows.exe"
+            "dist/narada_${{ env.VERSION }}_windows.exe"

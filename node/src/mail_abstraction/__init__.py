@@ -1,6 +1,6 @@
-"""Mail Abstraction layer for the Lattice node.
+"""Mail Abstraction layer for the Narada node.
 
-This package defines a single ``MailAdapter`` interface that the Lattice
+This package defines a single ``MailAdapter`` interface that the Narada
 node uses to talk to mail sources, regardless of transport.
 
 * :class:`IMAPSMTPAdapter` - wraps the existing Openmail IMAP/SMTP code.
@@ -8,8 +8,8 @@ node uses to talk to mail sources, regardless of transport.
   through this path directly. The adapter is the well-typed seam
   that the routers can be migrated to in a follow-up without
   changing behaviour.
-* :class:`src.lattice.adapter.LatticeAdapter` - the Lattice protocol
-  transport. Lives in the ``lattice`` package now (Phase 2+).
+* :class:`src.narada.adapter.NaradaAdapter` - the Narada protocol
+  transport. Lives in the ``Narada`` package now (Phase 2+).
 """
 
 from .base import (

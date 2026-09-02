@@ -1,8 +1,8 @@
-# Lattice Security Documentation (Stub)
+# Narada Security Documentation (Stub)
 
 > Status: **draft / discussion only.**
 
-Lattice is currently **not** considered secure. The cryptographic design,
+Narada is currently **not** considered secure. The cryptographic design,
 threat model, key management, metadata protection, and protocol security are
 all under development.
 
@@ -15,5 +15,5 @@ This directory will eventually hold:
   properties**.
 - Documented **known limitations** and the rationale behind them.
 
-Do not use experimental Lattice implementations for sensitive communication
+Do not use experimental Narada implementations for sensitive communication
 in the meantime.

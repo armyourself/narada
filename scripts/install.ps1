@@ -1,5 +1,5 @@
-# Lattice — Windows installer
-# Sets up the Lattice node (Python 3.13 + uv) and the desktop client
+# Narada — Windows installer
+# Sets up the Narada node (Python 3.13 + uv) and the desktop client
 # (Bun + Tauri + Rust toolchain). Intended to be run from a developer shell.
 #
 # Usage (from repo root):
@@ -20,7 +20,7 @@ Require-Command -Name "uv"     -InstallHint "Install from https://github.com/ast
 Require-Command -Name "bun"    -InstallHint "Install from https://bun.sh"
 Require-Command -Name "rustup" -InstallHint "Install from https://tauri.app/start/prerequisites/"
 
-Write-Host "Installing Lattice node..."
+Write-Host "Installing Narada node..."
 Push-Location node
 try {
     uv sync
@@ -29,7 +29,7 @@ try {
 }
 Write-Host "  -> node ready."
 
-Write-Host "Installing Lattice desktop client..."
+Write-Host "Installing Narada desktop client..."
 Push-Location client
 try {
     bun install

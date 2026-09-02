@@ -1,12 +1,12 @@
 .PHONY: help install install-win run-node run-client test-node
 
 help:
-	@echo "Lattice — available targets:"
+	@echo "narada — available targets:"
 	@echo "  make install      Install node + client (Linux/macOS, via install.sh)"
 	@echo "  make install-win  Install node + client on Windows (scripts/install.ps1)"
-	@echo "  make run-node     Run the Lattice node (Python)"
-	@echo "  make run-client   Run the Lattice desktop client (Bun + Tauri)"
-	@echo "  make test-node    Run the Lattice node test suite (pytest)"
+	@echo "  make run-node     Run the narada node (Python)"
+	@echo "  make run-client   Run the narada desktop client (Bun + Tauri)"
+	@echo "  make test-node    Run the narada node test suite (pytest)"
 
 install:
 	./install.sh

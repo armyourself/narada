@@ -1,7 +1,7 @@
-# Lattice Protocol
+# Narada Protocol
 
-This directory defines the Lattice protocol. Anything that travels over the
-Lattice network — node-to-node messages, identity documents, handshakes,
+This directory defines the Narada protocol. Anything that travels over the
+Narada network — node-to-node messages, identity documents, handshakes,
 delivery acknowledgements — is described here.
 
 The protocol is the project. The clients and nodes are just reference
@@ -27,7 +27,7 @@ protocol/
 
 - **Phase 1 — Cryptographic Identity.** Keypair generation, secure key
   storage, identity format, key rotation, key recovery.
-- **Phase 2 — Lattice Protocol.** Protocol spec, message format, node
+- **Phase 2 — Narada Protocol.** Protocol spec, message format, node
   identity, secure handshake, encrypted transport, message authentication,
   delivery acknowledgements, replay protection.
 - **Phase 3 — Distributed Network.** Peer discovery, peer-to-peer
@@ -36,8 +36,8 @@ protocol/
 - **Phase 4 — Distributed Delivery.** Relay nodes, encrypted temporary
   storage, offline delivery, message expiration, relay selection, delivery
   confirmation, storage policies.
-- **Phase 5 — Interoperability.** SMTP / IMAP gateways, Lattice -> SMTP,
-  SMTP -> Lattice, identity mapping, spam prevention.
+- **Phase 5 — Interoperability.** SMTP / IMAP gateways, Narada -> SMTP,
+  SMTP -> Narada, identity mapping, spam prevention.
 - **Phase 6 — Protocol Stabilization.** Formal spec, threat model, security
   audit, reference implementation, versioned protocol, compatibility
   guarantees.

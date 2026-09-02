@@ -3,17 +3,17 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lattice-gateway"
+name = "Narada-gateway"
 version = "0.0.1-alpha0"
-description = "Lattice gateway: bridge between the Lattice protocol and conventional email (SMTP/IMAP)."
+description = "Narada gateway: bridge between the Narada protocol and conventional email (SMTP/IMAP)."
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [
-    { name = "Lattice contributors" },
+    { name = "Narada contributors" },
 ]
 license = { text = "Apache-2.0" }
 dependencies = [
-    "lattice-node",
+    "Narada-node",
 ]
 
 [tool.setuptools.packages.find]

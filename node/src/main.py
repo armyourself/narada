@@ -18,8 +18,8 @@ from src.internal.account_manager import AccountManager
 from src.internal.file_system import FileObject, Root
 from src.routers import (
     account_tasks,
-    lattice_identity_tasks,
-    lattice_protocol_tasks,
+    narada_identity_tasks,
+    narada_protocol_tasks,
     mailbox_tasks,
 )
 from src.helpers.uvicorn_logger import UvicornLogger
@@ -45,67 +45,67 @@ account_manager = AccountManager()
 uvicorn_logger = UvicornLogger()
 
 
-# Lattice outbox drainer state. The drainer is a small background task
-# that runs every LATTICE_DRAIN_INTERVAL seconds during the FastAPI
+# Narada outbox drainer state. The drainer is a small background task
+# that runs every narada_DRAIN_INTERVAL seconds during the FastAPI
 # lifespan; it tries to deliver every due outbox entry.
-_LATTICE_DRAIN_INTERVAL = 30.0  # seconds
-_lattice_drain_task: asyncio.Task | None = None
-_lattice_drain_stop = asyncio.Event() if False else None  # placeholder
+_narada_DRAIN_INTERVAL = 30.0  # seconds
+_narada_drain_task: asyncio.Task | None = None
+_narada_drain_stop = asyncio.Event() if False else None  # placeholder
 
 
-def _drain_lattice_outbox_once() -> None:
-    """One pass over every Lattice account with a non-empty outbox.
+def _drain_narada_outbox_once() -> None:
+    """One pass over every Narada account with a non-empty outbox.
 
     Imports are inside the function so the module loads even if the
-    Lattice package is partially uninitialised in a future state.
+    Narada package is partially uninitialised in a future state.
     """
     try:
-        from src.lattice.adapter import LatticeAdapter
-        from src.lattice.outbox import Outbox
-        from src.lattice_identity.keystore import default_keystore
+        from src.Narada.adapter import NaradaAdapter
+        from src.Narada.outbox import Outbox
+        from src.narada_identity.keystore import default_keystore
     except Exception as exc:  # noqa: BLE001
-        uvicorn_logger.error(f"Lattice drain: import failed: {exc}")
+        uvicorn_logger.error(f"Narada drain: import failed: {exc}")
         return
     data_dir = os.path.join(os.path.expanduser("~"), "." + APP_NAME.lower())
-    outbox = Outbox(os.path.join(data_dir, "lattice"))
+    outbox = Outbox(os.path.join(data_dir, "Narada"))
     keystore = default_keystore()
     for account_id in outbox.list_all_accounts():
         try:
-            adapter = LatticeAdapter(account_id, outbox=outbox, keystore=keystore)
+            adapter = NaradaAdapter(account_id, outbox=outbox, keystore=keystore)
             adapter.drain_outbox(max_per_account=32)
         except Exception as exc:  # noqa: BLE001
-            uvicorn_logger.error(f"Lattice drain: account {account_id}: {exc}")
+            uvicorn_logger.error(f"Narada drain: account {account_id}: {exc}")
 
 
-async def _lattice_drain_loop() -> None:
-    uvicorn_logger.info("Lattice outbox drainer started")
+async def _narada_drain_loop() -> None:
+    uvicorn_logger.info("Narada outbox drainer started")
     while True:
         try:
-            _drain_lattice_outbox_once()
+            _drain_narada_outbox_once()
         except Exception as exc:  # noqa: BLE001
-            uvicorn_logger.error(f"Lattice drain loop error: {exc}")
-        await asyncio.sleep(_LATTICE_DRAIN_INTERVAL)
+            uvicorn_logger.error(f"Narada drain loop error: {exc}")
+        await asyncio.sleep(_narada_DRAIN_INTERVAL)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _lattice_drain_task
+    global _narada_drain_task
     try:
         client_handler.create_openmail_clients()
-        # Start the Lattice outbox drainer.
+        # Start the Narada outbox drainer.
         try:
             loop = asyncio.get_running_loop()
-            _lattice_drain_task = loop.create_task(_lattice_drain_loop())
+            _narada_drain_task = loop.create_task(_narada_drain_loop())
         except RuntimeError:
             # No running loop (e.g. in a test). Skip starting the task;
-            # tests can call _drain_lattice_outbox_once() directly.
-            _lattice_drain_task = None
+            # tests can call _drain_narada_outbox_once() directly.
+            _narada_drain_task = None
         yield
     finally:
-        if _lattice_drain_task is not None:
-            _lattice_drain_task.cancel()
+        if _narada_drain_task is not None:
+            _narada_drain_task.cancel()
             try:
-                await _lattice_drain_task
+                await _narada_drain_task
             except (asyncio.CancelledError, Exception):
                 pass
         client_handler.shutdown()
@@ -114,8 +114,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(account_tasks.router)
 app.include_router(mailbox_tasks.router)
-app.include_router(lattice_identity_tasks.router)
-app.include_router(lattice_protocol_tasks.router)
+app.include_router(narada_identity_tasks.router)
+app.include_router(narada_protocol_tasks.router)
 
 def setup_api_middlewares(**kwargs):
     app.add_middleware(

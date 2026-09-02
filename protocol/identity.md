@@ -1,17 +1,17 @@
-# Lattice Identity
+# Narada Identity
 
 > Status: **specified.** The on-the-wire encoding, key types, and
 > recovery format are defined here. Implementation lives in
-> `node/src/lattice_identity/`.
+> `node/src/narada_identity/`.
 
 ## What an identity is
 
-A Lattice identity binds together:
+A Narada identity binds together:
 
 - A **public key** used to verify signatures and derive shared secrets.
 - A **node identity**: one or more node references where the user can be
   reached (mailbox location, supported transport, etc.). *Not specified
-  here; lands with the Lattice protocol (Phase 2+).*
+  here; lands with the Narada protocol (Phase 2+).*
 - **Mailbox information**: how to deliver messages to this identity.
   *Not specified here.*
 - **Key metadata**: algorithm, version, creation time, rotation history,
@@ -23,11 +23,11 @@ the user.
 
 ## Public-id string format
 
-A Lattice identity is encoded as a **bech32m** string (BIP-350) with the
-human-readable prefix `lattice`:
+A Narada identity is encoded as a **bech32m** string (BIP-350) with the
+human-readable prefix `narada`:
 
 ```
-lattice1<bech32m-checksummed-payload>
+narada1<bech32m-checksummed-payload>
 ```
 
 ### Payload layout
@@ -53,14 +53,14 @@ parsers.
 
 The X25519 keypair is **deterministically derived from the Ed25519
 seed** via HKDF-SHA256 with the info string
-`b"lattice-x25519-from-ed25519-seed"`. A single 32-byte seed is
+`b"narada-x25519-from-ed25519-seed"`. A single 32-byte seed is
 therefore enough to recover both halves. This keeps the recovery
 mnemonic small (12 words) and removes the risk of the two keys
 drifting apart.
 
 ## Recovery: 12-word BIP-39 mnemonic
 
-A Lattice identity can be recovered from a 12-word BIP-39 mnemonic:
+A Narada identity can be recovered from a 12-word BIP-39 mnemonic:
 
 1. Decode the mnemonic to its 16-byte entropy (the BIP-39 checksum is
    verified by the standard wordlist).
@@ -73,7 +73,7 @@ keystore is configured.
 
 ## Keystore backends
 
-The private seed is stored by a `LatticeKeystore` chosen at runtime:
+The private seed is stored by a `NaradaKeystore` chosen at runtime:
 
 - **`InMemoryKeystore`** — process-local; used for tests and the
   `--no-persist` CLI mode. Not durable.
@@ -85,19 +85,19 @@ The private seed is stored by a `LatticeKeystore` chosen at runtime:
 - **`PassphraseKeystore`** — fallback for headless servers with no OS
   keyring. The seed is encrypted with a passphrase via PBKDF2-HMAC-SHA256
   (200 000 iterations) + AES-GCM and stored as a file under
-  `~/.lattice/keystore/<account_id>.bin` (mode 0600).
+  `~/.narada/keystore/<account_id>.bin` (mode 0600).
 
 The same interface is exposed via the FastAPI router
-`/lattice/identity/...` and the CLI
-`python -m src.lattice_identity.cli ...`.
+`/narada/identity/...` and the CLI
+`python -m src.narada_identity.cli ...`.
 
 ## Signing and ECDH
 
-Given a `LatticeIdentity` and another party's public id:
+Given a `NaradaIdentity` and another party's public id:
 
 - `identity.sign(data)` returns an Ed25519 signature.
 - `identity.shared_secret_with(peer_public_id)` decodes the peer's
-  `lattice1...` id, extracts the X25519 public key, and returns the 32-byte
+  `narada1...` id, extracts the X25519 public key, and returns the 32-byte
   ECDH output. **Callers should run this through HKDF before using it
   as a symmetric key.** The raw ECDH output is exposed for testability.
 
@@ -111,14 +111,14 @@ Given a `LatticeIdentity` and another party's public id:
 - **Rotatable.** A user can publish a new identity that supersedes an
   old one without losing the chain of trust. The rotation mechanism
   lives in the protocol layer (Phase 2+); today, rotation produces a
-  fresh `lattice1...` with no on-the-wire link to its predecessor.
+  fresh `narada1...` with no on-the-wire link to its predecessor.
 - **Recoverable.** A user can recover the identity from the 12-word
   mnemonic if the keystore is wiped.
 
 ## Open questions
 
 - Long-form vs short-form identifiers (think email address vs
-  fingerprint). `lattice1...` is the long form; short forms may be
+  fingerprint). `narada1...` is the long form; short forms may be
   introduced later.
 - How key rotation and recovery interact on the wire.
 - How to represent a user with multiple devices (sub-identities,

@@ -1,4 +1,4 @@
-# Lattice Protocol Specification (Stub)
+# Narada Protocol Specification (Stub)
 
 > Status: **draft / discussion only.** Nothing in this document is final.
 > See `identity.md` and `message-format.md` for sub-topics.
@@ -20,12 +20,12 @@
 
 ## Non-goals (initial)
 
-- Production-grade security. Lattice is explicitly **not** considered secure
+- Production-grade security. Narada is explicitly **not** considered secure
   yet; do not use it for sensitive communication.
 - Compelling-with-existing-email compatibility beyond what the gateway
   (Phase 5) provides.
 - Replacing the surface area of modern mail providers (search, calendar,
-  contacts, etc.). The Lattice protocol carries messages; clients may add
+  contacts, etc.). The Narada protocol carries messages; clients may add
   features on top.
 
 ## Layers (proposed)

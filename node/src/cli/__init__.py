@@ -1,1 +1,1 @@
-"""Lattice CLI commands."""
+"""narada CLI commands."""

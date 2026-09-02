@@ -1,13 +1,13 @@
-# Lattice Message Format (Phase 2 MVP)
+# Narada Message Format (Phase 2 MVP)
 
 > Status: **specified.** The on-the-wire JSON shape, the cryptographic
 > recipe, and the transport contract are defined here. The
-> implementation lives in `node/src/lattice/`.
+> implementation lives in `node/src/narada/`.
 
 ## Intended message flow
 
 ```text
-Plaintext (LatticeBody)
+Plaintext (NaradaBody)
     │
     ▼
 X25519 ECDH (sender static priv, recipient static pub) -> shared secret
@@ -26,7 +26,7 @@ JSON envelope {v, sender, recipient, message_id, timestamp, nonce,
                signature, body_ciphertext}
     │
     ▼
-LatticeTransport (loopback HTTP for the MVP) -> recipient
+NaradaTransport (loopback HTTP for the MVP) -> recipient
     │
     ▼
 Recipient: verify signature, decrypt body, persist to mailbox
@@ -42,8 +42,8 @@ from the recipient's perspective.
 ```json
 {
   "v": 1,
-  "sender_public_id": "lattice1...",
-  "recipient_public_id": "lattice1...",
+  "sender_public_id": "narada1...",
+  "recipient_public_id": "narada1...",
   "message_id": "<uuid4>",
   "timestamp": 1735689600,
   "nonce": "<16 random bytes, base64>",
@@ -57,8 +57,8 @@ Field semantics:
 | Field | Type | Notes |
 |---|---|---|
 | `v` | int | Envelope version. Currently `1`. |
-| `sender_public_id` | string | A `lattice1...` public id. The Ed25519 component is used to verify the signature; the X25519 component is used to derive the shared secret. |
-| `recipient_public_id` | string | A `lattice1...` public id. The X25519 component is used to derive the shared secret. |
+| `sender_public_id` | string | A `narada1...` public id. The Ed25519 component is used to verify the signature; the X25519 component is used to derive the shared secret. |
+| `recipient_public_id` | string | A `narada1...` public id. The X25519 component is used to derive the shared secret. |
 | `message_id` | string | A unique per-message identifier. The sender picks it; the recipient uses it to dedup replays within the timestamp window. |
 | `timestamp` | int | Unix seconds. The recipient rejects envelopes outside a 5-minute window. |
 | `nonce` | bytes (16) | Random per message. The first 12 bytes are used as the ChaCha20-Poly1305 nonce. |
@@ -83,7 +83,7 @@ signature and AEAD checks will fail.
 ```
 shared    = X25519(sender_static_priv, recipient_x25519_pub)
 salt      = SHA-256(sender_public_id || ":" || message_id)         # 32 bytes
-key       = HKDF-SHA256(shared, salt=salt, info=b"lattice-envelope-v1", length=32)
+key       = HKDF-SHA256(shared, salt=salt, info=b"Narada-envelope-v1", length=32)
 nonce     = secrets.token_bytes(16)                                # 128 bits
 aead_nonce = nonce[:12]                                           # ChaCha20-Poly1305 uses 12 bytes
 body_ct   = ChaCha20Poly1305(key, nonce=aead_nonce, plaintext=body, aad=canonical_header_bytes)
@@ -102,7 +102,7 @@ signature = Ed25519(sender_ed25519_priv, canonical_header_bytes)
 
 ## Body (plaintext)
 
-`LatticeBody` is a small JSON object. It is encoded with the same
+`NaradaBody` is a small JSON object. It is encoded with the same
 canonical-JSON recipe (sort keys, no whitespace) before encryption,
 so the recipient can decode it after `aead.decrypt()` returns.
 
@@ -131,8 +131,8 @@ so the recipient can decode it after `aead.decrypt()` returns.
 The recipient runs these checks in order. The first failure short-
 circuits and returns a typed error to the sender.
 
-1. **Schema.** `LatticeEnvelope.from_dict` parses the JSON and the
-   base64 fields. Bad shape → `LatticeEnvelopeError`.
+1. **Schema.** `NaradaEnvelope.from_dict` parses the JSON and the
+   base64 fields. Bad shape → `NaradaEnvelopeError`.
 2. **Recipient.** `envelope.recipient_public_id` must equal the
    recipient's local public id. Mismatch → reject.
 3. **Version.** `envelope.v` must equal `ENVELOPE_VERSION` (currently
@@ -165,5 +165,5 @@ the sender within the window is treated as a no-op.
 - **Post-quantum.** The MVP is X25519 + Ed25519. A migration path
   through a hybrid KEM (e.g. X25519 + ML-KEM-768) is part of Phase 6
   (Protocol Stabilization).
-- **Body parsing.** `LatticeBody` is a flat JSON object. MIME,
+- **Body parsing.** `NaradaBody` is a flat JSON object. MIME,
   attachments, and threading will come in a later phase.
