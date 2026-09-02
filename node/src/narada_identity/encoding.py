@@ -203,14 +203,19 @@ def decode_public_id(public_id: str) -> tuple[IdentityVersion, bytes, bytes]:
             f"Unknown identity version: {payload[0]}"
         ) from exc
     return version, bytes(payload[1:33]), bytes(payload[33:65])
-
-
 def decode_node_hint(public_id: str) -> Optional[str]:
     """Return the embedded ``node1...`` hint of a V2 identity, or None.
 
-    V1 identities always return None.
+    V1 identities always return None. Malformed public ids also
+    return None (this helper is called speculatively on every
+    directory lookup; it must never raise).
     """
-    hrp, data, spec = _bech32_decode(public_id)
+    if not isinstance(public_id, str):
+        return None
+    try:
+        hrp, data, spec = _bech32_decode(public_id)
+    except NaradaIdentityError:
+        return None
     if hrp != _HRP or spec != "bech32m":
         return None
     payload = bytes(_convertbits(data, 5, 8, pad=False))
@@ -234,7 +239,6 @@ def decode_node_hint(public_id: str) -> Optional[str]:
             except UnicodeDecodeError:
                 return None
     return None
-
 
 def is_valid_public_id(public_id: str) -> bool:
     """Return True if ``public_id`` is a syntactically valid Narada identity."""
