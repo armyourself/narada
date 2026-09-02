@@ -8,10 +8,12 @@
   Private. Distributed. User-owned.
 </p>
 
-> [!WARNING]
-> Narada is experimental software under active development.
-> The protocol, architecture, APIs, and data formats are subject to change.
-> It is not currently suitable for production or security-critical communication.
+> [!IMPORTANT]
+> Narada is **alpha-grade software**. The protocol, architecture, APIs, and
+> data formats are subject to change without notice. The cryptographic design,
+> threat model, and implementation have not been independently audited.
+> It is not currently recommended for production, security-critical, or
+> irreplaceable communication.
 
 ---
 
@@ -448,13 +450,24 @@ Decryption
 Plaintext
 ```
 
-However:
+**Current security status**
 
-> **Narada is not currently considered secure.**
+Narada's cryptographic primitives — X25519 for key agreement, Ed25519 for
+signatures, ChaCha20-Poly1305 for payload encryption, BIP-39 for mnemonic
+recovery, bech32m for public identifiers — are well-known and widely vetted
+algorithms. The composition and wire format, however, are **alpha-grade**:
 
-The cryptographic design, threat model, key management, metadata protection, and protocol security are still being developed.
+* the formal protocol specification has not been published (Phase 6)
+* the threat model has not been published (`docs/security/` is a stub)
+* no third-party security audit has been performed
+* key rotation, replay protection beyond a timestamp window, and delivery
+  acknowledgements are partial or deferred (see the Roadmap)
+* metadata protection is not yet specified
 
-Do not use experimental Narada implementations for sensitive communication.
+Until those items are closed, treat Narada as a **research-grade reference
+implementation**: useful for development, integration work, and protocol
+discussion, but not a substitute for an audited messaging system for any
+communication whose loss or compromise would cause harm.
 
 ---
 
