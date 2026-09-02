@@ -139,15 +139,24 @@ def make_ack(
     )
 
 
+DEFAULT_ACK_MAX_AGE_SECONDS = 5 * 60
+
+
 def verify_ack(
-    ack: NaradaAck,
+    ack: "NaradaAck",
     *,
     expected_sender_public_id: str,
     expected_recipient_public_id: str,
     expected_message_id: str,
+    max_age_seconds: int = DEFAULT_ACK_MAX_AGE_SECONDS,
+    now: Optional[int] = None,
 ) -> bool:
     """Verify that ``ack`` is signed by the recipient's node and binds
     it to the expected envelope. Never raises.
+
+    Mitigates threat T6 (ack replay): the ack's ``timestamp`` must
+    be within ``max_age_seconds`` of ``now`` (default 5 minutes).
+    Callers may pass an explicit ``now`` for testing.
     """
     if ack.v != ACK_VERSION:
         return False
@@ -156,6 +165,9 @@ def verify_ack(
     if ack.recipient_public_id != expected_recipient_public_id:
         return False
     if ack.message_id != expected_message_id:
+        return False
+    current = int(now) if now is not None else int(time.time())
+    if abs(current - int(ack.timestamp)) > max_age_seconds:
         return False
     payload = _canonical_payload(
         ack.sender_public_id,

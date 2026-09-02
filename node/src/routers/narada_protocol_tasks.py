@@ -48,6 +48,13 @@ _keystore_factory = default_keystore
 _data_dir_factory = None  # None means "use default node data dir"
 
 
+def _hmac_key(data_dir) -> bytes:  # type: ignore[no-untyped-def]
+    """Return the HMAC key for ``data_dir``, derived from the node-identity seed."""
+    from src.narada_security.hmac_io import load_key
+
+    return load_key(data_dir)
+
+
 def _validate_account_id(account_id: str) -> Optional[Response]:
     if not isinstance(account_id, str) or not _ACCOUNT_ID_PATTERN.match(account_id):
         return Response(
@@ -152,6 +159,7 @@ def list_inbox(account_id: str) -> Response:
     except Exception as exc:  # noqa: BLE001
         return Response(success=False, message=f"could not open inbox: {exc}")
     messages = adapter.fetch_messages("narada", limit=200, offset=0)
+    messages = adapter.fetch_messages("narada", limit=200, offset=0)
     return Response(
         success=True,
         message=f"inbox for {account_id}",
@@ -159,6 +167,49 @@ def list_inbox(account_id: str) -> Response:
     )
 
 
+class SyncRequest(BaseModel):
+    account_id: str
+    since: int = 0
+
+
+
+
+@router.get("/narada/sync")
+def sync_account_get(account_id: str, since: int = 0) -> Response:
+    return _do_sync(account_id, since)
+
+
+@router.post("/narada/sync")
+def sync_account_post(request: SyncRequest) -> Response:
+    return _do_sync(request.account_id, request.since)
+
+
+def _do_sync(account_id: str, since: int) -> Response:
+    from src.narada.p2p.listener import build_sync_handler, WatermarkStore
+
+    err = _validate_account_id(account_id)
+    if err is not None:
+        return err
+    data_dir = _data_dir_factory() if _data_dir_factory is not None else None
+    if data_dir is None:
+        from src.consts import APP_NAME
+        import os
+
+        data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
+    wm = WatermarkStore(data_dir / "watermarks.json", key=_hmac_key(data_dir))
+
+    def getter() -> dict[str, str]:
+        return {account_id: str((data_dir / "etc" / f"mailbox.{account_id}.jsonl"))}
+
+    handler = build_sync_handler(account_id_getter=getter, watermark_store=wm)
+    out = handler({"type": "sync.fetch", "account_id": account_id, "since": since}, ("http", 0))
+    if out.get("type") == "error":
+        return Response(success=False, message=str(out.get("message", "sync failed")))
+    return Response(
+        success=True,
+        message=f"sync for {account_id} since {since}",
+        data={"entries": out.get("entries", [])},
+    )
 class OutboxRetryRequest(BaseModel):
     account_id: str
 
