@@ -18,6 +18,46 @@ For the narrative form of the threat model see
 For the user-facing roadmap status see the Phase 3 section of
 [`README.md`](README.md).
 
+### Status taxonomy
+
+Each threat is tagged with **status** and **property** columns.
+Status says what we did; property says what the result means.
+The two are not the same: a status of "closed" paired with a
+property of "availability" means we still have an availability
+hazard even though we shipped a fix for the confidentiality
+hazard.
+
+| Property | What it means |
+|----------|---------------|
+| **prevent** | The attack cannot reach the system. |
+| **detect** | The attack is observed; the system refuses to act on the tampered state. |
+| **recover** | After a detected event, the system returns to a consistent state without operator intervention. |
+| **availability** | A detected (or undetected) event causes redelivery, loss, or a denial-of-service for legitimate users. |
+| **replay / idempotency** | A captured artifact can be re-submitted indefinitely, with at-most-once delivery not guaranteed. |
+| **confidentiality** | A passive observer learns the content or metadata of a communication. |
+
+A threat can affect more than one property. The T8 watermark
+example below illustrates this — we *detect* tampering, but
+recovery from a tampered watermark causes a *re-delivery* (an
+availability / replay hazard), so the fix is **detect** for
+confidentiality but **availability / replay** remain open.
+
+### What this report is NOT claiming
+
+* **Not** claiming the wire protocol is final. The wire format is
+  alpha-grade; subject to change without notice. Several HIGH
+  threats remain open (T1, T3, T7 in part, T8 in part). See §2.
+* **Not** claiming "no metadata leakage." T1 is open and HIGH.
+* **Not** claiming peer authentication. T3 is open and HIGH; the
+  QUIC layer relies on TOFU pinning.
+* **Not** claiming an audited threat model. No third-party audit
+  has been performed.
+* **Not** claiming forward secrecy. Past messages stay readable
+  to anyone who captures an old seed; rotation protects only
+  going-forward authenticity, not past confidentiality.
+* **Not** claiming production readiness. The README's WARNING
+  banner is still in effect.
+
 ---
 
 ## 1. Test report
@@ -197,49 +237,43 @@ rejected (**T6**); future-dated ack rejected (clock skew); custom
 
 **All 23 pass.**
 
-### 1.4 Coverage gaps acknowledged
-
-* QUIC stream I/O for the **inbound** listener is exercised only
-  at the handler level (the listener test stubs out the network
-  layer). Full QUIC stream framing is covered by commit 1's
-  outbound transport tests. An end-to-end QUIC round-trip test is
-  on the Phase 4 milestone list — it requires starting a real
-  QUIC listener on `127.0.0.1` and is the integration smoke run
-  that was deferred from commit 9 to keep the test suite
-  deterministic.
-* The HMAC-protected outbox writer (T7) and the HMAC-protected
-  seen-file writer (T8, second half) are deferred to the next
-  commit; the helper is in place but the call sites were not
-  migrated.
-
----
-
 ## 2. Threat model
 
-Full narrative in [`docs/security/threat-model.md`](docs/security/threat-model.md).
-Reproduced here in tabular form.
+### 2.0 Status taxonomy and threat catalog
 
-| ID | Severity | Status | One-line |
-|----|----------|--------|----------|
-| T1 | HIGH     | open       | Envelope metadata (`sender`, `recipient`, `message_id`, `timestamp`) visible to any intermediate node. |
-| T2 | HIGH     | **closed** | V2 hint hijack: peer answer must sign as the hinted node. |
-| T3 | HIGH     | open       | TOFU bypass via disk write to `peers.json` — needs PKI / web of trust (Phase 6). |
-| T4 | MEDIUM   | open       | Replay window is hardcoded to 5 min; original send path not covered by network watermark. |
-| T5 | MEDIUM   | open       | Connection-per-envelope timing leaks the sender→recipient graph. |
-| T6 | MEDIUM   | **closed** | Ack replay: `verify_ack` now enforces a 5-minute timestamp window. |
-| T7 | HIGH     | partial    | Outbox JSONL has no integrity protection. Helper in place; call sites not migrated. |
-| T8 | HIGH     | partial    | Watermark file now HMAC-protected (closed). Seen-file still plaintext (open). |
-| T9 | MEDIUM   | open       | Push channel is unauthenticated at the application layer. |
-| T10| LOW      | mitigated  | `decode_node_hint` is defensive (returns None on garbage); `decode_public_id` is intentionally strict. |
-| T11| LOW      | open       | V2 without hint is wire-identical to V1. |
-| T12| LOW      | open       | Ciphertext length reveals plaintext length. |
-| T13| LOW      | open       | `bootstrap_peers.txt` is plaintext. |
-| T14| LOW      | open       | mDNS TXT record leaks `node_id`. |
-| T15| LOW      | open       | Mailbox JSONL stores `sender_public_id` as plaintext. |
+Status values: **prevent** (attack cannot reach the system),
+**detect** (attack is observed and refused), **recover**
+(system returns to consistent state without operator), **partial**
+(some property mitigated, others not), **open** (no fix landed).
+Property values: **confidentiality / integrity / availability /**
+replay / authenticity**. A row lists all properties the threat
+affects; the *Status → Property* column says which properties the
+current code does and does not yet enforce.
 
-Summary: **3 closed (T2, T6, T8 watermark), 2 partial (T7, T8
-seen), 10 open**, of which **4 are HIGH severity** (T1, T3, T7
-remaining, T8 remaining).
+A threat can affect more than one property. The T8 watermark
+example illustrates this — we *detect* tampering, but recovery
+from a tampered watermark causes a *re-delivery* (an
+availability / replay hazard), so the fix is **detect** for
+confidentiality but **availability / replay** remain open.
+|----|-----|-------|------------|---------------------|
+| T1 | HIGH | Metadata visible to any intermediate node | confidentiality (sender, recipient, timestamp, size), availability (fingerprintability) | **open** on confidentiality; availability accepted as inherent until padding+dummy-traffic land (Phase 6/7) |
+| T2 | HIGH | V2 hint hijack (peer answer signed by a different node than the hint claims) | authenticity, confidentiality | **prevent**: peer answer's `ack_node_id` must equal `decode_node_hint(public_id)`; mismatch rejected without poisoning inner directory |
+| T3 | HIGH | TOFU bypass via disk write to `peers.json` | authenticity | **open**: PKI / web-of-trust out of scope (Phase 6). UX work (operator must confirm first contact) on the hardening roadmap |
+| T4 | MEDIUM | Replay window hardcoded to 5 min; original send path not covered by network watermark | replay, availability | **open**: 5-minute `seen.<account>.json` TTL stays as a backstop; per-sender LSEQ (additive v=4 field) on the hardening roadmap |
+| T5 | MEDIUM | Connection-per-envelope timing leaks sender→recipient graph | confidentiality | **open**: connection multiplexing on Phase 4 |
+| T6 | MEDIUM | Ack replay (captured ack reusable indefinitely) | authenticity, replay | **prevent**: `verify_ack` enforces a 5-minute timestamp window (`max_age_seconds` kwarg) |
+| T7 | HIGH | Outbox JSONL has no integrity protection | integrity, availability | **partial**: HMAC helper (`hmac_io`) exists; outbox writer not migrated. Migration on the hardening roadmap. **No detect / recover on tamper yet** |
+| T8a| HIGH | Watermark file rewrite causes re-delivery of every sender's messages | replay, availability, integrity | **detect** for tamper (sidecar HMAC). **Recovery from tamper = empty store = forced re-delivery.** That is itself an availability hazard. Fix the recovery path before claiming "closed" |
+| T8b| HIGH | Seen-file rewrite bypasses the 5-min replay window | replay, integrity | **open**: same shape as T8a; migration pending |
+| T9 | MEDIUM | Push channel is unauthenticated at the application layer | authenticity, replay | **open**: push signing on the hardening roadmap (additive envelope field) |
+| T10| LOW  | `decode_public_id` raises on malformed input | availability | **mitigated for hint**: `decode_node_hint` is defensive (None on garbage). **Open** for strict API (intentional) |
+| T11| LOW  | V2 without hint is wire-identical to V1 | integrity (programmer-facing) | **open**: not a security issue per se; documentation only |
+| T12| LOW  | Ciphertext length reveals plaintext length | confidentiality | **open**: padding on Phase 6/7 |
+| T13| LOW  | `bootstrap_peers.txt` is plaintext | confidentiality, availability | **open**: encrypted bootstrap on Phase 6/7 |
+| T14| LOW  | mDNS TXT record leaks `node_id` | confidentiality | **open**: opaque token on Phase 3+ follow-up |
+| T15| LOW  | Mailbox JSONL stores `sender_public_id` as plaintext | confidentiality | **open**: encrypted mailbox on Phase 4+ |
+
+
 
 ### 2.1 Detailed mitigations applied in commit 9
 
@@ -296,28 +330,42 @@ old, future, custom max-age, default value. Five tests.
 
 ---
 
-**T8 (watermark half) — Watermark integrity** (HIGH, closed for
-watermarks)
+**T8a — Watermark file tamper detection** (HIGH, **detect** — not
+closed)
 
 *Threat:* a disk attacker with write access to
 `<data_dir>/watermarks.json` could rewrite it to `{}` to force
 every sender's messages to be re-delivered (bypassing the
 network-level at-most-once).
 
-*Fix:* new module `src/narada_security/hmac_io.py` provides
-HMAC-SHA256-protected read/write helpers with `.hmac` sidecars.
-The key is derived from the node-identity seed (when present) or
-generated as a 32-byte random key persisted at
+*Property:* integrity (the file's content cannot be silently
+changed without the application noticing) **and** availability
+(detection of a tampered file causes a forced re-delivery of every
+message in the system, which is itself a denial-of-service hazard).
+
+*What we shipped:* new module `src/narada_security/hmac_io.py`
+provides HMAC-SHA256-protected read/write helpers with `.hmac`
+sidecars. The key is derived from the node-identity seed (when
+present) or generated as a 32-byte random key persisted at
 `<data_dir>/node_identity/hmac_key` with 0600 permissions.
 
 `WatermarkStore.__init__` accepts an optional `key`. When set, all
 writes go through `write_json_protected` and all loads through
 `read_json_protected`. A failed HMAC check on load falls back to
-the empty store; the next write overwrites the bad file.
-
-The router's `/narada/sync` passes
+the empty store; the next write overwrites the bad file. The
+router's `/narada/sync` passes
 `hmac_io.load_key(_data_dir_factory())` so production traffic
 gets HMAC protection automatically.
+
+*What we did NOT ship:* a recovery path that preserves the
+per-sender state across a tamper event. **This is the residual
+availability hazard.** Today, a single disk-event that corrupts
+the watermark file forces every sender to re-deliver every
+message. The fix is a tombstone log (append-only, replay-safe
+until the next snapshot) or a write-ahead log of accepted
+message ids; both are larger than the original fix and live in
+a follow-up. Until then, "T8a: detect, partial recover" is the
+honest label.
 
 *Tests:* `tests/narada_security/test_watermark_store_protected.py`
 — persistence with sidecar, reload verifies, **tampered data
@@ -327,26 +375,30 @@ rejected, plaintext fallback when no key.
 *Wire impact:* none. The watermark file gains a `.hmac` sidecar
 on disk; clients of `WatermarkStore` see no API change.
 
+
 ---
 
-### 2.2 Mitigations planned but not yet landed (commit 9 partial)
+### 2.2 Hardening roadmap (no feature work until these land)
 
-**T7 — Outbox integrity**
+The following threats are tracked for the **hardening round** that
+precedes Phase 4. None of them are blocking — but they all leave
+a real residual hazard on disk, on the wire, or both.
 
-Helper `hmac_io.write_json_protected` and the
-`Outbox._rewrite` / `_append_line` paths exist; the migration is
-the next sub-step. Outbox entries are line-atomic today, but a
-disk attacker who can rewrite a single line can fabricate or
-suppress deliveries.
+| ID | What the fix is | Property target | Wire format | Status |
+|----|-----------------|-----------------|-------------|--------|
+| T8a | Tombstone log for watermark tamper recovery (avoid forced re-delivery) | availability + replay | none (local-state only) | not started |
+| T7 | Wire `Outbox._rewrite` / `_append_line` through `hmac_io` | integrity + availability | none (local-state only) | not started |
+| T8b | Wire `NaradaInbox._save_seen` through `hmac_io`; add LSEQ window as the authoritative dedup | replay | none (local-state only) | not started |
+| T4 | LSEQ: per-sender monotonic sequence in envelope body; receiver tracks `<sender, lseq>` | replay | **additive v=4** — `lseq` field in body JSON; v≤3 recipients ignore | not started |
+| T9 | Push signing: sender's node signs each pushed envelope; receiver verifies against `sender_node_id` | authenticity + replay | **additive** — `push_signature` field in envelope; v≤3 recipients ignore | not started |
+| T3 | First-contact UX: listener prints peer cert fingerprint; operator must `accept` before frames are processed | authenticity (UX mitigation, not PKI) | none | not started |
+| T1 | Metadata padding + dummy traffic | confidentiality | breaking (requires new envelope kind) | deferred to Phase 6/7 |
+| T3 (PKI) | Real certificate transparency or web of trust | authenticity | new protocol version | deferred to Phase 6 |
 
-**T8 (seen half) — Seen-file integrity**
-
-Same shape as watermarks: `<data_dir>/etc/seen.<account>.json`
-gains a sidecar via `hmac_io`. Migration is one function call
-plus tests.
-
-Both will be a single follow-up commit because they share the
-helper and the migration pattern.
+Each row will ship as its own commit with adversarial regression
+tests added in the same commit. We will not combine hardening
+fixes with feature work in a single commit because that makes the
+diffs unreviewable.
 
 ---
 
@@ -440,26 +492,51 @@ wired at the queue level.
 
 ---
 
-## 4. What's open after Phase 3
+## 4. What's next: hardening before features
 
-Per the threat model in §2 and the README roadmap:
+Phase 4 feature work (relays, offline delivery, message expiration,
+storage policies) is **on hold** until the hardening roadmap in
+§2.2 lands. We will not build new distributed machinery on top of
+an unauthenticated push channel (T9), an unbounded replay window
+(T4), or a forgeable outbox (T7) — those would multiply
+attack surface faster than they multiply capability.
 
-| Phase | Scope | Status |
-|-------|-------|--------|
-| 4 — Distributed Delivery | Relay nodes, encrypted temporary storage, offline delivery, message expiration, relay selection, delivery confirmation, storage policies | Not started. The PeerBook + listener seam is in place. |
-| 5 — Interoperability | SMTP / IMAP gateway, identity mapping, spam prevention | Not started. `gateway/` is a skeleton. |
-| 6 — Protocol Stabilization | Formal spec, threat model (in progress), security audit, reference implementation, versioned protocol, compatibility guarantees | Threat model now published; the rest is open. |
+### Active roadmap (hardening round)
 
-Additional Phase 3 follow-ups not yet committed:
+| Order | ID | What | Wire format |
+|------:|----|------|-------------|
+| 1 | T8a | Watermark tamper-recovery via tombstone log (avoid forced re-delivery) | none (local state) |
+| 2 | T7 | Outbox writer through `hmac_io` | none (local state) |
+| 3 | T8b | Seen-file writer through `hmac_io` + LSEQ-backed dedup | additive `lseq` field |
+| 4 | T4 | Per-sender LSEQ as the authoritative dedup (replaces 5-min window) | additive v=4 |
+| 5 | T9 | Push signing: sender node signs each pushed envelope | additive `push_signature` |
+| 6 | T3 | First-contact UX (operator confirms peer cert fingerprint) | none |
 
-* **T7 + T8 (seen)**: HMAC wire into outbox JSONL writer and
-  seen-file writer. Trivial with `hmac_io` already in place.
-* **T9**: Push-channel application-level signature on each
-  pushed envelope. New `NaradaPushAck` envelope type + node-side
-  signature.
-* **Phase 1 recover endpoint**: closes the two pre-existing
-  `test_security.py` failures. Adds `POST /narada/identity/recover`.
+### Deferred (post-hardening, with reason)
 
+| ID | Reason for deferral |
+|----|---------------------|
+| T1 | Metadata privacy needs padding + dummy traffic; structural protocol change, not a quick fix. Phase 6/7. |
+| T3 PKI | Real certificate transparency or web of trust is a protocol-design project of its own. Phase 6. |
+| T10, T11, T12, T13, T14, T15 | LOW-severity; out of scope for the hardening round. Phase 6 cleanup. |
+
+### Out of scope of this branch entirely
+
+* **Phase 4 features** (relays, offline delivery, expiration,
+  storage policies) — held until the hardening round above is
+  complete.
+* **Phase 5 features** (gateway) — held indefinitely; the gateway
+  requires a stable, audited protocol.
+* **Phase 6 features** (formal spec, audit) — held indefinitely.
+
+### Pre-existing test failures (carry-over from before this work)
+
+* `tests/narada_identity/test_security.py::test_router_rejects_oversized_mnemonic_on_recover`
+  — 405 Method Not Allowed (the router does not yet expose
+  `POST /narada/identity/recover`). Adds Phase 1's recover
+  endpoint in a follow-up.
+* `tests/narada_identity/test_security.py::test_router_recover_refuses_to_overwrite_existing_identity`
+  — same root cause.
 ---
 
 ## 5. Reproduction commands
