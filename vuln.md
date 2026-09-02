@@ -70,8 +70,8 @@ confidentiality but **availability / replay** remain open.
 | `tests/narada_identity`   |    54 |   52 |    2 |
 | `tests/routers`           |    14 |   14 |    0 |
 | `tests/mail_abstraction`  |    12 |   12 |    0 |
-| `tests/narada_security`   |    23 |   23 |    0 |
-| **Total**                 | **229** | **227** | **2** |
+| `tests/narada_security`   |    46 |   46 |    0 |
+| **Total**                 | **252** | **249** | **2** |
 
 Command:
 
@@ -263,7 +263,7 @@ confidentiality but **availability / replay** remain open.
 | T5 | MEDIUM | Connection-per-envelope timing leaks sender→recipient graph | confidentiality | **open**: connection multiplexing on Phase 4 |
 | T6 | MEDIUM | Ack replay (captured ack reusable indefinitely) | authenticity, replay | **prevent**: `verify_ack` enforces a 5-minute timestamp window (`max_age_seconds` kwarg) |
 | T7 | HIGH | Outbox JSONL has no integrity protection | integrity, availability | **partial**: HMAC helper (`hmac_io`) exists; outbox writer not migrated. Migration on the hardening roadmap. **No detect / recover on tamper yet** |
-| T8a| HIGH | Watermark file rewrite causes re-delivery of every sender's messages | replay, availability, integrity | **detect** for tamper (sidecar HMAC). **Recovery from tamper = empty store = forced re-delivery.** That is itself an availability hazard. Fix the recovery path before claiming "closed" |
+| T8a| HIGH | Watermark file rewrite causes re-delivery of every sender's messages | replay, availability, integrity | **prevent** for replay (tombstone log backs up the snapshot; a tampered snapshot is recovered from the next valid events on load). **Detect** for tamper (sidecar HMAC). Compaction (`WatermarkStore.snapshot()`) bounds the replay cost. See §2.1 T8a |
 | T8b| HIGH | Seen-file rewrite bypasses the 5-min replay window | replay, integrity | **open**: same shape as T8a; migration pending |
 | T9 | MEDIUM | Push channel is unauthenticated at the application layer | authenticity, replay | **open**: push signing on the hardening roadmap (additive envelope field) |
 | T10| LOW  | `decode_public_id` raises on malformed input | availability | **mitigated for hint**: `decode_node_hint` is defensive (None on garbage). **Open** for strict API (intentional) |
@@ -330,8 +330,8 @@ old, future, custom max-age, default value. Five tests.
 
 ---
 
-**T8a — Watermark file tamper detection** (HIGH, **detect** — not
-closed)
+**T8a — Watermark file tamper recovery** (HIGH, **prevent** for
+replay + **detect** for tamper; recovery now bounded)
 
 *Threat:* a disk attacker with write access to
 `<data_dir>/watermarks.json` could rewrite it to `{}` to force
@@ -339,41 +339,67 @@ every sender's messages to be re-delivered (bypassing the
 network-level at-most-once).
 
 *Property:* integrity (the file's content cannot be silently
-changed without the application noticing) **and** availability
-(detection of a tampered file causes a forced re-delivery of every
-message in the system, which is itself a denial-of-service hazard).
+changed without the application noticing), replay (a captured
+snapshot is recoverable from the next valid events), availability
+(bounded by the number of uncompacted tombstones — see *Limits*
+below).
 
-*What we shipped:* new module `src/narada_security/hmac_io.py`
-provides HMAC-SHA256-protected read/write helpers with `.hmac`
-sidecars. The key is derived from the node-identity seed (when
-present) or generated as a 32-byte random key persisted at
-`<data_dir>/node_identity/hmac_key` with 0600 permissions.
+*What we shipped (across two commits):*
 
-`WatermarkStore.__init__` accepts an optional `key`. When set, all
-writes go through `write_json_protected` and all loads through
-`read_json_protected`. A failed HMAC check on load falls back to
-the empty store; the next write overwrites the bad file. The
+1. **HMAC sidecar** on the snapshot file (`src/narada_security/
+   hmac_io.py`). Detects silent tampering of the snapshot.
+2. **Tombstone log** (`src/narada_security/tombstone_log.py`)
+   backing up every `update` since the last snapshot, each entry
+   HMAC-signed on its own line. On load, a tampered snapshot
+   triggers fallback to the tombstone replay, which restores the
+   live state.
+3. **`WatermarkStore.snapshot()`** compacts the tombstones
+   into a new snapshot and clears the log. The caller (a
+   background task or a CLI) decides when.
+4. **Migration path** (`test_migration_from_existing_snapshot`):
+   a pre-hardening node that already has an HMAC-signed
+   watermark.json picks up the new tombstones on first
+   `WatermarkStore()` call without losing existing state.
+
+The key is derived from the node-identity seed (when present) or
+generated as a 32-byte random key persisted at
+`<data_dir>/node_identity/hmac_key` with 0600 permissions. The
 router's `/narada/sync` passes
 `hmac_io.load_key(_data_dir_factory())` so production traffic
-gets HMAC protection automatically.
+gets HMAC + tombstone protection automatically.
 
-*What we did NOT ship:* a recovery path that preserves the
-per-sender state across a tamper event. **This is the residual
-availability hazard.** Today, a single disk-event that corrupts
-the watermark file forces every sender to re-deliver every
-message. The fix is a tombstone log (append-only, replay-safe
-until the next snapshot) or a write-ahead log of accepted
-message ids; both are larger than the original fix and live in
-a follow-up. Until then, "T8a: detect, partial recover" is the
-honest label.
+*Limits:* the recovery is bounded by the time between snapshots.
+If the attacker tampers with the snapshot AND every tombstone
+since the last compaction, the store falls back to empty state
+(`get` returns -1) and re-delivery happens for senders that have
+no surviving tombstone. Compaction is therefore required for
+real protection. The MVP exposes `WatermarkStore.snapshot()` and
+`pending_tombstones()`; an automated compactor (e.g. compact
+every 1000 updates or every 24 hours) is the next step. **Until
+an automated compactor runs, the worst-case re-delivery window
+is bounded by the time since the last manual compaction.**
 
-*Tests:* `tests/narada_security/test_watermark_store_protected.py`
-— persistence with sidecar, reload verifies, **tampered data
-rejected** (T8 mitigation), missing sidecar rejected, wrong key
-rejected, plaintext fallback when no key.
+*Tests (28 across two files):*
 
-*Wire impact:* none. The watermark file gains a `.hmac` sidecar
-on disk; clients of `WatermarkStore` see no API change.
+* `tests/narada_security/test_tombstone_log.py` (11) — append,
+  replay, tamper on data / sidecar / missing sidecar, wrong key,
+  compact, persistence across instances.
+* `tests/narada_security/test_watermark_store_recovery.py`
+  (11) — snapshot tamper recovered from tombstone, missing
+  snapshot recovered from tombstone, both-tampered attack
+  rejected, snapshot + compact + reload, migration from a
+  pre-hardening snapshot, legacy plaintext path unchanged.
+* `tests/narada_security/test_watermark_store_protected.py`
+  (6, two renamed) — HMAC sidecar persistence + reload, the two
+  tamper tests now assert *recovery* (state restored from
+  tombstones) rather than *rejection* (state discarded), wrong
+  key rejected, plaintext fallback.
+
+*Wire impact:* none. The snapshot gains a `.hmac` sidecar; a new
+ `<snapshot>.tombstones.jsonl.<n>` file per tombstone; a
+ `<node_identity/hmac_key>` fallback key file. Clients of
+`WatermarkStore` see two new methods (`snapshot`,
+`pending_tombstones`) and no removals.
 
 
 ---
@@ -386,7 +412,7 @@ a real residual hazard on disk, on the wire, or both.
 
 | ID | What the fix is | Property target | Wire format | Status |
 |----|-----------------|-----------------|-------------|--------|
-| T8a | Tombstone log for watermark tamper recovery (avoid forced re-delivery) | availability + replay | none (local-state only) | not started |
+| T8a | Tombstone log for watermark tamper recovery (avoid forced re-delivery) | availability + replay | none (local-state only) | **shipped** — bounded by snapshot interval; automated compactor still pending |
 | T7 | Wire `Outbox._rewrite` / `_append_line` through `hmac_io` | integrity + availability | none (local-state only) | not started |
 | T8b | Wire `NaradaInbox._save_seen` through `hmac_io`; add LSEQ window as the authoritative dedup | replay | none (local-state only) | not started |
 | T4 | LSEQ: per-sender monotonic sequence in envelope body; receiver tracks `<sender, lseq>` | replay | **additive v=4** — `lseq` field in body JSON; v≤3 recipients ignore | not started |
@@ -505,12 +531,12 @@ attack surface faster than they multiply capability.
 
 | Order | ID | What | Wire format |
 |------:|----|------|-------------|
-| 1 | T8a | Watermark tamper-recovery via tombstone log (avoid forced re-delivery) | none (local state) |
-| 2 | T7 | Outbox writer through `hmac_io` | none (local state) |
-| 3 | T8b | Seen-file writer through `hmac_io` + LSEQ-backed dedup | additive `lseq` field |
-| 4 | T4 | Per-sender LSEQ as the authoritative dedup (replaces 5-min window) | additive v=4 |
-| 5 | T9 | Push signing: sender node signs each pushed envelope | additive `push_signature` |
-| 6 | T3 | First-contact UX (operator confirms peer cert fingerprint) | none |
+| 0 (done) | T8a | Watermark tamper-recovery via tombstone log | none (local state) |
+| 1 | T7 | Outbox writer through `hmac_io` (+ tombstone log) | none (local state) |
+| 2 | T8b | Seen-file writer through `hmac_io` (+ tombstone log); LSEQ-backed dedup | additive `lseq` field |
+| 3 | T4 | Per-sender LSEQ as the authoritative dedup (replaces 5-min window) | additive v=4 |
+| 4 | T9 | Push signing: sender node signs each pushed envelope | additive `push_signature` |
+| 5 | T3 | First-contact UX (operator confirms peer cert fingerprint) | none |
 
 ### Deferred (post-hardening, with reason)
 

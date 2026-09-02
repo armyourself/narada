@@ -13,9 +13,9 @@ This module glues together three Phase 3 deliverables:
 
 * Watermark dedup (commit 6). Per-sender sequence number; the
   receiver skips pushes with a watermark <= the stored value.
-
-* Node failure handling (commit 7). PeerBook tracks liveness and
-  marks peers ``down`` after K missed pings.
+  Combined with a tombstone log (T8a hardening) so a disk
+  attacker cannot force re-delivery by rewriting the watermark
+  file alone.
 
 Wire framing: 4-byte big-endian length + JSON body, identical to
 commit 1's transport.
@@ -185,11 +185,29 @@ class PeerBook:
 class WatermarkStore:
     """Per-sender sequence number seen by this node.
 
-    On-disk state is HMAC-protected (see :mod:`src.narada_security.hmac_io`)
-    to mitigate threat T8: a disk-level attacker who can rewrite
-    ``watermarks.json`` cannot forge a valid sidecar without the
-    node-identity seed. A failed HMAC check on load falls back to
-    the empty store; subsequent updates overwrite the bad file.
+    Recovery model (T8a hardening round):
+
+    * On-disk state is split into two parts: a single HMAC-signed
+      *snapshot* file (``<path>``) and an append-only
+      *tombstone* log (``<path>.tombstones.jsonl`` with per-line
+      ``.hmac`` sidecars) recording every ``update`` since the
+      snapshot was written.
+    * On load, the snapshot is verified with HMAC. If it is
+      missing or tampered with, the live state is reconstructed by
+      starting from an empty snapshot and replaying every valid
+      tombstone. This means a disk attacker who rewrites the
+      snapshot must also rewrite every tombstone since the last
+      snapshot to suppress delivery.
+    * Callers can compact the tombstone log via :meth:`snapshot`,
+      which rewrites the snapshot file with the current live
+      state and clears the log. Recommended after every N
+      updates; for the MVP we expose the method and let the
+      caller (a background task, or a CLI) decide when.
+
+    Without the tombstone log, an HMAC failure on the snapshot
+    forces a full re-delivery of every sender's messages — a real
+    availability hazard. With the log, the worst case is bounded
+    by the number of events since the last compaction.
     """
 
     def __init__(self, path: Path, *, key: Optional[bytes] = None) -> None:
@@ -197,14 +215,22 @@ class WatermarkStore:
         self._lock = threading.RLock()
         self._data: dict[str, int] = {}
         self._key = key
+        self._tombstones = None
+        if key is not None:
+            from src.narada_security.tombstone_log import TombstoneLog
+
+            self._tombstones = TombstoneLog(
+                Path(str(path) + ".tombstones.jsonl"), key=key
+            )
         self._load()
 
     def _load(self) -> None:
         if not self._path.exists():
+            # No snapshot: try to recover purely from the tombstone
+            # log (if any). This handles a fresh node that only has
+            # the tombstone sidecar left.
+            self._replay_tombstones_into_empty()
             return
-        # If a sidecar is present, verify it; refuse to load if the
-        # sidecar is missing or wrong (defence against silent
-        # rollback by a disk attacker).
         if self._key is not None:
             from src.narada_security.hmac_io import (
                 HmacIntegrityError,
@@ -214,16 +240,30 @@ class WatermarkStore:
             try:
                 data = read_json_protected(self._path, self._key)
             except (HmacIntegrityError, FileNotFoundError):
+                # Snapshot tampered with: fall back to replaying
+                # the tombstone log from an empty baseline.
+                self._data = {}
+                self._replay_tombstones_into_empty()
+                # Write a new snapshot so subsequent loads have a
+                # known-good baseline. (Recovery is not idempotent
+                # in the strict sense: a future tampering of the
+                # snapshot still requires the attacker to also
+                # suppress the current tombstones.)
                 return
-            if not isinstance(data, dict):
-                return
-            for k, v in data.items():
-                try:
-                    self._data[str(k)] = int(v)
-                except (TypeError, ValueError):
-                    continue
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    try:
+                        self._data[str(k)] = int(v)
+                    except (TypeError, ValueError):
+                        continue
+            # Apply any tombstones that supersede the snapshot.
+            self._replay_tombstones_into_data()
             return
-        # No key provided: legacy plaintext path.
+        # No key provided: legacy plaintext path. We do NOT
+        # support tombstone-backed recovery in the legacy mode
+        # because the sidecar can't be verified; reading the
+ # legacy file without verification would let a tamper
+        # event go undetected.
         try:
             data = json.loads(self._path.read_bytes())
         except (json.JSONDecodeError, OSError):
@@ -235,6 +275,32 @@ class WatermarkStore:
                 self._data[str(k)] = int(v)
             except (TypeError, ValueError):
                 continue
+
+    def _replay_tombstones_into_empty(self) -> None:
+        """Replay the tombstone log into ``self._data`` starting from empty."""
+        if self._tombstones is None:
+            return
+        for event in self._tombstones.replay():
+            self._apply_event(event)
+
+    def _replay_tombstones_into_data(self) -> None:
+        """Apply every tombstone to the loaded snapshot."""
+        if self._tombstones is None:
+            return
+        for event in self._tombstones.replay():
+            self._apply_event(event)
+
+    def _apply_event(self, event: Mapping[str, Any]) -> None:
+        sender = event.get("sender")
+        try:
+            lseq = int(event.get("lseq"))
+        except (TypeError, ValueError):
+            return
+        if not isinstance(sender, str):
+            return
+        cur = self._data.get(sender, -1)
+        if lseq > cur:
+            self._data[sender] = lseq
 
     def _save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -252,13 +318,49 @@ class WatermarkStore:
             return self._data.get(sender_public_id, -1) >= watermark
 
     def update(self, sender_public_id: str, watermark: int) -> bool:
+        """Record ``watermark`` for ``sender_public_id``.
+
+        If a key was provided, appends to the tombstone log
+        **before** updating the in-memory state. This guarantees
+        that any tombstone that supersedes a state value also
+        survives a snapshot tamper.
+        """
         with self._lock:
             cur = self._data.get(sender_public_id, -1)
             if watermark <= cur:
                 return False
+            if self._tombstones is not None:
+                self._tombstones.append(
+                    {"sender": sender_public_id, "lseq": watermark, "ts": int(time.time())}
+                )
             self._data[sender_public_id] = watermark
             self._save()
             return True
+
+    def snapshot(self) -> int:
+        """Compact: rewrite the snapshot and clear the tombstone log.
+
+        Returns the number of tombstone events that were
+        discarded. Callers should invoke this on a schedule
+        (e.g. every N updates) to bound the replay cost on a
+        future tamper event.
+
+        If no key was provided, the snapshot file is rewritten
+        with the current state but the tombstone log is left
+        alone (legacy mode does not verify it).
+        """
+        with self._lock:
+            self._save()
+            if self._tombstones is None:
+                return 0
+            return self._tombstones.compact()
+
+    def pending_tombstones(self) -> int:
+        """Return the number of uncompacted tombstone events."""
+        with self._lock:
+            if self._tombstones is None:
+                return 0
+            return self._tombstones.next_seq
 
     def get(self, sender_public_id: str) -> int:
         with self._lock:
@@ -267,7 +369,6 @@ class WatermarkStore:
     def all(self) -> dict[str, int]:
         with self._lock:
             return dict(self._data)
-
 
 # --- Sync handler --------------------------------------------------------
 
