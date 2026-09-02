@@ -34,9 +34,9 @@ def test_wrong_hrp_rejected():
     ed = b"\x01" * 32
     x = b"\x02" * 32
     encoded = encode_public_id(ed, x)
-    # Replace 'Narada' (the hrp) with 'latticf' before the '1' separator.
+    # Replace 'narada' (the hrp) with 'latticf' before the '1' separator.
     # A real production parser would not accept a wrong hrp; our decoder
-    # also rejects anything whose hrp is not 'Narada'.
+    # also rejects anything whose hrp is not 'narada'.
     assert encoded.startswith("narada1")
     tampered = "latticf" + encoded[len("narada"):]
     assert not tampered.startswith("narada1")

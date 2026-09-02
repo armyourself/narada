@@ -138,3 +138,43 @@ def test_outbox_retry_validates_account_id(app_and_keystore):
     assert resp.status_code == 200
     assert resp.json()["success"] is False
     assert "account_id" in resp.json()["message"].lower()
+
+
+def test_post_narada_inbox_returns_signed_ack(app_and_keystore):
+    """Successful accept must return a signed ack in data.ack."""
+    from src.narada.ack import verify_ack
+
+    client, alice, bob, _ks, _tmp = app_and_keystore
+    body = NaradaBody(subject="hi", body_text="x")
+    envelope = make_envelope(alice, bob.public_id, body)
+    resp = client.post("/narada/inbox", json=envelope.as_dict())
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["success"] is True
+    assert payload["data"]["duplicate"] is False
+    ack_dict = payload["data"].get("ack")
+    assert ack_dict is not None
+    # The ack must verify against the recipient's expected envelope.
+    from src.narada.ack import NaradaAck
+
+    ack = NaradaAck.from_dict(ack_dict)
+    assert verify_ack(
+        ack,
+        expected_sender_public_id=alice.public_id,
+        expected_recipient_public_id=bob.public_id,
+        expected_message_id=envelope.message_id,
+    ) is True
+
+
+def test_post_narada_inbox_duplicate_does_not_re_ack(app_and_keystore):
+    """A duplicate POST must NOT include a fresh ack (the recipient already accepted)."""
+    client, alice, bob, _ks, _tmp = app_and_keystore
+    body = NaradaBody(subject="hi")
+    envelope = make_envelope(alice, bob.public_id, body)
+    r1 = client.post("/narada/inbox", json=envelope.as_dict())
+    r2 = client.post("/narada/inbox", json=envelope.as_dict())
+    assert r1.json()["data"]["duplicate"] is False
+    assert r2.json()["data"]["duplicate"] is True
+    # First response carries an ack; the second must not.
+    assert r1.json()["data"].get("ack") is not None
+    assert r2.json()["data"].get("ack") is None

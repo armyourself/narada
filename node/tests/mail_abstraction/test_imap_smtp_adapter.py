@@ -19,7 +19,7 @@ from src.mail_abstraction import (
     Message,
     MessageSource,
 )
-from src.Narada import NaradaAdapter
+from src.narada import NaradaAdapter
 from src.mail_abstraction.imap_smtp import convert_email, convert_folder
 from src.modules.openmail.types import Email as OpenmailEmail, Folder as OpenmailFolder
 
