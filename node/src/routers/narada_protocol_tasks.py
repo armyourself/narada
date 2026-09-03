@@ -96,7 +96,7 @@ def receive_envelope(envelope: Mapping[str, Any]) -> Response:
         seen_path=seen_path,
     )
     try:
-        body, was_duplicate = inbox.receive(env)
+        body, was_duplicate, _is_key_update = inbox.receive(env)
     except NaradaEnvelopeError as exc:
         return Response(success=False, message=f"envelope rejected: {exc}")
 

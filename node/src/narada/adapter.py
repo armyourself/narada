@@ -447,14 +447,13 @@ class NaradaAdapter(MailAdapter):
         )
         env = NaradaEnvelope.from_dict(envelope_dict)
         try:
-            _body, was_duplicate = inbox.receive(env)
+            _body, was_duplicate, _is_key_update = inbox.receive(env)
             return not was_duplicate
         except NaradaEnvelopeError as exc:
             # Invalid envelope; not a duplicate, but a failure.
             import sys
             print(f"[deliver_for_test] {self._account_id}: {exc}", file=sys.stderr)
             return False
-
     def node_for_acks(self) -> NaradaNodeIdentity:
         """Return the persistent node identity used to sign acks.
 

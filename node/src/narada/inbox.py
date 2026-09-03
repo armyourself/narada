@@ -62,6 +62,7 @@ class NaradaInbox:
         keystore: Optional[NaradaKeystore] = None,
         seen_path: Optional[Path] = None,
         data_dir: Optional[Path] = None,
+        rotation_store: Optional["KeyRotationStore"] = None,
     ) -> None:
         self._account_id = account_id
         self._keystore = keystore or default_keystore()
@@ -76,6 +77,13 @@ class NaradaInbox:
         self._data_dir = Path(data_dir)
         self._mailbox_dir = self._data_dir / "etc"
         self._mailbox_path = self._mailbox_dir / f"mailbox.{_safe_account_id(account_id)}.jsonl"
+        # Optional: rotation store. When provided, the inbox accepts
+        # v=3 envelopes as key-update announcements (persisted via
+        # the store) and v=1 envelopes whose sender has an active
+        # rotation record are accepted under the new ed25519 key.
+        # See protocol/identity.md for the on-the-wire rotation
+        # design (Option A: X25519 preserved).
+        self._rotation_store = rotation_store
 
     # --- Persistence of "seen" set ---------------------------------------
 
@@ -139,13 +147,25 @@ class NaradaInbox:
         envelope: NaradaEnvelope,
         *,
         seen_ttl_seconds: int = 5 * 60,
-    ) -> tuple[NaradaBody, bool]:
+    ) -> tuple[NaradaBody, bool, bool]:
         """Verify, decrypt, and persist ``envelope``.
 
-        Returns ``(body, was_duplicate)``. ``was_duplicate`` is True
-        if the message_id was already accepted within ``seen_ttl_seconds``;
-        in that case the body is still returned (for the caller's
-        convenience) but persistence is skipped.
+        Returns ``(body, was_duplicate, is_key_update)``.
+        ``is_key_update`` is True if the envelope was a v=3
+        key-update announcement (in which case ``body`` is a
+        sentinel NaradaBody and the rotation is persisted via
+        the rotation store instead of the mailbox).
+
+        ``was_duplicate`` is True if the message_id was already
+        accepted within ``seen_ttl_seconds``; the body is still
+        returned (for the caller's convenience) but persistence
+        is skipped.
+
+        On a v=1 envelope whose ``sender_public_id`` has an
+        active rotation record, the inbox verifies the signature
+        under the rotation's new ed25519 key. The body is
+        decrypted with the recipient's identity (whose X25519
+        key is unchanged by the rotation, so ECDH still works).
         """
         identity = self.load_identity()
         # Pre-check: is this envelope even for us? Cheap, avoids loading
@@ -158,19 +178,123 @@ class NaradaInbox:
         if envelope.recipient_public_id != identity.public_id:
             raise NaradaEnvelopeError("envelope addressed to a different recipient")
 
+        # v=3: key-update announcement. Persist via the rotation
+        # store, do NOT touch the mailbox.
+        if envelope.v == 3:
+            return self._receive_key_update(envelope)
+
         is_dup = self._is_duplicate(
             envelope.sender_public_id, envelope.message_id, seen_ttl_seconds
         )
         if is_dup:
-            # Still verify + decrypt so the caller has the body; just
-            # do not persist again.
-            body = open_envelope(envelope, identity)
-            return body, True
+            body = self._open_with_rotation(envelope, identity)
+            return body, True, False
 
-        body = open_envelope(envelope, identity)
+        body = self._open_with_rotation(envelope, identity)
         self._persist(envelope, body)
-        return body, False
+        return body, False, False
 
+    def _open_with_rotation(
+        self, envelope: NaradaEnvelope, identity: NaradaIdentity
+    ) -> NaradaBody:
+        """Open ``envelope`` with the recipient's identity, but fall
+        back to the rotation's new ed25519 key if the standard
+        signature verification fails and an active rotation record
+        exists for ``envelope.sender_public_id``.
+
+        The recipient's X25519 key is unchanged by rotation
+        (Option A), so the body decryption path is unchanged. The
+        signature, however, was made with the sender's NEW
+        ed25519 key after rotation; we re-verify with that key
+        when the rotation record is active.
+
+        Raises :class:`NaradaEnvelopeError` if neither path
+        verifies the signature.
+        """
+        from .envelope import _canonical_json
+        from src.narada_identity.encoding import decode_public_id
+        from src.narada_identity.keypair import verify_signature
+        # Standard path.
+        try:
+            return open_envelope(envelope, identity)
+        except NaradaEnvelopeError:
+            pass  # try the rotation path
+
+        # Rotation fallback.
+        if self._rotation_store is None:
+            raise NaradaEnvelopeError(
+                "envelope signature does not verify under the prior key "
+                "and no rotation store is configured"
+            )
+        rec = self._rotation_store.lookup(envelope.sender_public_id)
+        if rec is None:
+            raise NaradaEnvelopeError(
+                "envelope signature does not verify under the prior key "
+                "and no active rotation is recorded for this sender"
+            )
+        # Rebuild the canonical header bytes (same as in make_envelope).
+        header_dict = {
+            "v": envelope.v,
+            "sender_public_id": envelope.sender_public_id,
+            "recipient_public_id": envelope.recipient_public_id,
+            "message_id": envelope.message_id,
+            "timestamp": envelope.timestamp,
+            "nonce": envelope.nonce,
+        }
+        header_bytes = _canonical_json(header_dict)
+        _ver, new_ed_pub, _x_pub = decode_public_id(rec.new_public_id)
+        if not verify_signature(new_ed_pub, envelope.signature, header_bytes):
+            raise NaradaEnvelopeError(
+                "envelope signature does not verify under either prior or new key"
+            )
+        # Signature verified under the new ed25519 key. The X25519
+        # half of the recipient identity is unchanged by rotation
+        # (Option A), so the body decryption in open_envelope
+        # used the right X25519 key. Re-derive the body with the
+        # standard recipient identity.
+        return open_envelope(envelope, identity)
+
+    def _receive_key_update(
+        self, envelope: NaradaEnvelope
+    ) -> tuple[NaradaBody, bool, bool]:
+        """Handle a v=3 key-update envelope. Persist the rotation
+        record and return a sentinel body.
+
+        The dedup window is checked against the prior public id
+        so that re-broadcasts of the same update are deduped.
+        """
+        from .key_update import open_key_update_envelope
+
+        if self._rotation_store is None:
+            raise NaradaEnvelopeError(
+                "v=3 envelope received but no rotation store is configured"
+            )
+        # A key update is addressed to a recipient; the
+        # recipient opens it with their own identity.
+        identity = self.load_identity()
+        body = open_key_update_envelope(envelope, identity)
+        # Reject updates whose not_after has already passed: the
+        # rotation window has closed and the announcement is no
+        # longer useful. Accepting it would extend trust to a key
+        # that was supposed to be off the air.
+        import time as _t
+        if int(body.not_after) < int(_t.time()):
+            raise NaradaEnvelopeError(
+                "key-update envelope is past its not_after"
+            )
+        is_dup = self._is_duplicate(
+            body.prior_public_id, envelope.message_id, 5 * 60
+        )
+        if is_dup:
+            return body, True, True
+        # Persist. record() overwrites any prior record for the
+        # same prior_public_id.
+        self._rotation_store.record(
+            prior_public_id=body.prior_public_id,
+            new_public_id=body.new_public_id,
+            not_after=body.not_after,
+        )
+        return body, False, True
     def _persist(self, envelope: NaradaEnvelope, body: NaradaBody) -> None:
         """Append the message to the account's mailbox store.
 
