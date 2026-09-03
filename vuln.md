@@ -68,10 +68,10 @@ confidentiality but **availability / replay** remain open.
 |---------------------------|------:|-----:|-----:|
 | `tests/narada`            |   126 |  126 |    0 |
 | `tests/narada_identity`   |    54 |   52 |    2 |
-| `tests/routers`           |    14 |   14 |    0 |
+| `tests/routers`           |    17 |   17 |    0 |
 | `tests/mail_abstraction`  |    12 |   12 |    0 |
 | `tests/narada_security`   |    46 |   46 |    0 |
-| **Total**                 | **252** | **249** | **2** |
+| **Total**                 | **255** | **252** | **2** |
 
 Command:
 
@@ -516,10 +516,70 @@ wired at the queue level.
 * T8 (watermark) mitigation: `WatermarkStore` accepts key,
   verifies sidecar.
 
+### Phase 1 key rotation (post-Phase 3, hardening-aware) —
+`7748874`, `a95ce2d`, `df06323`, `a64f09f`
+
+On-the-wire key rotation shipped across four commits. The
+design decision: **Option A** (X25519 preserved across
+rotation). See the commit messages for the threat-model
+rationale.
+
+Files added:
+
+| File | Purpose |
+|------|---------|
+| `node/src/narada/key_update.py` | `NaradaKeyUpdate` v=3 envelope: `KeyUpdateBody` dataclass, `make_key_update_envelope`, `open_key_update_envelope` |
+| `node/src/narada/key_rotation_store.py` | `KeyRotationRecord` dataclass, `KeyRotationStore` HMAC-protected persistence with `record`, `lookup`, `remove`, `all` |
+| `node/src/narada_security/hmac_io.py` (commit `7ef0456`) | reused for `KeyRotationStore` sidecar |
+| `node/tests/narada/test_key_update.py` (17 tests) | envelope round-trip, sentinel check, body dataclass round-trip, sender-signs-with-old-key, hint/hint mismatch |
+| `node/tests/narada/test_key_rotation_store.py` (15 tests) | record, lookup (active / past not_after), persistence, tamper / missing sidecar / wrong key rejected, plaintext fallback |
+| `node/tests/narada_security/test_watermark_store_protected.py` (8 tests) | added in commit `7ef0456` (T8a); not key-rotation work per se |
+| `node/tests/narada_identity/test_rotate_preserve_x25519.py` (8 tests) | Option A rotation: Ed25519 rotates, X25519 preserved, multiple rotations keep the same X25519, full vs partial rotation differs |
+| `node/tests/narada/test_inbox_rotation.py` (10 tests) | rotation-aware inbox: v=3 key update accepted + persisted, v=1 signed under new key accepted after rotation, dedup, expired not_after rejected |
+| `node/tests/routers/test_key_rotation_integration.py` (3 tests) | router-level end-to-end: v=1 backwards compat, v=3 rejected (router doesn't yet thread the rotation store), rotation-aware inbox accepts new-key envelope |
+
+Files modified:
+
+| File | Change |
+|------|--------|
+| `node/src/narada/envelope.py` | `SUPPORTED_ENVELOPE_VERSIONS = {1, 3}`, `open_envelope` accepts both |
+| `node/src/narada_identity/keypair.py` | new `keypair_with_x25519_preserved` constructor (fresh Ed25519 + copied X25519) |
+| `node/src/narada_identity/identity.py` | `rotate_identity_preserve_x25519` (uses secret-blob slot), `identity_from_keystore_with_preserved_x25519` |
+| `node/src/narada_identity/keystore.py` | abstract `store_secret` / `load_secret` / `has_secret`; `InMemoryKeystore` and `PassphraseKeystore` implement them (encrypted sidecar `<account>.secret.bin` in the passphrase case). 7/7 existing keystore tests still pass. |
+| `node/src/narada/inbox.py` | `__init__` accepts `rotation_store`; `receive()` returns `(body, was_duplicate, is_key_update)`. v=3 envelopes are opened as key updates, deduped by `(prior, message_id)`, and persisted via the rotation store (not the mailbox). v=1 envelopes with a sender that has an active rotation record are verified under the rotation's new ed25519 key. |
+| `node/src/narada/adapter.py` + `src/routers/narada_protocol_tasks.py` | callers updated to unpack the new 3-tuple |
+| `node/tests/narada/test_inbox.py` | existing tests updated to 3-tuple unpacks |
+
+Wire-format impact: v=1 envelopes are unchanged. v=3 envelopes
+are new; older senders and older receivers ignore them
+(v=1 readers reject on version mismatch, v=3 writers add
+a new envelope kind that the older code doesn't see). v=3
+is `additive`, not a breaking change.
+
+Threat-model properties of the rotation path:
+
+* **Authenticity**: the key-update envelope is signed by the
+  sender's OLD ed25519 key, so the recipient verifies the
+  update came from the same owner as the prior identity.
+  v=1 envelopes signed with the new ed25519 key are accepted
+  only when an active rotation record exists.
+* **Availability**: an active rotation record has a bounded
+  lifetime (`not_after`); once it closes, the recipient
+  expects the sender to use the new public id directly.
+* **Integrity / recovery**: `KeyRotationStore` is HMAC-protected
+  (T8-style). Tampering is **detected**; recovery from
+  corrupted state is the same T8a-bounded-recovery problem
+  (vuln.md §2.0). The store has no tombstone log yet; that's
+  part of the hardening round.
+
+Open gap: the router's `receive_envelope` endpoint constructs
+`NaradaInbox` without a `KeyRotationStore`. A v=3 envelope
+posted to the router today is rejected with a 'rotation store'
+error (`test_router_rejects_v3_envelope` documents this). The
+follow-up is a small commit: add a `_rotation_store_factory`
+  endpoint can also be added.
+
 ---
-
-## 4. What's next: hardening before features
-
 Phase 4 feature work (relays, offline delivery, message expiration,
 storage policies) is **on hold** until the hardening roadmap in
 §2.2 lands. We will not build new distributed machinery on top of
