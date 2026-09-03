@@ -85,6 +85,39 @@ class NaradaKeystore(abc.ABC):
     def has(self, account_id: str) -> bool:
         """Return True if an entry exists for ``account_id``."""
 
+    # --- Optional secret-blob API ----------------------------------
+    #
+    # Some keys (notably the X25519 private key preserved across
+    # an Option-A rotation) cannot be derived from the Ed25519
+    # seed and must be stored separately. The default 32-byte
+    # seed-based API above is preserved unchanged; the *secret*
+    # methods below are an additional, opt-in channel.
+    #
+    # Implementations may store the secret on disk / keyring with
+    # the same encryption layer as the seed, or as plaintext
+    # (test backends only). Production keystores must use
+    # authenticated encryption.
+
+    def store_secret(self, account_id: str, secret: bytes) -> None:
+        """Persist an arbitrary secret blob for ``account_id``.
+
+        Default raises ``NotImplementedError`` so existing
+        implementations don't silently accept a new API.
+        Override to enable.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement store_secret"
+        )
+
+    def load_secret(self, account_id: str) -> bytes:
+        """Load the secret blob for ``account_id``."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement load_secret"
+        )
+
+    def has_secret(self, account_id: str) -> bool:
+        """Return True if a secret blob exists for ``account_id``."""
+        return False
 
 class InMemoryKeystore(NaradaKeystore):
     """Keystore that holds seeds in a process-local dict.
@@ -115,10 +148,43 @@ class InMemoryKeystore(NaradaKeystore):
     def delete(self, account_id: str) -> bool:
         _validate_account_id(account_id)
         return self._store.pop(account_id, None) is not None
-
     def has(self, account_id: str) -> bool:
         _validate_account_id(account_id)
         return account_id in self._store
+
+    # --- secret-blob API (test/local backend) -------------------
+
+    def __init_secret_store(self) -> None:
+        if not hasattr(self, "_secret_store"):
+            self._secret_store: dict[str, bytes] = {}
+
+    def store_secret(self, account_id: str, secret: bytes) -> None:
+        _validate_account_id(account_id)
+        self.__init_secret_store()
+        self._secret_store[account_id] = bytes(secret)
+
+    def load_secret(self, account_id: str) -> bytes:
+        _validate_account_id(account_id)
+        self.__init_secret_store()
+        try:
+            return self._secret_store[account_id]
+        except KeyError as exc:
+            raise NaradaKeystoreError(
+                f"No secret stored for account_id={account_id!r}"
+            ) from exc
+
+    def has_secret(self, account_id: str) -> bool:
+        self.__init_secret_store()
+        return account_id in self._secret_store
+
+    def delete(self, account_id: str) -> bool:
+        _validate_account_id(account_id)
+        removed_seed = self._store.pop(account_id, None) is not None
+        removed_secret = False
+        if hasattr(self, "_secret_store") and account_id in self._secret_store:
+            del self._secret_store[account_id]
+            removed_secret = True
+        return removed_seed or removed_secret
 
 
 class KeyringKeystore(NaradaKeystore):
@@ -314,7 +380,58 @@ class PassphraseKeystore(NaradaKeystore):
         _validate_account_id(account_id)
         return self._path(account_id).exists()
 
+    # --- secret-blob API -----------------------------------------
+    #
+    # The secret blob lives in a sibling file <account>.secret.bin
+    # (encrypted with the same passphrase). The default 32-byte
+    # seed API is untouched; this is an additional channel.
 
+    def _secret_path(self, account_id: str) -> Path:
+        return self.directory / f"{account_id}.secret.bin"
+
+    def store_secret(self, account_id: str, secret: bytes) -> None:
+        _validate_account_id(account_id)
+        path = self._secret_path(account_id)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_bytes(self._encrypt(bytes(secret)))
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:
+            pass
+        os.replace(tmp, path)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+
+    def load_secret(self, account_id: str) -> bytes:
+        _validate_account_id(account_id)
+        path = self._secret_path(account_id)
+        if not path.exists():
+            raise NaradaKeystoreError(
+                f"No secret stored for account_id={account_id!r}"
+            )
+        size = path.stat().st_size
+        if size > _MAX_KEYSTORE_FILE_BYTES:
+            raise NaradaKeystoreError(
+                f"Secret file is too large ({size} bytes); refusing to read"
+            )
+        return self._decrypt(path.read_bytes())
+
+    def has_secret(self, account_id: str) -> bool:
+        return self._secret_path(account_id).exists()
+
+    def delete(self, account_id: str) -> bool:
+        _validate_account_id(account_id)
+        seed_path = self._path(account_id)
+        secret_path = self._secret_path(account_id)
+        removed_seed = seed_path.exists()
+        if removed_seed:
+            seed_path.unlink()
+        removed_secret = secret_path.exists()
+        if removed_secret:
+            secret_path.unlink()
+        return removed_seed or removed_secret
 def default_keystore(*, passphrase: Optional[str] = None) -> NaradaKeystore:
     """Pick the most appropriate keystore for the current environment.
 
