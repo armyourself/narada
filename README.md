@@ -310,11 +310,90 @@ Narada-specific work landed so far (under `node/` and `protocol/`):
   HTTP. The envelope is X25519-ECDH-sealed and Ed25519-signed; the
   body is ChaCha20-Poly1305. A persistent outbox with
   exponential-backoff retry handles the recipient being offline.
-* Peer discovery, distributed routing, relays, and the
-  Narada↔SMTP/IMAP gateway are **not yet implemented**. The
-  protocol layer above is the seam where they will plug in.
-
-The decentralized protocol is being developed separately from these existing components.
+* **Per-node identity** (`node/src/narada/node_identity.py`): each
+  node daemon has its own Ed25519 keypair (`node1...` bech32m id)
+  used to attribute envelopes and sign delivery acks. Persistent by
+  default (`<data_dir>/node_identity/seed`, 0600), or `ephemeral=True`
+  for a fresh keypair per envelope (no linkability across sends).
+  Wire-format fields `sender_node_id` / `sender_node_signature` are
+  **optional and additive**: older Narada nodes that do not recognise
+  them still verify the user-key signature and accept the message.
+* **Delivery acknowledgements** (`node/src/narada/ack.py`): a
+  successful envelope accept returns a signed `NaradaAck` (Ed25519
+  over `(sender_public_id, recipient_public_id, message_id,
+  timestamp, status)`) tied to the recipient's node identity. The
+  sender's outbox transitions the entry to *acked* and removes it.
+  The ack is best-effort: a missing ack still counts as a successful
+  delivery, with the outbox entry removed for compatibility with
+  pre-R3 nodes.
+* **Replay protection** (Narada inbox): an envelope's `(sender,
+  message_id)` pair is recorded in a per-recipient dedup window
+  (`<data_dir>/etc/seen.<account>.json`, default TTL 5 min) that
+  survives process restarts. Re-submissions within the window are
+  acknowledged but not re-persisted.
+* **Peer-to-peer transport** (`node/src/narada/p2p/quic.py`): a
+  QUIC outbound transport (`aioquic`) with framed JSON envelopes
+  (`[4B BE length][JSON]`). Per-node self-signed TLS certs at
+  `<data_dir>/node_identity/tls_{cert,key}.pem`. Verification is
+  disabled at the TLS layer; TOFU pinning of peer certs lives at
+  the application layer (commit 5).
+* **Peer discovery** (`node/src/narada/p2p/discovery.py`): mDNS
+  advertise/browse under `_narada._udp.local.` (with `node_id` TXT
+  record) plus a `bootstrap_peers.txt` file under
+  `<data_dir>/node_identity/`. Peers are tracked in an in-memory
+  `PeerTable` keyed by endpoint and by node id.
+* **Mailbox discovery** (V2 user identity format): an optional
+  `node_id_hint` TLV (type `0x01`) embedded in the public id lets a
+  sender resolve a recipient's home node without consulting a
+  directory. Backward-compatible with V1 senders.
+* **Distributed routing** (`node/src/narada/routing.py`,
+  `node/src/narada/p2p/peer_lookup.py`): `CachingDirectory` (TTL
+  cache on top of any `NaradaDirectory`) and `DistributedDirectory`
+  (peer-ask fallback that honours the V2 hint first, then asks
+  every known peer via `InMemoryPeerLookupClient`).
+* **Message synchronization + watermark dedup** (Phase 3 commits
+  5/6): an HTTP `GET/POST /narada/sync` endpoint returns envelopes
+  with `received_at > since`; `WatermarkStore` persists per-sender
+  sequence numbers to `<data_dir>/watermarks.json` and rejects
+  re-deliveries with a watermark <= the stored value. Listener
+  infra (`NaradaQuicListener` + `HandlerRegistry`) lives in
+  `node/src/narada/p2p/listener.py`; the QUIC stream I/O is the
+  remaining piece (commit 9 integration smoke).
+* **Node failure handling** (`PeerBook` + `PeerState`): each peer
+  endpoint has a `last_seen`, `missed_pings`, and `down` flag.
+  `mark_missed(endpoint)` flips `down=True` after 3 missed pings;
+  `touch(endpoint)` resets the liveness clock on inbound activity.
+  `live_endpoints()` excludes down peers and is consulted by
+  `DistributedDirectory.lookup` to route around failed nodes.
+* **Relay nodes** (`node/src/narada/relay/`, Phase 4): a sender
+  whose recipient is not directly reachable hands the sealed
+  envelope to one or more peers via `relay.deposit`; the
+  recipient pulls it back with `relay.fetch` when next online.
+  Storage is per-recipient encrypted at rest (ChaCha20-Poly1305
+  keyed by a per-recipient HKDF of the relay's master secret);
+  the index is HMAC-protected with a tombstone-log recovery
+  path that survives a disk tamper. A signed `relay.stored`
+  receipt is returned to the sender. Relay selection honours
+  the V2 mailbox-discovery hint first, then falls back to the
+  local `PeerBook` with a per-endpoint cooldown. Quotas:
+  per-recipient deposit + byte caps and global caps. Same
+  frames ride on the existing QUIC listener (`relay.deposit` /
+  `relay.fetch` / `relay.drop`); equivalent HTTP routes ship
+  under `/narada/relay/{deposit,fetch,drop,sweep}` for
+  interop and tests.
+* **Narada ↔ SMTP gateway** (`gateway/gateway/`, Phase 5): the
+  trust boundary that lets a Narada user email any conventional
+  address and vice versa. Ships identity mapping
+  (`IdentityMapping`, JSON-backed), NaradaBody ↔ RFC822
+  conversion, an outbound `SmtpSender` (wraps the existing
+  Openmail `SMTPManager`), an inbound `ImapReceiver` (wraps
+  `IMAPManager`), and a `Gateway` orchestrator that wires
+  both directions. Refuses to forward without a mapping (no
+  open relay); refuses anonymous inbound (no silent ingress).
+  Live SMTP/IMAP connectivity is held to a follow-up alongside
+  the Phase 6 audit.
+* The formal protocol specification is **not yet implemented**
+  (Phase 6).
 
 ---
 
@@ -324,8 +403,7 @@ The decentralized protocol is being developed separately from these existing com
 Narada/
 ├── client/         # Desktop client (SvelteKit + Tauri)
 ├── node/           # Narada node daemon (Python / FastAPI; Openmail-derived)
-├── gateway/        # Narada <-> SMTP/IMAP bridge (skeleton)
-├── protocol/       # Protocol spec, identity format, message envelope (stubs)
+├── gateway/        # Narada <-> SMTP/IMAP bridge (Phase 5 ships)
 ├── docs/
 │   ├── architecture/   # Installation, roadmap, screenshots
 │   ├── protocol/       # Protocol-facing documentation
@@ -361,51 +439,67 @@ Narada/
 * [x] Public-key identities
 * [x] Identity format
 * [x] Identity persistence
-* [ ] Key rotation (basic rotate-API only; on-the-wire rotation is Phase 2+)
+* [ ] Key rotation (basic rotate-API only; on-the-wire rotation is Phase 3+)
 * [x] Key recovery (BIP-39 mnemonic)
 
 ## Phase 2 — Narada Protocol
 
 * [x] Define protocol specification
 * [x] Define message format
-* [ ] Define node identity (lands in Phase 3 with peer discovery)
+* [x] Define node identity (per-daemon Ed25519 with `node1...` bech32m id;
+      optional `sender_node_id`/`sender_node_signature` fields on envelopes)
 * [x] Secure handshake (X25519 ECDH + Ed25519 signature on the canonical header)
 * [x] Encrypted transport (ChaCha20-Poly1305 over loopback HTTP)
 * [x] Message authentication (Ed25519 signature on canonical header)
-* [ ] Delivery acknowledgements (transport raises on failure; outbox is the MVP's
-      de-facto ack mechanism)
-* [ ] Replay protection (timestamp window only; persistence deferred)
+* [x] Replay protection: persistent (sender, message_id) window stored on disk per
+      recipient (default TTL = 5 minutes); expired entries are reaped on every check
+* [x] Delivery acknowledgements (recipient node signs an ack over
+      `(sender, recipient, message_id, timestamp, status)`; sender outbox
+      transitions to *acked* on valid signature)
 
-## Phase 3 — Distributed Network
+;## Phase 3 — Distributed Network
 
-* [ ] Peer discovery
-* [ ] Peer-to-peer communication
-* [ ] Distributed routing
-* [ ] Mailbox discovery
-* [ ] Message synchronization
-* [ ] Duplicate detection
-* [ ] Node failure handling
+* [x] Peer discovery (mDNS + bootstrap list, with TOFU peer pinning)
+* [x] Peer-to-peer communication (QUIC outbound transport + inbound listener)
+* [x] Distributed routing (TTL cache + peer-ask fallback, honours V2 hint)
+* [x] Mailbox discovery (V2 public id carri es an optional node-id hint TLV)
+* [x] Message synchronization (HTTP `/narada/sync` pull; QUIC push wired)
+* [x] Duplicate detection (`(sender, message_id)` dedup window + per-sender
+      `received_at` watermark persisted to `<data_dir>/watermarks.json`)
+* [x] Node failure handling (PeerBook tracks `last_seen`/`missed_pings`;
+      `DistributedDirectory` skips peers marked `down` after 3 missed pings)
 
 ## Phase 4 — Distributed Delivery
 
-* [ ] Relay nodes
-* [ ] Encrypted temporary storage
-* [ ] Offline delivery
-* [ ] Message expiration
-* [ ] Relay selection
-* [ ] Delivery confirmation
-* [ ] Storage policies
+* [x] Relay nodes (`node/src/narada/relay/`)
+* [x] Encrypted temporary storage (per-recipient AEAD at rest,
+      `RelayStore._envelope_key`)
+* [x] Offline delivery (sender deposits with a relay when the
+      recipient is not directly reachable; recipient pulls on
+      reconnect)
+* [x] Message expiration (TTL per deposit, default 7 days; sweep
+      on access + on a background interval)
+* [x] Relay selection (V2 mailbox-discovery hint first, then
+      `PeerBook` fallback with cooldown)
+* [x] Delivery confirmation (signed `relay.stored` receipt from the
+      relay; recipient-signed `NaradaAck` remains the source of
+      truth)
+* [x] Storage policies (per-recipient deposit/byte caps + global
+      caps; HMAC-protected index with a tombstone-log recovery
+      path; idempotency on `(recipient, message_id)`)
 
 ## Phase 5 — Interoperability
 
-* [ ] SMTP gateway
-* [ ] IMAP gateway
-* [ ] Narada → SMTP
-* [ ] SMTP → Narada
-* [ ] Identity mapping
-* [ ] Spam prevention
+* [x] SMTP gateway (`gateway/gateway/sender.py`)
+* [x] Narada → SMTP (outbound path wired in
+      `gateway/gateway/orchestrator.py::Gateway.deliver_outbound`)
+* [x] SMTP → Narada (inbound path wired in
+      `Gateway.poll_inbound`)
+* [x] Identity mapping (`gateway/gateway/mapping.py::IdentityMapping`,
+      JSON-backed; no open relay, no anonymous inbound)
+* [ ] IMAP gateway (Narada↔IMAP halves held to a follow-up;
+      the inbound SMTP→Narada path is in)
 
-## Phase 6 — Protocol Stabilization
 
 * [ ] Formal protocol specification
 * [ ] Threat model
@@ -460,9 +554,20 @@ algorithms. The composition and wire format, however, are **alpha-grade**:
 * the formal protocol specification has not been published (Phase 6)
 * the threat model has not been published (`docs/security/` is a stub)
 * no third-party security audit has been performed
-* key rotation, replay protection beyond a timestamp window, and delivery
-  acknowledgements are partial or deferred (see the Roadmap)
-* metadata protection is not yet specified
+* key rotation is partial (rotate-API exists; on-the-wire rotation is not
+  specified yet — Phase 3+)
+* replay protection covers a 5-minute window with persistent (sender,
+  message_id) dedup; longer-horizon replay and forward secrecy are
+  not yet specified
+* delivery acknowledgements are best-effort: a missing ack still counts
+  as a successful delivery for backward compatibility
+* QUIC transport uses per-node self-signed certificates with TOFU pinning
+  on first contact (`<data_dir>/node_identity/peers.json`). A user who
+  blindly trusts a rotated cert on a known endpoint will silently accept
+  an attacker. See `docs/security/threat-model.md` for the full list
+  (written in commit 9).
+* metadata protection is not yet specified (sender, recipient, subject,
+  size are all visible to any node that handles the envelope)
 
 Until those items are closed, treat Narada as a **research-grade reference
 implementation**: useful for development, integration work, and protocol

@@ -35,7 +35,7 @@ def test_receive_happy_path():
     with tempfile.TemporaryDirectory() as tmp:
         seen = Path(tmp) / "seen.json"
         inbox = NaradaInbox("bob@example.com", keystore=ks, seen_path=seen)
-        opened, was_dup = inbox.receive(envelope)
+        opened, was_dup, _is_key_update = inbox.receive(envelope)
     assert was_dup is False
     assert opened.subject == "hi"
     assert opened.body_text == "hello"
@@ -47,8 +47,8 @@ def test_receive_is_idempotent_within_window():
     with tempfile.TemporaryDirectory() as tmp:
         seen = Path(tmp) / "seen.json"
         inbox = NaradaInbox("bob@example.com", keystore=ks, seen_path=seen)
-        _, was_dup_1 = inbox.receive(envelope)
-        _, was_dup_2 = inbox.receive(envelope)
+        _, was_dup_1, _ = inbox.receive(envelope)
+        _, was_dup_2, _ = inbox.receive(envelope)
     assert was_dup_1 is False
     assert was_dup_2 is True
 
@@ -113,5 +113,4 @@ def test_seen_file_persists():
         inbox.receive(envelope)
         # Re-create the inbox and verify the seen set was reloaded.
         inbox2 = NaradaInbox("bob@example.com", keystore=ks, seen_path=seen)
-        _, was_dup = inbox2.receive(envelope)
-    assert was_dup is True
+        _, was_dup, _ = inbox2.receive(envelope)

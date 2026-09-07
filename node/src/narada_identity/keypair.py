@@ -159,6 +159,56 @@ def keypair_from_seed(seed: bytes) -> Keypair:
     )
 
 
+def keypair_with_x25519_preserved(
+    new_ed25519_seed: bytes,
+    prior_x25519_public_bytes: bytes,
+    prior_x25519_private_bytes: Optional[bytes] = None,
+) -> "Keypair":
+    """Build a keypair with a fresh Ed25519 key and a *copied* X25519 key.
+
+    The X25519 keypair is the same as the prior identity's. Only
+    the signing key is rotated. This is the on-the-wire-rotation
+    path (Option A in the design discussion): the recipient keeps
+    the same encryption key, so ECDH continues to work without
+    re-keying out of band.
+
+    If ``prior_x25519_private_bytes`` is provided, the X25519
+    *private* key is preserved too, so the resulting keypair can
+    decrypt envelopes sealed to the prior identity. If only the
+    public key is provided, the X25519 half is a public-only stub
+    and the resulting keypair is suitable for signing new
+    envelopes but not decrypting old ones.
+    """
+    if len(new_ed25519_seed) != SEED_LEN:
+        raise NaradaIdentityError(
+            f"Ed25519 seed must be {SEED_LEN} bytes, got {len(new_ed25519_seed)}"
+        )
+    if len(prior_x25519_public_bytes) != 32:
+        raise NaradaIdentityError(
+            f"X25519 public key must be 32 bytes, got {len(prior_x25519_public_bytes)}"
+        )
+    ed_priv = Ed25519PrivateKey.from_private_bytes(new_ed25519_seed)
+    ed_pub = ed_priv.public_key()
+    if prior_x25519_private_bytes is not None:
+        if len(prior_x25519_private_bytes) != 32:
+            raise NaradaIdentityError(
+                "prior X25519 private key must be 32 bytes"
+            )
+        x_priv = X25519PrivateKey.from_private_bytes(prior_x25519_private_bytes)
+    else:
+        # Derive a private key from the prior public key — this is a
+        # **dummy** value that satisfies the dataclass shape but
+        # cannot decrypt anything. Callers that need real decrypt
+        # capability must pass prior_x25519_private_bytes.
+        x_priv = X25519PrivateKey.from_private_bytes(b"\x00" * 32)
+    x_pub = X25519PublicKey.from_public_bytes(prior_x25519_public_bytes)
+    return Keypair(
+        ed25519_private=ed_priv,
+        ed25519_public=ed_pub,
+        x25519_private=x_priv,
+        x25519_public=x_pub,
+    )
+
 def verify_signature(
     public_key_bytes: bytes,
     signature: bytes,

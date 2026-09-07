@@ -107,6 +107,98 @@ def rotate_identity(
     return NaradaIdentity.from_keypair(account_id, keypair), mnemonic
 
 
+def rotate_identity_preserve_x25519(
+    account_id: str,
+    keystore: NaradaKeystore,
+) -> tuple["NaradaIdentity", str]:
+    """Rotate the Ed25519 signing key while preserving the X25519 encryption key.
+
+    Returns ``(new_identity, new_mnemonic)`` with a fresh BIP-39
+    mnemonic but the same X25519 public key as the prior identity.
+
+    The X25519 *private* key is preserved across the rotation so
+    the new identity can decrypt envelopes sealed to the prior
+    one (Option A in the design discussion). The X25519 private
+    key is stored in the keystore's secret-blob slot via
+    :meth:`store_secret`; on load, the new identity rebuilds
+    the keypair from the new Ed25519 seed plus the preserved
+    X25519 private key.
+
+    Raises :class:`NaradaIdentityError` if no identity is
+    currently stored for ``account_id``.
+    """
+    if not keystore.has(account_id):
+        raise NaradaIdentityError(
+            f"No identity stored for account_id={account_id!r}; nothing to rotate"
+        )
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+    )
+
+    from .keypair import keypair_with_x25519_preserved
+
+    prior_identity = identity_from_keystore_with_preserved_x25519(
+        account_id, keystore
+    )
+    prior_x25519_private = prior_identity.keypair.x25519_private.private_bytes(
+        encoding=Encoding.Raw,
+        format=PrivateFormat.Raw,
+        encryption_algorithm=NoEncryption(),
+    )
+    prior_x25519_public = prior_identity.keypair.x25519_public_bytes
+
+    new_mnemonic = generate_mnemonic()
+    new_seed = mnemonic_to_seed(new_mnemonic)
+    new_keypair = keypair_with_x25519_preserved(
+        new_ed25519_seed=new_seed,
+        prior_x25519_public_bytes=prior_x25519_public,
+        prior_x25519_private_bytes=prior_x25519_private,
+    )
+    keystore.store(account_id, new_seed)
+    keystore.store_secret(account_id, prior_x25519_private)
+    return NaradaIdentity.from_keypair(account_id, new_keypair), new_mnemonic
+
+def identity_from_keystore_with_preserved_x25519(
+    account_id: str,
+    keystore: NaradaKeystore,
+) -> "NaradaIdentity":
+    """Load an identity, restoring the X25519 private key if it was preserved.
+
+    Used after :func:`rotate_identity_preserve_x25519`. The
+    new identity's X25519 key is rebuilt from the preserved
+    X25519 private key (stored in the secret-blob slot) and
+    the new Ed25519 seed (stored in the regular slot). If no
+    secret blob exists, the X25519 key is derived from the new
+    seed via HKDF (the standard path, used for non-Option-A
+    identities).
+    """
+    seed = keystore.load(account_id)
+    if keystore.has_secret(account_id):
+        from .keypair import keypair_with_x25519_preserved
+
+        prior_x25519_private = keystore.load_secret(account_id)
+        from cryptography.hazmat.primitives.asymmetric.x25519 import (
+            X25519PrivateKey,
+        )
+        from cryptography.hazmat.primitives.serialization import (
+            Encoding,
+            PublicFormat,
+        )
+
+        x_priv = X25519PrivateKey.from_private_bytes(prior_x25519_private)
+        prior_x25519_public = x_priv.public_key().public_bytes(
+            encoding=Encoding.Raw,
+            format=PublicFormat.Raw,
+        )
+        keypair = keypair_with_x25519_preserved(
+            new_ed25519_seed=seed,
+            prior_x25519_public_bytes=prior_x25519_public,
+            prior_x25519_private_bytes=prior_x25519_private,
+        )
+        return NaradaIdentity.from_keypair(account_id, keypair)
+    return identity_from_keystore(account_id, keystore)
 def verify_public_id_signature(
     public_id: str,
     signature: bytes,

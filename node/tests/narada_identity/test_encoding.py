@@ -34,9 +34,9 @@ def test_wrong_hrp_rejected():
     ed = b"\x01" * 32
     x = b"\x02" * 32
     encoded = encode_public_id(ed, x)
-    # Replace 'Narada' (the hrp) with 'latticf' before the '1' separator.
+    # Replace 'narada' (the hrp) with 'latticf' before the '1' separator.
     # A real production parser would not accept a wrong hrp; our decoder
-    # also rejects anything whose hrp is not 'Narada'.
+    # also rejects anything whose hrp is not 'narada'.
     assert encoded.startswith("narada1")
     tampered = "latticf" + encoded[len("narada"):]
     assert not tampered.startswith("narada1")
@@ -59,3 +59,50 @@ def test_bech32m_checksum_required_not_bech32():
     encoded = encode_public_id(ed, x)
     with __import__("pytest").raises(NaradaIdentityError):
         decode_public_id(encoded[:-1] + ("q" if encoded[-1] != "q" else "p"))
+
+
+from src.narada_identity.encoding import decode_node_hint
+
+
+from src.narada_identity.encoding import decode_node_hint  # noqa: E402
+
+
+def test_v2_with_hint_roundtrip():
+    ed = b"\x03" * 32
+    x = b"\x04" * 32
+    hint = "node1abcde12345"
+    encoded = encode_public_id(
+        ed, x, version=IdentityVersion.V2, node_id_hint=hint
+    )
+    assert encoded.startswith("narada1")
+    version, ed_out, x_out = decode_public_id(encoded)
+    assert version is IdentityVersion.V2
+    assert ed_out == ed
+    assert x_out == x
+    assert decode_node_hint(encoded) == hint
+
+
+def test_v1_decode_node_hint_returns_none():
+    ed = b"\x05" * 32
+    x = b"\x06" * 32
+    encoded = encode_public_id(ed, x)
+    assert decode_node_hint(encoded) is None
+
+
+def test_v2_without_hint_is_valid():
+    ed = b"\x07" * 32
+    x = b"\x08" * 32
+    encoded = encode_public_id(ed, x, version=IdentityVersion.V2)
+    assert decode_node_hint(encoded) is None
+    version, ed_out, x_out = decode_public_id(encoded)
+    assert version is IdentityVersion.V2
+    assert ed_out == ed
+
+
+def test_v1_rejects_hint():
+    with __import__("pytest").raises(NaradaIdentityError):
+        encode_public_id(
+            b"\x01" * 32, b"\x02" * 32,
+            version=IdentityVersion.V1,
+            node_id_hint="node1abc",
+        )

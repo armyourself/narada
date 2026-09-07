@@ -5,6 +5,7 @@ description = "Self hosted email client"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aioquic>=1.3.0",
     "cryptography>=45.0.6",
     "fastapi>=0.116.1",
     "keyring>=25.6.0",
@@ -14,4 +15,5 @@ dependencies = [
     "python-multipart>=0.0.20",
     "uvicorn>=0.35.0",
     "websockets>=15.0.1",
+    "zeroconf>=0.150.0",
 ]

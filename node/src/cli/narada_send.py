@@ -17,7 +17,7 @@ import argparse
 import sys
 import time
 
-from src.Narada.adapter import NaradaAdapter
+from src.narada.adapter import NaradaAdapter
 from src.narada_identity.keystore import default_keystore
 from src.mail_abstraction import Address
 

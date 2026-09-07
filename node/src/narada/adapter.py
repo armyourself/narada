@@ -50,6 +50,7 @@ from .envelope import NaradaBody, NaradaEnvelope, NaradaEnvelopeError, make_enve
 from .inbox import NaradaInbox
 from .outbox import Outbox, OutboxEntry
 from .transport import HttpNaradaTransport, NaradaTransport, NaradaTransportError
+from .node_identity import NaradaNodeIdentity
 
 
 class NaradaAdapter(MailAdapter):
@@ -88,6 +89,7 @@ class NaradaAdapter(MailAdapter):
         transport: Optional[NaradaTransport] = None,
         keystore: Optional[NaradaKeystore] = None,
         data_dir: Optional[Path] = None,
+        node_ephemeral: bool = False,
     ) -> None:
         self._account_id = account_id
         self._directory = directory
@@ -98,8 +100,17 @@ class NaradaAdapter(MailAdapter):
             self._data_dir = Path(data_dir)
         else:
             self._data_dir = self._default_data_dir()
+        self._node_ephemeral = node_ephemeral
+        self._node_lock = threading.Lock()
+        self._node: Optional[NaradaNodeIdentity] = None
         self._lock = threading.Lock()
         self._mailbox_path = self._data_dir / "etc" / f"mailbox.{_safe(self._account_id)}.jsonl"
+        # Relay-path hooks. None until integration wires them up; the
+        # adapter still works as a direct-delivery adapter if these
+        # stay None.
+        self._relay_selector = None
+        self._relay_deposit = None
+        self._relay_peer_book = None
 
     @staticmethod
     def _default_data_dir() -> Path:
@@ -118,6 +129,25 @@ class NaradaAdapter(MailAdapter):
                 f"account {self._account_id!r} has no Narada identity: {exc}"
             ) from exc
 
+    def _ensure_node(self) -> NaradaNodeIdentity:
+        """Return the per-node identity used to sign outgoing envelopes.
+
+        In persistent mode (the default), this is loaded from
+        ``<data_dir>/node_identity/seed`` and reused across envelopes
+        — which is a linkability vector across the network.
+        In ephemeral mode (``node_ephemeral=True``), a fresh identity
+        is generated for every call. Ephemeral mode maximises privacy
+        at the cost of an extra signature per envelope and an extra
+        key generation per send.
+        """
+        if self._node_ephemeral:
+            return NaradaNodeIdentity.generate()
+        with self._node_lock:
+            if self._node is None:
+                from .node_identity import load_or_create
+
+                self._node = load_or_create(self._data_dir)
+            return self._node
     # --- Lifecycle -------------------------------------------------------
 
     def connect(self) -> tuple[bool, str]:
@@ -139,7 +169,7 @@ class NaradaAdapter(MailAdapter):
     # --- Folders / fetch -------------------------------------------------
 
     def list_folders(self) -> list[Folder]:
-        return [Folder(name="Narada", delimiter="/", is_selectable=True, children=[])]
+        return [Folder(name="narada", delimiter="/", is_selectable=True, children=[])]
 
     def fetch_messages(
         self,
@@ -162,7 +192,7 @@ class NaradaAdapter(MailAdapter):
                 record = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            out.append(_record_to_message(record, folder=folder or "Narada"))
+            out.append(_record_to_message(record, folder=folder or "narada"))
         return out[offset:offset + limit]
 
     # --- Send -----------------------------------------------------------
@@ -228,15 +258,27 @@ class NaradaAdapter(MailAdapter):
             body_text=body,
             sent_at=int(time.time()),
         )
-        envelope = make_envelope(sender, recipient_public_id, narada_body)
+        envelope = make_envelope(
+            sender,
+            recipient_public_id,
+            narada_body,
+            node=self._ensure_node(),
+        )
         envelope_dict = envelope.as_dict()
 
         directory = self._ensure_directory()
         base_url = directory.lookup(recipient_public_id)
         if base_url is None:
-            # Recipient is unknown: queue and let the user resolve it
-            # later (or the directory learns about it through first
-            # contact in a future phase).
+            # Recipient is unknown: try a relay first, then queue.
+            relay_reply = self._attempt_relay_deposit(
+                envelope_dict,
+                recipient_public_id=recipient_public_id,
+            )
+            if relay_reply is not None:
+                return True, (
+                    f"deposited at relay {relay_reply.get('relay_node_id')!r} "
+                    f"for {recipient_public_id}"
+                )
             self._ensure_outbox().enqueue(
                 account_id=self._account_id,
                 recipient_public_id=recipient_public_id,
@@ -245,20 +287,62 @@ class NaradaAdapter(MailAdapter):
             return False, f"recipient {recipient_public_id} not in directory; queued in outbox"
 
         try:
-            self._transport.send(base_url, envelope_dict)
-            return True, f"delivered to {recipient_public_id}"
+            ack = self._transport.send_with_ack(base_url, envelope_dict)
         except NaradaTransportError as exc:
             # Recipient was reachable but refused the message (4xx/5xx)
-            # OR the network call failed. Either way, queue with
-            # backoff so the user can see the failure and the outbox
-            # can retry.
+            # OR the network call failed. Either way, try a relay
+            # before queueing with backoff.
+            relay_reply = self._attempt_relay_deposit(
+                envelope_dict,
+                recipient_public_id=recipient_public_id,
+            )
+            if relay_reply is not None:
+                return True, (
+                    f"direct delivery failed ({exc}); deposited at relay "
+                    f"{relay_reply.get('relay_node_id')!r}"
+                )
             self._ensure_outbox().enqueue(
                 account_id=self._account_id,
                 recipient_public_id=recipient_public_id,
                 envelope=envelope_dict,
-                first_attempt_delay_seconds=60,  # first retry in 1 minute
+                first_attempt_delay_seconds=60,
             )
             return False, f"delivery failed, queued for retry: {exc}"
+
+        # Verify the ack before reporting success. A misbehaving node
+        # cannot ack on behalf of a recipient whose node key it does
+        # not hold; if verify_ack returns False we treat it as a send
+        # failure so the outbox retries.
+        if ack is not None:
+            from .ack import verify_ack
+
+            if verify_ack(
+                ack,
+                expected_sender_public_id=envelope.sender_public_id,
+                expected_recipient_public_id=recipient_public_id,
+                expected_message_id=envelope.message_id,
+            ):
+                return True, (
+                    f"delivered to {recipient_public_id} "
+                    f"(ack from node {ack.node_id})"
+                )
+            # Bad signature: queue with backoff so the recipient can
+            # be re-contacted (e.g. after key rotation).
+            self._ensure_outbox().enqueue(
+                account_id=self._account_id,
+                recipient_public_id=recipient_public_id,
+                envelope=envelope_dict,
+                first_attempt_delay_seconds=60,
+            )
+            return False, (
+                f"recipient returned an invalid ack; queued for retry"
+            )
+
+        # No ack received but the HTTP layer said 200. Treat as a
+        # successful delivery for now; the outbox already removed the
+        # entry on first-attempt enqueue paths. (Future: outbox-only
+        # entries will use ack=missing as a 'transient' hint.)
+        return True, f"delivered to {recipient_public_id}"
 
     # --- Watch (polling stub) -------------------------------------------
 
@@ -294,22 +378,82 @@ class NaradaAdapter(MailAdapter):
         directory = self._ensure_directory()
         base_url = directory.lookup(entry.recipient_public_id)
         if base_url is None:
-            # Still no directory entry; back off.
+            # No direct route: try a relay before giving up. The
+            # selector's cooldown prevents flapping between the same
+            # dead peer.
+            relay_reply = self._attempt_relay_deposit(
+                entry.envelope,
+                recipient_public_id=entry.recipient_public_id,
+                exclude_endpoints=[
+                    ep
+                    for ep in (getattr(e, "endpoint", None) for e in self._relay_peer_book.all() if e.down)
+                    if ep
+                ],
+            )
+            if relay_reply is not None:
+                self._outbox.mark_deposited(
+                    entry.account_id,
+                    entry.message_id,
+                    deposit_id=relay_reply.get("deposit_id"),
+                    relay_node_id=relay_reply.get("relay_node_id"),
+                )
+                return
             self._outbox.mark_failed(
                 entry.account_id,
                 entry.message_id,
-                error="recipient not in directory",
+                error="recipient not in directory and no relay available",
             )
             return
         try:
-            self._transport.send(base_url, entry.envelope)
-            self._outbox.mark_delivered(entry.account_id, entry.message_id)
+            ack = self._transport.send_with_ack(base_url, entry.envelope)
         except NaradaTransportError as exc:
+            # Direct delivery failed: try a relay before giving up.
+            relay_reply = self._attempt_relay_deposit(
+                entry.envelope,
+                recipient_public_id=entry.recipient_public_id,
+            )
+            if relay_reply is not None:
+                self._outbox.mark_deposited(
+                    entry.account_id,
+                    entry.message_id,
+                    deposit_id=relay_reply.get("deposit_id"),
+                    relay_node_id=relay_reply.get("relay_node_id"),
+                )
+                return
             self._outbox.mark_failed(
                 entry.account_id,
                 entry.message_id,
                 error=str(exc),
             )
+            return
+        if ack is not None:
+            from .ack import verify_ack
+
+            if not verify_ack(
+                ack,
+                expected_sender_public_id=entry.envelope["sender_public_id"],
+                expected_recipient_public_id=entry.recipient_public_id,
+                expected_message_id=entry.message_id,
+            ):
+                # Bad signature: count it as a soft failure so the
+                # backoff schedule still applies.
+                self._outbox.mark_failed(
+                    entry.account_id,
+                    entry.message_id,
+                    error="recipient returned an invalid ack",
+                )
+                return
+            self._outbox.mark_acked(
+                entry.account_id,
+                entry.message_id,
+                acked_at=ack.timestamp,
+                ack_node_id=ack.node_id,
+            )
+            return
+        # Ack-less success (HTTP 200, no ack in body): fall back to
+        # mark_delivered for backward compatibility with pre-R3
+        # nodes.
+        self._outbox.mark_delivered(entry.account_id, entry.message_id)
 
     # --- Lazy initialization --------------------------------------------
 
@@ -321,8 +465,59 @@ class NaradaAdapter(MailAdapter):
 
     def _ensure_outbox(self) -> Outbox:
         if self._outbox is None:
-            self._outbox = Outbox(self._data_dir / "Narada")
+            self._outbox = Outbox(self._data_dir / "narada")
         return self._outbox
+
+    def _ensure_relay_selector(self):
+        if self._relay_selector is None:
+            from .relay.selector import RelaySelector
+            self._relay_selector = RelaySelector()
+        return self._relay_selector
+
+    def set_relay_selector(self, selector) -> None:
+        self._relay_selector = selector
+
+    def set_relay_deposit(self, fn) -> None:
+        """Inject the relay deposit callable used when the direct path fails."""
+        self._relay_deposit = fn
+
+    def set_relay_peer_book(self, peer_book) -> None:
+        """Inject the local PeerBook used for relay selection."""
+        self._relay_peer_book = peer_book
+    def _attempt_relay_deposit(
+        self,
+        envelope: dict,
+        *,
+        recipient_public_id: str,
+        ttl_seconds=None,
+        exclude_endpoints=None,
+    ):
+        """Try one relay via the selector. Returns the receipt or None."""
+        if self._relay_deposit is None or self._relay_peer_book is None:
+            return None
+        selector = self._ensure_relay_selector()
+        try:
+            picked = selector.select(
+                peer_book=self._relay_peer_book,
+                recipient_public_id=recipient_public_id,
+                exclude_endpoints=exclude_endpoints or (),
+            )
+        except Exception:
+            return None
+        if picked is None:
+            return None
+        selector.note_attempt(picked.endpoint)
+        try:
+            reply = self._relay_deposit(
+                picked.endpoint, dict(envelope), ttl_seconds
+            )
+        except Exception:
+            return None
+        if not isinstance(reply, dict):
+            return None
+        if reply.get("type") != "relay.stored":
+            return None
+        return reply
 
     # --- Test hook -------------------------------------------------------
 
@@ -340,12 +535,14 @@ class NaradaAdapter(MailAdapter):
     def set_directory(self, directory: NaradaDirectory) -> None:
         self._directory = directory
 
-    def deliver_for_test(self, envelope_dict: Mapping[str, Any]) -> None:
-        """Test-only entry point: receive an envelope without going through HTTP.
+    def deliver_for_test(self, envelope_dict: Mapping[str, Any]) -> bool:
+        """Test-only entry point: receive an envelope without HTTP.
 
-        Production code receives envelopes via the FastAPI router. Tests
-        that wire the in-process transport directly into another adapter
-        use this to avoid the HTTP roundtrip.
+        Returns True if the envelope was freshly accepted, False on a
+        duplicate (or any other failure that should not generate an
+        ack). Production code receives envelopes via the FastAPI
+        router; tests that wire the in-process transport directly
+        into another adapter use this to avoid the HTTP roundtrip.
         """
         inbox = NaradaInbox(
             self._account_id,
@@ -354,12 +551,19 @@ class NaradaAdapter(MailAdapter):
         )
         env = NaradaEnvelope.from_dict(envelope_dict)
         try:
-            inbox.receive(env)
+            _body, was_duplicate, _is_key_update = inbox.receive(env)
+            return not was_duplicate
         except NaradaEnvelopeError as exc:
-            # Duplicate or already-seen; ignore for the test path.
+            # Invalid envelope; not a duplicate, but a failure.
             import sys
             print(f"[deliver_for_test] {self._account_id}: {exc}", file=sys.stderr)
+            return False
+    def node_for_acks(self) -> NaradaNodeIdentity:
+        """Return the persistent node identity used to sign acks.
 
+        Test-only: production ack generation lives in the router.
+        """
+        return self._ensure_node()
 
 def _record_to_message(record: dict, *, folder: str) -> Message:
     sender = str(record.get("sender", ""))
@@ -371,7 +575,7 @@ def _record_to_message(record: dict, *, folder: str) -> Message:
     return Message(
         uid=str(record.get("uid", "")),
         folder=folder,
-        source=MessageSource.Narada,
+        source=str(record.get("source", MessageSource.Narada.value)),
         subject=str(record.get("subject", "")),
         from_address=_address_from_string(sender),
         to_addresses=to_addresses,

@@ -29,7 +29,7 @@ import secrets
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
@@ -44,10 +44,14 @@ from src.narada_identity.identity import NaradaIdentity, verify_public_id_signat
 # --- Constants -------------------------------------------------------------
 
 ENVELOPE_VERSION = 1
+# v=3 carries an on-the-wire key rotation announcement. The wire
+# format is identical to v=1 except that the body subject is the
+# "__narada_key_update__" sentinel and the body text is a
+# JSON-serialised KeyUpdateBody (see src.narada.key_update).
+SUPPORTED_ENVELOPE_VERSIONS = frozenset({1, 3})
 _ENVELOPE_HKDF_INFO = b"Narada-envelope-v1"
 _NONCE_LEN = 16  # 128 bits; we use the first 12 for ChaCha20-Poly1305.
                   # Random per message -> collision risk negligible.
-
 # Public field names. Used both for canonical JSON ordering and for input
 # validation; this is the wire format.
 _FIELDS = (
@@ -113,6 +117,14 @@ class NaradaEnvelope:
     """A sealed Narada message.
 
     The transport layer ships the ``as_dict()`` form (JSON).
+
+    The optional ``sender_node_id`` and ``sender_node_signature`` fields
+    attribute the envelope to a specific Narada node daemon (see
+    :mod:`src.narada.node_identity`). They are **outside** the
+    user-key signature header: older Narada nodes that do not recognise
+    these fields can still verify the user signature and accept the
+    message. Newer nodes additionally verify the node signature when
+    the field is present.
     """
 
     v: int
@@ -123,9 +135,11 @@ class NaradaEnvelope:
     nonce: bytes
     signature: bytes
     body_ciphertext: bytes
+    sender_node_id: Optional[str] = None
+    sender_node_signature: Optional[bytes] = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "v": self.v,
             "sender_public_id": self.sender_public_id,
             "recipient_public_id": self.recipient_public_id,
@@ -135,6 +149,13 @@ class NaradaEnvelope:
             "signature": base64.b64encode(self.signature).decode("ascii"),
             "body_ciphertext": base64.b64encode(self.body_ciphertext).decode("ascii"),
         }
+        if self.sender_node_id is not None:
+            out["sender_node_id"] = self.sender_node_id
+        if self.sender_node_signature is not None:
+            out["sender_node_signature"] = base64.b64encode(
+                self.sender_node_signature
+            ).decode("ascii")
+        return out
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "NaradaEnvelope":
@@ -147,6 +168,8 @@ class NaradaEnvelope:
         except KeyError as exc:
             raise NaradaEnvelopeError(f"envelope missing field: {exc.args[0]}") from exc
         try:
+            node_id = data.get("sender_node_id")
+            node_sig_b64 = data.get("sender_node_signature")
             return cls(
                 v=int(data["v"]),
                 sender_public_id=str(data["sender_public_id"]),
@@ -156,6 +179,12 @@ class NaradaEnvelope:
                 nonce=base64.b64decode(nonce_b64, validate=True),
                 signature=base64.b64decode(sig_b64, validate=True),
                 body_ciphertext=base64.b64decode(ct_b64, validate=True),
+                sender_node_id=str(node_id) if node_id is not None else None,
+                sender_node_signature=(
+                    base64.b64decode(node_sig_b64, validate=True)
+                    if node_sig_b64 is not None
+                    else None
+                ),
             )
         except (TypeError, ValueError, base64.binascii.Error) as exc:
             raise NaradaEnvelopeError(f"envelope field has wrong type/encoding: {exc}") from exc
@@ -219,12 +248,19 @@ def make_envelope(
     *,
     timestamp: int | None = None,
     message_id: str | None = None,
+    node: Optional["NaradaNodeIdentity"] = None,
 ) -> NaradaEnvelope:
     """Build a sealed Narada envelope from plaintext ``body``.
 
     The caller is expected to ship ``envelope.as_dict()`` to the
     recipient (over a :class:`NaradaTransport`).
+
+    If ``node`` is provided, the envelope also carries
+    ``sender_node_id`` and ``sender_node_signature`` fields that
+    attribute it to a specific Narada daemon.
     """
+    from src.narada.node_identity import NaradaNodeIdentity  # local import
+
     try:
         _version, _ed_pub, recipient_x_pub = decode_public_id(recipient_public_id)
     except Exception as exc:
@@ -262,6 +298,20 @@ def make_envelope(
 
     signature = sender.keypair.sign(header_bytes)
 
+    sender_node_id: Optional[str] = None
+    sender_node_signature: Optional[bytes] = None
+    if node is not None:
+        if not isinstance(node, NaradaNodeIdentity):
+            raise NaradaEnvelopeError("node must be a NaradaNodeIdentity")
+        sender_node_id = node.public_id
+        # Node signature binds the node to (header_bytes, sender_node_id)
+        # so it cannot be moved between envelopes by a man-in-the-middle.
+        # We use a length-prefix-free concatenation because both halves
+        # are unambiguous: header_bytes ends with '}' (JSON object) and
+        # sender_node_id is a printable bech32m string with no '|' in it.
+        node_payload = header_bytes + b"|" + sender_node_id.encode("ascii")
+        sender_node_signature = node.sign(node_payload)
+
     return NaradaEnvelope(
         v=ENVELOPE_VERSION,
         sender_public_id=sender.public_id,
@@ -271,6 +321,8 @@ def make_envelope(
         nonce=nonce,
         signature=signature,
         body_ciphertext=body_ciphertext,
+        sender_node_id=sender_node_id,
+        sender_node_signature=sender_node_signature,
     )
 
 
@@ -295,7 +347,7 @@ def open_envelope(
     """
     if envelope.recipient_public_id != recipient.public_id:
         raise NaradaEnvelopeError("envelope addressed to a different recipient")
-    if envelope.v != ENVELOPE_VERSION:
+    if envelope.v not in SUPPORTED_ENVELOPE_VERSIONS:
         raise NaradaEnvelopeError(f"unsupported envelope version: {envelope.v}")
 
     current = int(now) if now is not None else int(time.time())
@@ -304,7 +356,26 @@ def open_envelope(
             f"envelope timestamp out of window: {envelope.timestamp} vs {current}"
         )
 
-    # 1. Verify signature.
+    # Optional sender-node fields: if either is present, both must be
+    # present and the node signature must verify. We import locally to
+    # keep the seal/open path cheap for senders that do not use nodes.
+    if (envelope.sender_node_id is None) != (envelope.sender_node_signature is None):
+        raise NaradaEnvelopeError(
+            "envelope has one of sender_node_id/sender_node_signature but not both"
+        )
+    if envelope.sender_node_id is not None and envelope.sender_node_signature is not None:
+        from src.narada.node_identity import verify_node_signature
+
+        header_bytes_for_node = _header_bytes(envelope)
+        node_payload = (
+            header_bytes_for_node + b"|" + envelope.sender_node_id.encode("ascii")
+        )
+        if not verify_node_signature(
+            envelope.sender_node_id,
+            envelope.sender_node_signature,
+            node_payload,
+        ):
+            raise NaradaEnvelopeError("envelope node signature is invalid")
     header_bytes = _header_bytes(envelope)
     try:
         sig_ok = verify_public_id_signature(
@@ -350,13 +421,11 @@ def open_envelope(
         raise NaradaEnvelopeError("envelope body is not a JSON object")
     return NaradaBody.from_dict(body_dict)
 
-
 __all__ = [
     "ENVELOPE_VERSION",
+    "SUPPORTED_ENVELOPE_VERSIONS",
     "NaradaBody",
     "NaradaEnvelope",
     "NaradaEnvelopeError",
-    "make_envelope",
-    "open_envelope",
 ]
 

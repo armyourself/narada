@@ -20,8 +20,11 @@ called by the FastAPI lifespan task.
 from __future__ import annotations
 
 import json
+import os
+import re
 import re
 from typing import Any, Mapping, Optional
+from pathlib import Path
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -29,9 +32,9 @@ from pydantic import BaseModel
 from src._types import Response
 from src.narada_identity.keystore import default_keystore
 
-from ..Narada.adapter import NaradaAdapter
-from ..Narada.envelope import NaradaEnvelope, NaradaEnvelopeError
-from ..Narada.inbox import NaradaInbox
+from ..narada.adapter import NaradaAdapter
+from ..narada.envelope import NaradaEnvelope, NaradaEnvelopeError
+from ..narada.inbox import NaradaInbox
 
 router = APIRouter(tags=["Narada Protocol"])
 
@@ -43,6 +46,13 @@ _ACCOUNT_ID_PATTERN = re.compile(r"^[A-Za-z0-9._@+\-]{1,254}$")
 # relies on the defaults: real OS keyring + ~/.openmail data dir.
 _keystore_factory = default_keystore
 _data_dir_factory = None  # None means "use default node data dir"
+
+
+def _hmac_key(data_dir) -> bytes:  # type: ignore[no-untyped-def]
+    """Return the HMAC key for ``data_dir``, derived from the node-identity seed."""
+    from src.narada_security.hmac_io import load_key
+
+    return load_key(data_dir)
 
 
 def _validate_account_id(account_id: str) -> Optional[Response]:
@@ -58,7 +68,7 @@ def _safe(account_id: str) -> str:
     return "".join(c if c.isalnum() or c in "._@+-" else "_" for c in account_id) or "unknown"
 
 
-@router.post("/Narada/inbox")
+@router.post("/narada/inbox")
 def receive_envelope(envelope: Mapping[str, Any]) -> Response:
     """Receive a sealed Narada envelope from another node."""
     try:
@@ -86,19 +96,52 @@ def receive_envelope(envelope: Mapping[str, Any]) -> Response:
         seen_path=seen_path,
     )
     try:
-        body, was_duplicate = inbox.receive(env)
+        body, was_duplicate, _is_key_update = inbox.receive(env)
     except NaradaEnvelopeError as exc:
         return Response(success=False, message=f"envelope rejected: {exc}")
+
+    # On a successful (non-duplicate) accept, include a signed ack so the
+    # sender's transport can transition the outbox entry to "acked".
+    # We always sign with the recipient's persistent node identity
+    # (best-effort: a node-identity load failure here does not block
+    # delivery — the ack is an optimisation, not a security primitive).
+    ack_dict: Optional[dict] = None
+    if not was_duplicate:
+        try:
+            from src.narada.ack import make_ack
+            from src.narada.node_identity import load_or_create
+
+            if data_dir is None:
+                from src.consts import APP_NAME
+                import os
+                ack_data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
+            else:
+                ack_data_dir = data_dir
+            node = load_or_create(ack_data_dir)
+            ack = make_ack(
+                node,
+                env.sender_public_id,
+                env.recipient_public_id,
+                env.message_id,
+            )
+            ack_dict = ack.as_dict()
+        except Exception:  # noqa: BLE001
+            # Ack generation failure is non-fatal.
+            ack_dict = None
+
+    response_data: dict = {
+        "message_id": env.message_id,
+        "duplicate": was_duplicate,
+        "subject": body.subject,
+        "from": body.sender or env.sender_public_id,
+    }
+    if ack_dict is not None:
+        response_data["ack"] = ack_dict
 
     return Response(
         success=True,
         message=("envelope accepted (duplicate, no re-persist)" if was_duplicate else "envelope accepted"),
-        data={
-            "message_id": env.message_id,
-            "duplicate": was_duplicate,
-            "subject": body.subject,
-            "from": body.sender or env.sender_public_id,
-        },
+        data=response_data,
     )
 
 
@@ -116,13 +159,57 @@ def list_inbox(account_id: str) -> Response:
     except Exception as exc:  # noqa: BLE001
         return Response(success=False, message=f"could not open inbox: {exc}")
     messages = adapter.fetch_messages("narada", limit=200, offset=0)
+    messages = adapter.fetch_messages("narada", limit=200, offset=0)
     return Response(
         success=True,
         message=f"inbox for {account_id}",
-        data={"messages": [m.__dict__ | {"source": m.source.value} for m in messages]},
+        data={"messages": [m.__dict__ | {"source": str(m.source)} for m in messages]},
     )
 
 
+class SyncRequest(BaseModel):
+    account_id: str
+    since: int = 0
+
+
+
+
+@router.get("/narada/sync")
+def sync_account_get(account_id: str, since: int = 0) -> Response:
+    return _do_sync(account_id, since)
+
+
+@router.post("/narada/sync")
+def sync_account_post(request: SyncRequest) -> Response:
+    return _do_sync(request.account_id, request.since)
+
+
+def _do_sync(account_id: str, since: int) -> Response:
+    from src.narada.p2p.listener import build_sync_handler, WatermarkStore
+
+    err = _validate_account_id(account_id)
+    if err is not None:
+        return err
+    data_dir = _data_dir_factory() if _data_dir_factory is not None else None
+    if data_dir is None:
+        from src.consts import APP_NAME
+        import os
+
+        data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
+    wm = WatermarkStore(data_dir / "watermarks.json", key=_hmac_key(data_dir))
+
+    def getter() -> dict[str, str]:
+        return {account_id: str((data_dir / "etc" / f"mailbox.{account_id}.jsonl"))}
+
+    handler = build_sync_handler(account_id_getter=getter, watermark_store=wm)
+    out = handler({"type": "sync.fetch", "account_id": account_id, "since": since}, ("http", 0))
+    if out.get("type") == "error":
+        return Response(success=False, message=str(out.get("message", "sync failed")))
+    return Response(
+        success=True,
+        message=f"sync for {account_id} since {since}",
+        data={"entries": out.get("entries", [])},
+    )
 class OutboxRetryRequest(BaseModel):
     account_id: str
 

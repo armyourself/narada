@@ -9,43 +9,35 @@ and this project does not yet follow Semantic Versioning.
 
 ### Added
 
-- **Mail Abstraction layer** under `node/src/mail_abstraction/`. Defines a
-  single `MailAdapter` interface (`Address`, `Folder`, `Message`,
-  `MessageSource`) that the Narada node uses to talk to mail sources
-  regardless of transport. Two adapters:
-  - `IMAPSMTPAdapter` — wraps the existing `Openmail` IMAP/SMTP client.
-    Transport methods (`list_folders`, `fetch_messages`, `send_message`,
-    `watch`) currently raise `MailAdapterError` and will be migrated to
-    use the interface as the routers are refactored; a `build_draft`
-    helper is already wired for callers that want to keep the adapter
-    contract in their signature.
-  - `NaradaAdapter` — stub for the future Narada protocol transport
-    (Phase 2+ of the Narada roadmap). All transport methods raise
-    `MailAdapterError` with a clear "not yet implemented" message.
-- **Narada cryptographic identity** under `node/src/narada_identity/`.
-  Each Narada account can now hold an identity consisting of an
-  Ed25519 signing key and an X25519 encryption key, encoded as a
-  `narada1...` bech32m string (see `protocol/identity.md` for the
-  spec). Includes:
-  - `Keypair` with deterministic X25519 derivation (HKDF) from the
-    Ed25519 seed.
-  - BIP-39 12-word mnemonic generation and recovery.
-  - Three keystore backends: `InMemoryKeystore` (tests), `KeyringKeystore`
-    (OS keyring, production default), `PassphraseKeystore`
-    (PBKDF2-HMAC-SHA256 + AES-GCM file fallback for headless servers).
-  - HTTP router `narada_identity_tasks` exposed under
-    `/narada/identity/generate`, `/narada/identity/{account_id}`,
-    `/narada/identity/recover`, `/narada/identity/rotate`,
-    `/narada/identity/{account_id}` (DELETE).
-  - CLI: `python -m src.narada_identity.cli generate|show|recover|rotate`.
-- **`Account.narada_identity_id`** optional field on the existing
-  `Account` and `AccountWithPassword` models, defaulting to `None`.
-- **42 new tests** under `node/tests/mail_abstraction/`,
-  `node/tests/narada_identity/`, and
-  `node/tests/internal/test_account_narada_field.py`. All pass.
-- `mnemonic>=0.21` added to `node/pyproject.toml` dependencies.
-- Concrete specification in `protocol/identity.md` (replaces the prior
-  open-questions stub).
+- **Narada ↔ SMTP gateway (Phase 5)** under `gateway/gateway/`.
+  - `convert.py` -- NaradaBody ↔ RFC822 (`EmailMessage`)
+    conversion; preserves subject, sender, to, cc, body_text,
+    sent_at; round-trips Narada sender/recipient ids through
+    `X-Narada-*` headers.
+  - `mapping.py` -- `IdentityMapping`, JSON-backed
+    `narada_to_smtp` / `smtp_to_narada` tables; reloadable;
+    refuses to forward without a mapping (no open relay).
+  - `sender.py` -- `SmtpSender` adapter. Default transport
+    wraps the existing Openmail `SMTPManager`; tests pass an
+    in-memory transport closure.
+  - `receiver.py` -- `ImapReceiver` adapter. Default transport
+    wraps the existing Openmail `IMAPManager`; refuses
+    anonymous inbound (sender not in the mapping is dropped).
+  - `orchestrator.py` -- `Gateway` ties mapping + conversion +
+    sender + receiver into two methods: `deliver_outbound`
+    (Narada → SMTP) and `poll_inbound` (SMTP → Narada).
+  - `errors.py` -- `NoMappingError`, `ConversionError`,
+    `SmtpSendError`, `ImapFetchError`.
+  - `__main__.py` updated to validate a mapping file with
+    `--check`.
+  - 19 unit tests under `gateway/tests/` covering conversion
+    round-trips, mapping CRUD + reload, sender/receiver
+    adapters, and end-to-end outbound + inbound against
+    in-memory transports.
+  - `gateway/scripts/smoke_phase5.py` round-trips a Narada
+    body through the gateway without a live SMTP server.
+  - Spec in `protocol/gateway.md`.
+  - Concrete specification in `protocol/identity.md` (replaces the prior
 
 ### Changed
 

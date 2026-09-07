@@ -14,10 +14,21 @@ participate in the Narada network. It is responsible for:
 
 ## Status
 
-This directory currently contains the Openmail-derived FastAPI server. It
-still speaks conventional email (IMAP/SMTP) only — the Narada protocol layer
-will be added on top of this code. The directory is named `node/` to reflect
-its target role.
+The Narada node daemon. Today it carries the Openmail-derived
+FastAPI server **and** the Narada protocol stack (Phases 1-4):
+
+- Phase 1: cryptographic identity (`src/narada_identity/`).
+- Phase 2: Narada protocol envelope, outbox, inbox, transport,
+  directory, adapter (`src/narada/`).
+- Phase 3: peer-to-peer transport (QUIC), discovery, distributed
+  routing, watermark dedup, peer failure handling
+  (`src/narada/p2p/`).
+- Phase 4: relay store, selector, signed `relay.stored`
+  receipts, and QUIC + HTTP relay handlers
+  (`src/narada/relay/`).
+
+Speaks conventional **IMAP/SMTP** to the local desktop client
+and will bridge with `gateway/` for non-Narada peers (Phase 5+).
 
 ## Layout
 

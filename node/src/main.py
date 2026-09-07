@@ -7,9 +7,7 @@ from __future__ import annotations
 import asyncio
 import os
 from contextlib import asynccontextmanager
-
-import uvicorn
-from fastapi import FastAPI, Request, Response as FastAPIResponse, HTTPException
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
@@ -60,8 +58,8 @@ def _drain_narada_outbox_once() -> None:
     Narada package is partially uninitialised in a future state.
     """
     try:
-        from src.Narada.adapter import NaradaAdapter
-        from src.Narada.outbox import Outbox
+        from src.narada.adapter import NaradaAdapter
+        from src.narada.outbox import Outbox
         from src.narada_identity.keystore import default_keystore
     except Exception as exc:  # noqa: BLE001
         uvicorn_logger.error(f"Narada drain: import failed: {exc}")
@@ -86,12 +84,27 @@ async def _narada_drain_loop() -> None:
             uvicorn_logger.error(f"Narada drain loop error: {exc}")
         await asyncio.sleep(_narada_DRAIN_INTERVAL)
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _narada_drain_task
     try:
         client_handler.create_openmail_clients()
+        # Initialise the Narada relay store with a per-process
+        # master key. The key is derived from the node-identity
+        # seed so a fresh process cannot read another process's
+        # relay deposits even if they share a data directory.
+        try:
+            from src.routers import narada_relay_tasks
+            from src.narada_security.hmac_io import load_key
+            data_dir = Path(os.path.join(
+                os.path.expanduser("~"), "." + APP_NAME.lower()
+            ))
+            narada_relay_tasks.configure(
+                data_dir=data_dir,
+                master_key=load_key(data_dir),
+            )
+        except Exception as exc:
+            uvicorn_logger.error(f"Narada relay: init failed: {exc}")
         # Start the Narada outbox drainer.
         try:
             loop = asyncio.get_running_loop()
@@ -110,13 +123,16 @@ async def lifespan(app: FastAPI):
                 pass
         client_handler.shutdown()
 
-
 app = FastAPI(lifespan=lifespan)
 app.include_router(account_tasks.router)
 app.include_router(mailbox_tasks.router)
 app.include_router(narada_identity_tasks.router)
 app.include_router(narada_protocol_tasks.router)
-
+try:
+    from src.routers import narada_relay_tasks
+    app.include_router(narada_relay_tasks.router)
+except Exception:
+    pass
 def setup_api_middlewares(**kwargs):
     app.add_middleware(
         CORSMiddleware,

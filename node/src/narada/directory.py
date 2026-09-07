@@ -31,10 +31,10 @@ def _validate_account_id(account_id: str) -> None:
 
 
 def _validate_url(url: str) -> None:
-    if not isinstance(url, str) or not url.startswith(("http://", "https://", "mem://")):
+    if not isinstance(url, str) or not url.startswith(
+        ("http://", "https://", "mem://")
+    ):
         raise ValueError("base url must start with http://, https://, or mem://")
-
-
 class NaradaDirectory(ABC):
     """Abstract directory of recipient -> base_url mappings."""
 
