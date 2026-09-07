@@ -105,6 +105,12 @@ class NaradaAdapter(MailAdapter):
         self._node: Optional[NaradaNodeIdentity] = None
         self._lock = threading.Lock()
         self._mailbox_path = self._data_dir / "etc" / f"mailbox.{_safe(self._account_id)}.jsonl"
+        # Relay-path hooks. None until integration wires them up; the
+        # adapter still works as a direct-delivery adapter if these
+        # stay None.
+        self._relay_selector = None
+        self._relay_deposit = None
+        self._relay_peer_book = None
 
     @staticmethod
     def _default_data_dir() -> Path:
@@ -263,9 +269,16 @@ class NaradaAdapter(MailAdapter):
         directory = self._ensure_directory()
         base_url = directory.lookup(recipient_public_id)
         if base_url is None:
-            # Recipient is unknown: queue and let the user resolve it
-            # later (or the directory learns about it through first
-            # contact in a future phase).
+            # Recipient is unknown: try a relay first, then queue.
+            relay_reply = self._attempt_relay_deposit(
+                envelope_dict,
+                recipient_public_id=recipient_public_id,
+            )
+            if relay_reply is not None:
+                return True, (
+                    f"deposited at relay {relay_reply.get('relay_node_id')!r} "
+                    f"for {recipient_public_id}"
+                )
             self._ensure_outbox().enqueue(
                 account_id=self._account_id,
                 recipient_public_id=recipient_public_id,
@@ -277,14 +290,22 @@ class NaradaAdapter(MailAdapter):
             ack = self._transport.send_with_ack(base_url, envelope_dict)
         except NaradaTransportError as exc:
             # Recipient was reachable but refused the message (4xx/5xx)
-            # OR the network call failed. Either way, queue with
-            # backoff so the user can see the failure and the outbox
-            # can retry.
+            # OR the network call failed. Either way, try a relay
+            # before queueing with backoff.
+            relay_reply = self._attempt_relay_deposit(
+                envelope_dict,
+                recipient_public_id=recipient_public_id,
+            )
+            if relay_reply is not None:
+                return True, (
+                    f"direct delivery failed ({exc}); deposited at relay "
+                    f"{relay_reply.get('relay_node_id')!r}"
+                )
             self._ensure_outbox().enqueue(
                 account_id=self._account_id,
                 recipient_public_id=recipient_public_id,
                 envelope=envelope_dict,
-                first_attempt_delay_seconds=60,  # first retry in 1 minute
+                first_attempt_delay_seconds=60,
             )
             return False, f"delivery failed, queued for retry: {exc}"
 
@@ -357,16 +378,48 @@ class NaradaAdapter(MailAdapter):
         directory = self._ensure_directory()
         base_url = directory.lookup(entry.recipient_public_id)
         if base_url is None:
-            # Still no directory entry; back off.
+            # No direct route: try a relay before giving up. The
+            # selector's cooldown prevents flapping between the same
+            # dead peer.
+            relay_reply = self._attempt_relay_deposit(
+                entry.envelope,
+                recipient_public_id=entry.recipient_public_id,
+                exclude_endpoints=[
+                    ep
+                    for ep in (getattr(e, "endpoint", None) for e in self._relay_peer_book.all() if e.down)
+                    if ep
+                ],
+            )
+            if relay_reply is not None:
+                self._outbox.mark_deposited(
+                    entry.account_id,
+                    entry.message_id,
+                    deposit_id=relay_reply.get("deposit_id"),
+                    relay_node_id=relay_reply.get("relay_node_id"),
+                )
+                return
             self._outbox.mark_failed(
                 entry.account_id,
                 entry.message_id,
-                error="recipient not in directory",
+                error="recipient not in directory and no relay available",
             )
             return
         try:
             ack = self._transport.send_with_ack(base_url, entry.envelope)
         except NaradaTransportError as exc:
+            # Direct delivery failed: try a relay before giving up.
+            relay_reply = self._attempt_relay_deposit(
+                entry.envelope,
+                recipient_public_id=entry.recipient_public_id,
+            )
+            if relay_reply is not None:
+                self._outbox.mark_deposited(
+                    entry.account_id,
+                    entry.message_id,
+                    deposit_id=relay_reply.get("deposit_id"),
+                    relay_node_id=relay_reply.get("relay_node_id"),
+                )
+                return
             self._outbox.mark_failed(
                 entry.account_id,
                 entry.message_id,
@@ -412,8 +465,59 @@ class NaradaAdapter(MailAdapter):
 
     def _ensure_outbox(self) -> Outbox:
         if self._outbox is None:
-            self._outbox = Outbox(self._data_dir / "Narada")
+            self._outbox = Outbox(self._data_dir / "narada")
         return self._outbox
+
+    def _ensure_relay_selector(self):
+        if self._relay_selector is None:
+            from .relay.selector import RelaySelector
+            self._relay_selector = RelaySelector()
+        return self._relay_selector
+
+    def set_relay_selector(self, selector) -> None:
+        self._relay_selector = selector
+
+    def set_relay_deposit(self, fn) -> None:
+        """Inject the relay deposit callable used when the direct path fails."""
+        self._relay_deposit = fn
+
+    def set_relay_peer_book(self, peer_book) -> None:
+        """Inject the local PeerBook used for relay selection."""
+        self._relay_peer_book = peer_book
+    def _attempt_relay_deposit(
+        self,
+        envelope: dict,
+        *,
+        recipient_public_id: str,
+        ttl_seconds=None,
+        exclude_endpoints=None,
+    ):
+        """Try one relay via the selector. Returns the receipt or None."""
+        if self._relay_deposit is None or self._relay_peer_book is None:
+            return None
+        selector = self._ensure_relay_selector()
+        try:
+            picked = selector.select(
+                peer_book=self._relay_peer_book,
+                recipient_public_id=recipient_public_id,
+                exclude_endpoints=exclude_endpoints or (),
+            )
+        except Exception:
+            return None
+        if picked is None:
+            return None
+        selector.note_attempt(picked.endpoint)
+        try:
+            reply = self._relay_deposit(
+                picked.endpoint, dict(envelope), ttl_seconds
+            )
+        except Exception:
+            return None
+        if not isinstance(reply, dict):
+            return None
+        if reply.get("type") != "relay.stored":
+            return None
+        return reply
 
     # --- Test hook -------------------------------------------------------
 

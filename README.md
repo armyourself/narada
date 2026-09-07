@@ -365,11 +365,24 @@ Narada-specific work landed so far (under `node/` and `protocol/`):
   `touch(endpoint)` resets the liveness clock on inbound activity.
   `live_endpoints()` excludes down peers and is consulted by
   `DistributedDirectory.lookup` to route around failed nodes.
-* Relays, message expiration, storage policies, the
-  Narada↔SMTP/IMAP gateway, and the formal protocol specification
-  are **not yet implemented**. The p2p/ package is the seam where
-  they plug in.
-
+* **Relay nodes** (`node/src/narada/relay/`, Phase 4): a sender
+  whose recipient is not directly reachable hands the sealed
+  envelope to one or more peers via `relay.deposit`; the
+  recipient pulls it back with `relay.fetch` when next online.
+  Storage is per-recipient encrypted at rest (ChaCha20-Poly1305
+  keyed by a per-recipient HKDF of the relay's master secret);
+  the index is HMAC-protected with a tombstone-log recovery
+  path that survives a disk tamper. A signed `relay.stored`
+  receipt is returned to the sender. Relay selection honours
+  the V2 mailbox-discovery hint first, then falls back to the
+  local `PeerBook` with a per-endpoint cooldown. Quotas:
+  per-recipient deposit + byte caps and global caps. Same
+  frames ride on the existing QUIC listener (`relay.deposit` /
+  `relay.fetch` / `relay.drop`); equivalent HTTP routes ship
+  under `/narada/relay/{deposit,fetch,drop,sweep}` for
+  interop and tests.
+* The Narada↔SMTP/IMAP gateway and the formal protocol
+  specification are **not yet implemented** (Phases 5 and 6).
 The decentralized protocol is being developed separately from these existing components.
 
 ---
@@ -435,7 +448,7 @@ Narada/
       `(sender, recipient, message_id, timestamp, status)`; sender outbox
       transitions to *acked* on valid signature)
 
-## Phase 3 — Distributed Network
+;## Phase 3 — Distributed Network
 
 * [x] Peer discovery (mDNS + bootstrap list, with TOFU peer pinning)
 * [x] Peer-to-peer communication (QUIC outbound transport + inbound listener)
@@ -449,13 +462,22 @@ Narada/
 
 ## Phase 4 — Distributed Delivery
 
-* [ ] Relay nodes
-* [ ] Encrypted temporary storage
-* [ ] Offline delivery
-* [ ] Message expiration
-* [ ] Relay selection
-* [ ] Delivery confirmation
-* [ ] Storage policies
+* [x] Relay nodes (`node/src/narada/relay/`)
+* [x] Encrypted temporary storage (per-recipient AEAD at rest,
+      `RelayStore._envelope_key`)
+* [x] Offline delivery (sender deposits with a relay when the
+      recipient is not directly reachable; recipient pulls on
+      reconnect)
+* [x] Message expiration (TTL per deposit, default 7 days; sweep
+      on access + on a background interval)
+* [x] Relay selection (V2 mailbox-discovery hint first, then
+      `PeerBook` fallback with cooldown)
+* [x] Delivery confirmation (signed `relay.stored` receipt from the
+      relay; recipient-signed `NaradaAck` remains the source of
+      truth)
+* [x] Storage policies (per-recipient deposit/byte caps + global
+      caps; HMAC-protected index with a tombstone-log recovery
+      path; idempotency on `(recipient, message_id)`)
 
 ## Phase 5 — Interoperability
 

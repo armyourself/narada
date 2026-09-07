@@ -131,6 +131,11 @@ class PeerState:
     missed_pings: int = 0
     push_queue: "queue.Queue[dict]" = field(default_factory=queue.Queue)
     subscribed_account_id: Optional[str] = None
+    # The peer's bech32m node id (e.g. ``node1...``). Learned via
+    # the discovery layer or the QUIC TLS cert. ``None`` until the
+    # peer introduces itself; the relay selector treats
+    # ``node_id=None`` as "match only by endpoint".
+    node_id: Optional[str] = None
 
 
 class PeerBook:

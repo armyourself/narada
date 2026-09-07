@@ -9,41 +9,43 @@ and this project does not yet follow Semantic Versioning.
 
 ### Added
 
-- **Mail Abstraction layer** under `node/src/mail_abstraction/`. Defines a
-  single `MailAdapter` interface (`Address`, `Folder`, `Message`,
-  `MessageSource`) that the Narada node uses to talk to mail sources
-  regardless of transport. Two adapters:
-  - `IMAPSMTPAdapter` — wraps the existing `Openmail` IMAP/SMTP client.
-    Transport methods (`list_folders`, `fetch_messages`, `send_message`,
-    `watch`) currently raise `MailAdapterError` and will be migrated to
-    use the interface as the routers are refactored; a `build_draft`
-    helper is already wired for callers that want to keep the adapter
-    contract in their signature.
-  - `NaradaAdapter` — stub for the future Narada protocol transport
-    (Phase 2+ of the Narada roadmap). All transport methods raise
-    `MailAdapterError` with a clear "not yet implemented" message.
-- **Narada cryptographic identity** under `node/src/narada_identity/`.
-  Each Narada account can now hold an identity consisting of an
-  Ed25519 signing key and an X25519 encryption key, encoded as a
-  `narada1...` bech32m string (see `protocol/identity.md` for the
-  spec). Includes:
-  - `Keypair` with deterministic X25519 derivation (HKDF) from the
-    Ed25519 seed.
-  - BIP-39 12-word mnemonic generation and recovery.
-  - Three keystore backends: `InMemoryKeystore` (tests), `KeyringKeystore`
-    (OS keyring, production default), `PassphraseKeystore`
-    (PBKDF2-HMAC-SHA256 + AES-GCM file fallback for headless servers).
-  - HTTP router `narada_identity_tasks` exposed under
-    `/narada/identity/generate`, `/narada/identity/{account_id}`,
-    `/narada/identity/recover`, `/narada/identity/rotate`,
-    `/narada/identity/{account_id}` (DELETE).
-  - CLI: `python -m src.narada_identity.cli generate|show|recover|rotate`.
-- **`Account.narada_identity_id`** optional field on the existing
-  `Account` and `AccountWithPassword` models, defaulting to `None`.
-- **42 new tests** under `node/tests/mail_abstraction/`,
-  `node/tests/narada_identity/`, and
-  `node/tests/internal/test_account_narada_field.py`. All pass.
-- `mnemonic>=0.21` added to `node/pyproject.toml` dependencies.
+- **Relay nodes + encrypted temporary storage (Phase 4)**
+  under `node/src/narada/relay/`.
+  - `RelayStore` — per-recipient store with at-rest encryption
+    (ChaCha20-Poly1305 keyed by a per-recipient HKDF of a
+    relay-side master secret), HMAC-protected index, and a
+    tombstone-log-backed recovery path that survives a disk
+    attacker rewriting the index file. Defaults: 7-day TTL,
+    30-day max TTL, 64 deposits / 16 MiB per recipient, 16 KiB
+    total deposits / 256 MiB total bytes.
+  - `RelaySelector` — sender-side selection. Honours the V2
+    `node_id_hint` TLV first, then falls back to the local
+    `PeerBook` (skipping peers marked `down`), with a
+    per-endpoint cooldown so retries don't flap.
+  - `StoredReceipt` — the best-effort `relay.stored` receipt
+    signed by the relay's node identity (Ed25519 over the
+    canonical receipt JSON). Recipient-signed `NaradaAck`
+    remains the source of truth for delivery confirmation.
+  - QUIC handlers `relay.deposit`, `relay.fetch`,
+    `relay.drop` wired into the existing
+    `HandlerRegistry` via `register_relay_handlers`.
+  - HTTP routes `POST /narada/relay/{deposit,fetch,drop,sweep}`
+    in `node/src/routers/narada_relay_tasks.py` for interop +
+    tests.
+  - `RelayClient` (`relay/transport.py`) — single-shot async
+    QUIC client for outbound relay frames; sharing the
+    `encode_frame` / `decode_frame` helpers with the listener.
+  - `NaradaAdapter` consults the relay on `send_message` and
+    `drain_outbox` when the recipient is unknown or the direct
+    path fails; `Outbox.mark_deposited` records the deposit on
+    the sender side.
+  - 32 new tests under `node/tests/narada/relay/` covering
+    store round-trip, idempotency, TTL, quota, index-tamper
+    recovery, selector (hint + fallback + cooldown), handlers
+    (in-process), HTTP router, and end-to-end
+    Alice → relay → Bob with the offline recipient pulling on
+    reconnect.
+  - Spec in `protocol/relay.md`.
 - Concrete specification in `protocol/identity.md` (replaces the prior
   open-questions stub).
 

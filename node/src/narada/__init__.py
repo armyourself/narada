@@ -24,7 +24,6 @@ A complete Narada message is built and consumed in roughly this shape::
     body = open_envelope(envelope, recipient_identity)
     inbox.persist(body, sender_public_id=envelope.sender_public_id)
 """
-
 from .adapter import NaradaAdapter
 from .directory import NaradaDirectory, LocalContactList
 from .envelope import (
@@ -37,6 +36,14 @@ from .envelope import (
 )
 from .inbox import NaradaInbox
 from .outbox import Outbox, OutboxEntry
+from .relay import (
+    RelaySelector,
+    RelayStore,
+    RelayStoreError,
+    StoredReceipt,
+    make_stored_receipt,
+    verify_stored_receipt,
+)
 from .transport import (
     HttpNaradaTransport,
     NaradaTransport,
@@ -52,11 +59,18 @@ __all__ = [
     "NaradaEnvelope",
     "NaradaEnvelopeError",
     "NaradaInbox",
+    "Outbox",
+    "OutboxEntry",
+    "RelaySelector",
+    "RelayStore",
+    "RelayStoreError",
+    "StoredReceipt",
+    "make_stored_receipt",
+    "verify_stored_receipt",
     "NaradaTransport",
     "NaradaTransportError",
     "LocalContactList",
-    "Outbox",
-    "OutboxEntry",
     "make_envelope",
     "open_envelope",
 ]
+
