@@ -9,45 +9,35 @@ and this project does not yet follow Semantic Versioning.
 
 ### Added
 
-- **Relay nodes + encrypted temporary storage (Phase 4)**
-  under `node/src/narada/relay/`.
-  - `RelayStore` — per-recipient store with at-rest encryption
-    (ChaCha20-Poly1305 keyed by a per-recipient HKDF of a
-    relay-side master secret), HMAC-protected index, and a
-    tombstone-log-backed recovery path that survives a disk
-    attacker rewriting the index file. Defaults: 7-day TTL,
-    30-day max TTL, 64 deposits / 16 MiB per recipient, 16 KiB
-    total deposits / 256 MiB total bytes.
-  - `RelaySelector` — sender-side selection. Honours the V2
-    `node_id_hint` TLV first, then falls back to the local
-    `PeerBook` (skipping peers marked `down`), with a
-    per-endpoint cooldown so retries don't flap.
-  - `StoredReceipt` — the best-effort `relay.stored` receipt
-    signed by the relay's node identity (Ed25519 over the
-    canonical receipt JSON). Recipient-signed `NaradaAck`
-    remains the source of truth for delivery confirmation.
-  - QUIC handlers `relay.deposit`, `relay.fetch`,
-    `relay.drop` wired into the existing
-    `HandlerRegistry` via `register_relay_handlers`.
-  - HTTP routes `POST /narada/relay/{deposit,fetch,drop,sweep}`
-    in `node/src/routers/narada_relay_tasks.py` for interop +
-    tests.
-  - `RelayClient` (`relay/transport.py`) — single-shot async
-    QUIC client for outbound relay frames; sharing the
-    `encode_frame` / `decode_frame` helpers with the listener.
-  - `NaradaAdapter` consults the relay on `send_message` and
-    `drain_outbox` when the recipient is unknown or the direct
-    path fails; `Outbox.mark_deposited` records the deposit on
-    the sender side.
-  - 32 new tests under `node/tests/narada/relay/` covering
-    store round-trip, idempotency, TTL, quota, index-tamper
-    recovery, selector (hint + fallback + cooldown), handlers
-    (in-process), HTTP router, and end-to-end
-    Alice → relay → Bob with the offline recipient pulling on
-    reconnect.
-  - Spec in `protocol/relay.md`.
-- Concrete specification in `protocol/identity.md` (replaces the prior
-  open-questions stub).
+- **Narada ↔ SMTP gateway (Phase 5)** under `gateway/gateway/`.
+  - `convert.py` -- NaradaBody ↔ RFC822 (`EmailMessage`)
+    conversion; preserves subject, sender, to, cc, body_text,
+    sent_at; round-trips Narada sender/recipient ids through
+    `X-Narada-*` headers.
+  - `mapping.py` -- `IdentityMapping`, JSON-backed
+    `narada_to_smtp` / `smtp_to_narada` tables; reloadable;
+    refuses to forward without a mapping (no open relay).
+  - `sender.py` -- `SmtpSender` adapter. Default transport
+    wraps the existing Openmail `SMTPManager`; tests pass an
+    in-memory transport closure.
+  - `receiver.py` -- `ImapReceiver` adapter. Default transport
+    wraps the existing Openmail `IMAPManager`; refuses
+    anonymous inbound (sender not in the mapping is dropped).
+  - `orchestrator.py` -- `Gateway` ties mapping + conversion +
+    sender + receiver into two methods: `deliver_outbound`
+    (Narada → SMTP) and `poll_inbound` (SMTP → Narada).
+  - `errors.py` -- `NoMappingError`, `ConversionError`,
+    `SmtpSendError`, `ImapFetchError`.
+  - `__main__.py` updated to validate a mapping file with
+    `--check`.
+  - 19 unit tests under `gateway/tests/` covering conversion
+    round-trips, mapping CRUD + reload, sender/receiver
+    adapters, and end-to-end outbound + inbound against
+    in-memory transports.
+  - `gateway/scripts/smoke_phase5.py` round-trips a Narada
+    body through the gateway without a live SMTP server.
+  - Spec in `protocol/gateway.md`.
+  - Concrete specification in `protocol/identity.md` (replaces the prior
 
 ### Changed
 

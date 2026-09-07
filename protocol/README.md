@@ -13,6 +13,12 @@ Stub. The exact wire format, cryptography, and transport are not yet
 specified. These documents are starting points for discussion; nothing here
 should be treated as final.
 
+> Updated as the spec matures. Today the directory contains the
+> Phase 2 message-format spec, the Phase 2 identity spec, the
+> Phase 4 relay spec, the Phase 5 gateway spec, and the original
+> top-level stub. The protocol is **alpha-grade**; the wire
+> format and cryptographic composition are subject to change.
+
 ## Layout
 
 ```
@@ -20,9 +26,10 @@ protocol/
 ├── spec.md            # Top-level protocol specification (overview)
 ├── identity.md        # Cryptographic identity format
 ├── message-format.md  # Encrypted message envelope
+├── relay.md           # Phase 4 relay wire format (Phase 4 ships)
+├── gateway.md         # Phase 5 Narada ↔ SMTP gateway boundary
 └── README.md
 ```
-
 ## Roadmap (from the project README)
 
 - **Phase 1 — Cryptographic Identity.** Keypair generation, secure key

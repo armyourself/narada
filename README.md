@@ -381,9 +381,19 @@ Narada-specific work landed so far (under `node/` and `protocol/`):
   `relay.fetch` / `relay.drop`); equivalent HTTP routes ship
   under `/narada/relay/{deposit,fetch,drop,sweep}` for
   interop and tests.
-* The Narada↔SMTP/IMAP gateway and the formal protocol
-  specification are **not yet implemented** (Phases 5 and 6).
-The decentralized protocol is being developed separately from these existing components.
+* **Narada ↔ SMTP gateway** (`gateway/gateway/`, Phase 5): the
+  trust boundary that lets a Narada user email any conventional
+  address and vice versa. Ships identity mapping
+  (`IdentityMapping`, JSON-backed), NaradaBody ↔ RFC822
+  conversion, an outbound `SmtpSender` (wraps the existing
+  Openmail `SMTPManager`), an inbound `ImapReceiver` (wraps
+  `IMAPManager`), and a `Gateway` orchestrator that wires
+  both directions. Refuses to forward without a mapping (no
+  open relay); refuses anonymous inbound (no silent ingress).
+  Live SMTP/IMAP connectivity is held to a follow-up alongside
+  the Phase 6 audit.
+* The formal protocol specification is **not yet implemented**
+  (Phase 6).
 
 ---
 
@@ -393,8 +403,7 @@ The decentralized protocol is being developed separately from these existing com
 Narada/
 ├── client/         # Desktop client (SvelteKit + Tauri)
 ├── node/           # Narada node daemon (Python / FastAPI; Openmail-derived)
-├── gateway/        # Narada <-> SMTP/IMAP bridge (skeleton)
-├── protocol/       # Protocol spec, identity format, message envelope (stubs)
+├── gateway/        # Narada <-> SMTP/IMAP bridge (Phase 5 ships)
 ├── docs/
 │   ├── architecture/   # Installation, roadmap, screenshots
 │   ├── protocol/       # Protocol-facing documentation
@@ -481,14 +490,16 @@ Narada/
 
 ## Phase 5 — Interoperability
 
-* [ ] SMTP gateway
-* [ ] IMAP gateway
-* [ ] Narada → SMTP
-* [ ] SMTP → Narada
-* [ ] Identity mapping
-* [ ] Spam prevention
+* [x] SMTP gateway (`gateway/gateway/sender.py`)
+* [x] Narada → SMTP (outbound path wired in
+      `gateway/gateway/orchestrator.py::Gateway.deliver_outbound`)
+* [x] SMTP → Narada (inbound path wired in
+      `Gateway.poll_inbound`)
+* [x] Identity mapping (`gateway/gateway/mapping.py::IdentityMapping`,
+      JSON-backed; no open relay, no anonymous inbound)
+* [ ] IMAP gateway (Narada↔IMAP halves held to a follow-up;
+      the inbound SMTP→Narada path is in)
 
-## Phase 6 — Protocol Stabilization
 
 * [ ] Formal protocol specification
 * [ ] Threat model
