@@ -25,8 +25,23 @@
 </div>
 
 <style>
-    .settings {
-        width: 80%;
-        height: 100%;
+    :global {
+        .settings {
+            position: absolute;
+            top: 88px;
+            left: 268px;
+            bottom: 22px;
+            right: 22px;
+            z-index: 2;
+            background: var(--glass);
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
     }
 </style>

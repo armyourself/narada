@@ -84,18 +84,20 @@
 
 <style>
     :global {
-        .toast{
+        .toast {
             width: 400px;
             display: flex;
             flex-direction: row;
             align-items: center;
             justify-content: space-between;
             height: 75px;
-            background-color: var(--color-bg-primary);
+            background: var(--glass-strong);
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            border: 1px solid var(--glass-border);
             padding: var(--spacing-2xs) var(--spacing-md);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-sm);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
             z-index: var(--z-index-toast);
 
             & .toast-header, .toast-footer {
@@ -104,19 +106,19 @@
                 justify-content: center;
 
                 & svg {
-                    fill: var(--color-bg-primary);
+                    fill: var(--ink);
                     height: var(--font-size-lg);
                     width: var(--font-size-lg);
                 }
             }
 
             & .toast-body {
-                color: var(--color-text-secondary);
+                color: var(--ink-dim);
                 font-size: var(--font-size-sm);
                 margin-left: -10px;
 
                 & .toast-title {
-                    color: var(--color-text-primary);
+                    color: var(--ink);
                 }
             }
 

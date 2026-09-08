@@ -90,15 +90,12 @@
 <style>
     :global {
         .mailbox {
-            display: flex;
-            flex-direction: column;
-            border: 1px solid var(--color-border-subtle);
-            border-radius: var(--radius-sm);
-            width: 80%;
-            padding: 0;
-            height: 100%;
-            overflow-x: hidden;
-            overflow-y: scroll;
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 8px 10px;
         }
+
+        .mailbox::-webkit-scrollbar { width: 6px; }
+        .mailbox::-webkit-scrollbar-thumb { background: rgba(180, 140, 110, 0.25); border-radius: 10px; }
     }
 </style>

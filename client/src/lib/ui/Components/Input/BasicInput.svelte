@@ -21,8 +21,6 @@
 	} = $derived(attributes);
 
     const handleChange = ({ target }: any) => {
-        /* Related issue about bind:group
-        with nested components: github.com/sveltejs/svelte/issues/2308 */
         if (!group) return;
 		const { value, checked } = target;
 		if (checked) group.push(value);
@@ -51,55 +49,60 @@
 
 <style>
     :global{
-        .input{
+        .input {
             width: 100%;
-            padding: var(--spacing-sm) var(--spacing-2xs);
-            border: none;
-            border-bottom: 1px solid var(--color-border);
-            background-color: transparent;
-            color: var(--color-text-primary);
+            padding: 9px 14px;
+            background: var(--glass-strong);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--ink);
+            font-size: var(--font-size-sm);
             transition: all var(--transition-fast) var(--ease-default);
-
-            &:focus {
-                outline: none;
-                border-color: var(--color-text-primary);
-            }
-
-            &[type="email"] {
-                will-change: transform;
-            }
-
-            &[type="checkbox"] {
-                padding: 0;
-                appearance: none;
-                -webkit-appearance: none;
-                width: var(--font-size-md);
-                height: var(--font-size-md);
-                border-radius: var(--radius-sm);
-                background-color: transparent;
-                border: 1px solid var(--color-border);
-                cursor: pointer;
-                position: relative;
-
-                &:checked {
-                    background-color: var(--color-text-primary);
-
-                    &::after {
-                        content: "";
-                        position: absolute;
-                        top: calc(var(--font-size-md) / 8);
-                        left: calc(var(--font-size-md) / 3);
-                        width: calc(var(--font-size-md) / 5);
-                        height: calc(var(--font-size-md) / 2);
-                        border: solid var(--color-bg-primary);
-                        border-width: 0 calc(var(--font-size-md) / 8) calc(var(--font-size-md) / 8) 0;
-                        transform: rotate(45deg);
-                    }
-                }
-            }
         }
 
-        .input + .muted{
+        .input::placeholder { color: var(--ink-faint); }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: var(--glass);
+        }
+
+        .input[type="email"] {
+            will-change: transform;
+        }
+
+        .input[type="checkbox"] {
+            padding: 0;
+            appearance: none;
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 6px;
+            background: var(--glass-strong);
+            border: 1px solid var(--glass-border);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .input[type="checkbox"]:checked {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .input[type="checkbox"]:checked::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 5px;
+            width: 4px;
+            height: 8px;
+            border: solid #fff;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+
+        .input + .muted {
             margin-left: calc(var(--spacing-2xs) / 2);
             margin-top: var(--spacing-xs);
         }

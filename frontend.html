@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Narada — Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --hue-1:#FBE6D6;
+    --hue-2:#F7DEE7;
+    --hue-3:#FBF0D9;
+    --hue-4:#E9E2EF;
+    --cream:#FFFBF7;
+    --ink:#453B35;
+    --ink-dim:#8F8177;
+    --ink-faint:#BDB0A5;
+    --accent:#C99B76;
+    --accent-soft:#E7C7A8;
+    --glass:rgba(255,255,255,0.50);
+    --glass-strong:rgba(255,255,255,0.72);
+    --glass-border:rgba(255,255,255,0.65);
+    --shadow:0 8px 30px rgba(200,160,130,0.14);
+    --radius:18px;
+    --radius-sm:12px;
+    --ui:'Space Grotesk', sans-serif;
+    --body:'Inter', sans-serif;
+  }
+  html[data-theme="dark"]{
+    --hue-1:#332821;
+    --hue-2:#2E262B;
+    --hue-3:#332C21;
+    --hue-4:#26222E;
+    --cream:#1B1917;
+    --ink:#EFE7E0;
+    --ink-dim:#B0A399;
+    --ink-faint:#726558;
+    --accent:#E3B487;
+    --accent-soft:#C99B76;
+    --glass:rgba(255,255,255,0.06);
+    --glass-strong:rgba(255,255,255,0.10);
+    --glass-border:rgba(255,255,255,0.12);
+    --shadow:0 8px 30px rgba(0,0,0,0.35);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--body);
+    color:var(--ink);
+    overflow:hidden;
+    background:var(--cream);
+    transition:background .4s ease, color .4s ease;
+  }
+  button{font:inherit;background:none;border:none;cursor:pointer;color:inherit;}
+  input{font:inherit;color:inherit;}
+  ::selection{background:var(--accent-soft);color:#fff;}
+  .topbar,.sidebar,.list-pane,.reading,.compose-modal,.bg,.nav-item,.mail-row,.avatar,.badge,.action-btn,.peer-pill{
+    transition:background .4s ease, border-color .4s ease, box-shadow .4s ease, color .3s ease;
+  }
+
+  /* ---- ambient background ---- */
+  .bg{
+    position:fixed;inset:0;z-index:0;overflow:hidden;
+    background:linear-gradient(160deg, var(--cream) 0%, var(--hue-1) 32%, var(--hue-2) 58%, var(--hue-3) 80%, var(--hue-4) 100%);
+  }
+  .blob{
+    position:absolute;border-radius:50%;filter:blur(90px);opacity:0.4;
+    will-change:transform;
+  }
+  .blob.b1{width:560px;height:560px;background:var(--hue-1);top:-220px;left:-160px;animation:driftA 34s ease-in-out infinite;}
+  .blob.b2{width:480px;height:480px;background:var(--hue-2);bottom:-220px;right:-140px;animation:driftB 40s ease-in-out infinite;}
+  .blob.b3{width:380px;height:380px;background:var(--hue-3);top:32%;left:42%;animation:driftC 30s ease-in-out infinite;}
+  .blob.b4{width:420px;height:420px;background:var(--hue-4);top:8%;right:12%;animation:driftD 36s ease-in-out infinite;}
+  @keyframes driftA{
+    0%{transform:translate(0,0) scale(1);}
+    25%{transform:translate(90px,60px) scale(1.1);}
+    50%{transform:translate(40px,140px) scale(0.95);}
+    75%{transform:translate(-60px,50px) scale(1.05);}
+    100%{transform:translate(0,0) scale(1);}
+  }
+  @keyframes driftB{
+    0%{transform:translate(0,0) scale(1);}
+    30%{transform:translate(-80px,-70px) scale(1.08);}
+    60%{transform:translate(-30px,-140px) scale(0.96);}
+    100%{transform:translate(0,0) scale(1);}
+  }
+  @keyframes driftC{
+    0%{transform:translate(0,0) scale(1);}
+    33%{transform:translate(70px,-50px) scale(1.12);}
+    66%{transform:translate(-70px,40px) scale(0.9);}
+    100%{transform:translate(0,0) scale(1);}
+  }
+  @keyframes driftD{
+    0%{transform:translate(0,0) scale(1);}
+    40%{transform:translate(-60px,80px) scale(1.06);}
+    70%{transform:translate(50px,40px) scale(0.94);}
+    100%{transform:translate(0,0) scale(1);}
+  }
+  @media (prefers-reduced-motion: reduce){ .blob{animation:none;} }
+
+  /* ---- app shell ---- */
+  .app{
+    position:relative;z-index:1;
+    height:100vh;
+    display:grid;
+    grid-template-rows:auto 1fr;
+    padding:18px 22px 22px;
+    gap:14px;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex;align-items:center;gap:18px;
+    background:var(--glass);
+    backdrop-filter:blur(18px) saturate(1.4);
+    -webkit-backdrop-filter:blur(18px) saturate(1.4);
+    border:1px solid var(--glass-border);
+    border-radius:var(--radius);
+    padding:10px 18px;
+    box-shadow:var(--shadow);
+  }
+  .brand{
+    display:flex;align-items:center;gap:9px;
+    font-family:var(--ui);font-weight:600;font-size:1.02rem;
+    white-space:nowrap;padding-right:6px;
+  }
+
+  .search{
+    flex:1;display:flex;align-items:center;gap:10px;
+    background:var(--glass-strong);
+    border:1px solid var(--glass-border);
+    border-radius:100px;
+    padding:9px 16px;
+    max-width:560px;
+    color:var(--ink-dim);
+  }
+  .search svg{width:16px;height:16px;flex-shrink:0;stroke:var(--ink-dim);fill:none;stroke-width:2;}
+  .search input{background:none;border:none;outline:none;flex:1;font-size:0.87rem;color:var(--ink);}
+  .search input::placeholder{color:var(--ink-faint);}
+
+  .topbar-right{display:flex;align-items:center;gap:14px;margin-left:auto;}
+  .peer-pill{
+    display:flex;align-items:center;gap:7px;
+    font-family:var(--ui);font-size:0.68rem;color:var(--ink-dim);
+    background:var(--glass-strong);border:1px solid var(--glass-border);
+    padding:6px 12px;border-radius:100px;white-space:nowrap;
+  }
+  .peer-pill .live{width:6px;height:6px;border-radius:50%;background:#7CBF9E;}
+  .icon-btn{
+    width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--ink-dim);flex-shrink:0;
+  }
+  .icon-btn:hover{background:var(--glass-strong);color:var(--ink);}
+  .icon-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .icon-btn .moon{display:none;}
+  html[data-theme="dark"] .icon-btn .sun{display:none;}
+  html[data-theme="dark"] .icon-btn .moon{display:block;}
+  .avatar{
+    width:34px;height:34px;border-radius:50%;
+    background:linear-gradient(145deg,var(--accent-soft),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-family:var(--ui);font-weight:600;font-size:0.8rem;
+    flex-shrink:0;
+  }
+
+  /* ---- main grid ---- */
+  .main{
+    display:grid;
+    grid-template-columns:232px 1fr;
+    gap:14px;
+    min-height:0;
+    transition:grid-template-columns .25s ease;
+  }
+  .main.sidebar-collapsed{grid-template-columns:76px 1fr;}
+
+  /* ---- sidebar ---- */
+  .sidebar{
+    background:var(--glass);
+    backdrop-filter:blur(18px) saturate(1.4);
+    -webkit-backdrop-filter:blur(18px) saturate(1.4);
+    border:1px solid var(--glass-border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:14px 14px 16px;
+    display:flex;flex-direction:column;
+    min-height:0;
+    transition:padding .25s ease, background .4s ease, border-color .4s ease;
+  }
+  .sidebar-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:4px 4px 12px;margin-bottom:6px;
+    border-bottom:1px solid var(--glass-border);
+  }
+  .sidebar-head .label{font-family:var(--ui);font-size:0.72rem;color:var(--ink-faint);letter-spacing:.03em;}
+  .sidebar-collapse-btn{
+    width:26px;height:26px;border-radius:8px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;color:var(--ink-faint);
+  }
+  .sidebar-collapse-btn:hover{background:var(--glass-strong);color:var(--ink);}
+  .sidebar-collapse-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;transition:transform .25s ease;}
+  .sidebar.collapsed .sidebar-collapse-btn svg{transform:rotate(180deg);}
+  .sidebar.collapsed .sidebar-head{justify-content:center;}
+  .sidebar.collapsed .sidebar-head .label{display:none;}
+
+  .compose-btn{
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    background:var(--glass-strong);
+    border:1px solid var(--glass-border);
+    color:var(--ink);
+    font-family:var(--ui);font-weight:600;font-size:0.86rem;
+    padding:12px 18px;border-radius:var(--radius-sm);
+    box-shadow:0 4px 14px rgba(203,154,115,0.20);
+    transition:transform .18s ease, box-shadow .18s ease;
+    margin-bottom:18px;
+  }
+  .compose-btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(203,154,115,0.28);}
+  .compose-btn svg{width:17px;height:17px;stroke:var(--accent);fill:none;stroke-width:2.2;stroke-linecap:round;flex-shrink:0;}
+  .sidebar.collapsed .compose-btn{padding:12px;}
+  .sidebar.collapsed .compose-btn .label-text{display:none;}
+
+  .nav-group{display:flex;flex-direction:column;gap:2px;margin-bottom:16px;}
+  .nav-item{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:9px 11px;border-radius:var(--radius-sm);
+    font-size:0.85rem;color:var(--ink-dim);
+    border-left:2px solid transparent;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .nav-item .left{display:flex;align-items:center;gap:11px;min-width:0;}
+  .nav-item .label-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .nav-item svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0;}
+  .nav-item:hover{background:var(--glass-strong);color:var(--ink);}
+  .nav-item.active{background:var(--glass-strong);color:var(--ink);font-weight:600;border-left-color:var(--accent);}
+  .nav-item.active .left svg{stroke:var(--accent);}
+  .count{font-size:0.68rem;color:var(--ink-faint);font-family:var(--ui);flex-shrink:0;}
+  .nav-item.active .count{color:var(--accent);}
+  .sidebar.collapsed .nav-item{justify-content:center;padding:10px;border-left:none;}
+  .sidebar.collapsed .nav-item.active{box-shadow:inset 0 0 0 1px var(--glass-border);}
+  .sidebar.collapsed .nav-item .label-text,
+  .sidebar.collapsed .nav-item .count{display:none;}
+
+  .sidebar-foot{
+    margin-top:auto;padding-top:14px;border-top:1px solid var(--glass-border);
+  }
+  .sidebar.collapsed .sidebar-foot{display:none;}
+  .node-id{
+    font-family:var(--ui);font-size:0.66rem;color:var(--ink-faint);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .node-id .id-val{color:var(--ink-dim);word-break:break-all;}
+  .node-id .id-label{letter-spacing:.02em;}
+
+  /* ---- content: list + reading pane ---- */
+  .content{
+    display:grid;
+    grid-template-columns:380px 1fr;
+    gap:14px;
+    min-height:0;
+  }
+  @media (max-width:980px){ .content{grid-template-columns:1fr;} .reading{display:none;} }
+
+  .list-pane, .reading{
+    background:var(--glass);
+    backdrop-filter:blur(18px) saturate(1.4);
+    -webkit-backdrop-filter:blur(18px) saturate(1.4);
+    border:1px solid var(--glass-border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    min-height:0;
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+
+  .list-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px 10px;
+    font-family:var(--ui);font-size:0.95rem;font-weight:600;
+  }
+  .list-head span.sub{font-family:var(--body);font-weight:400;font-size:0.72rem;color:var(--ink-faint);}
+  .list-scroll{overflow-y:auto;flex:1;padding:0 8px 10px;}
+  .list-scroll::-webkit-scrollbar{width:6px;}
+  .list-scroll::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
+
+  .mail-row{
+    display:flex;align-items:flex-start;gap:11px;
+    padding:12px 12px;border-radius:var(--radius-sm);
+    cursor:pointer;transition:background .15s ease;
+    position:relative;
+  }
+  .mail-row:hover{background:var(--glass-strong);}
+  .mail-row.selected{background:var(--glass-strong);box-shadow:inset 0 0 0 1px var(--glass-border);}
+  .mail-row.unread .sender, .mail-row.unread .subject{font-weight:600;color:var(--ink);}
+  .mail-row .unread-dot{
+    width:7px;height:7px;border-radius:50%;background:var(--accent);
+    margin-top:6px;flex-shrink:0;
+  }
+  .mail-row.read .unread-dot{background:transparent;}
+  .mail-body{flex:1;min-width:0;}
+  .mail-top{display:flex;justify-content:space-between;gap:8px;}
+  .sender{font-size:0.85rem;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .time{font-size:0.68rem;color:var(--ink-faint);flex-shrink:0;font-family:var(--ui);}
+  .subject{font-size:0.83rem;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .snippet{font-size:0.78rem;color:var(--ink-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mail-meta{display:flex;align-items:center;gap:6px;margin-top:6px;}
+  .badge{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--ui);font-size:0.62rem;color:var(--ink-dim);
+    background:var(--glass-strong);border:1px solid var(--glass-border);
+    padding:2px 8px;border-radius:100px;
+  }
+  .badge svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.2;}
+  .badge.direct{
+    color:#4C7A61;border-color:rgba(76,122,97,0.35);
+    background:rgba(76,122,97,0.10);
+  }
+  .badge.relay{
+    color:#A97635;border-style:dashed;border-color:rgba(169,118,53,0.45);
+    background:rgba(169,118,53,0.09);
+  }
+  .badge.gateway{
+    color:#7C6A5E;border-radius:6px;border-color:rgba(124,106,94,0.35);
+    background:rgba(124,106,94,0.09);
+  }
+  .star-btn{margin-left:auto;flex-shrink:0;padding:2px;}
+  .star-btn svg{width:15px;height:15px;stroke:var(--ink-faint);fill:none;stroke-width:1.6;}
+  .star-btn.starred svg{stroke:var(--accent);fill:var(--accent-soft);}
+
+  /* ---- reading pane ---- */
+  .reading{padding:0;}
+  .reading-empty{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:var(--ink-faint);gap:10px;text-align:center;padding:40px;
+  }
+  .reading-empty svg{width:44px;height:44px;stroke:var(--ink-faint);fill:none;stroke-width:1.3;opacity:.8;}
+  .reading-empty p{font-size:0.85rem;max-width:26ch;}
+
+  .reading-head{
+    padding:20px 26px 16px;border-bottom:1px solid var(--glass-border);
+  }
+  .reading-subject{font-family:var(--ui);font-size:1.15rem;font-weight:600;margin-bottom:14px;}
+  .reading-from{display:flex;align-items:center;gap:12px;}
+  .reading-from .avatar{width:38px;height:38px;font-size:0.85rem;}
+  .reading-from-meta{flex:1;min-width:0;}
+  .reading-from-meta .name{font-size:0.88rem;font-weight:600;}
+  .reading-from-meta .addr{font-size:0.72rem;color:var(--ink-faint);font-family:var(--ui);}
+  .reading-time{font-size:0.72rem;color:var(--ink-faint);font-family:var(--ui);white-space:nowrap;}
+  .route-strip{
+    display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;
+  }
+  .route-strip .badge{font-size:0.66rem;padding:4px 10px;}
+
+  .reading-body{
+    flex:1;overflow-y:auto;padding:22px 26px 30px;
+    font-size:0.92rem;line-height:1.75;color:var(--ink);
+  }
+  .reading-body::-webkit-scrollbar{width:6px;}
+  .reading-body::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
+  .reading-body p+p{margin-top:14px;}
+
+  .reading-actions{
+    display:flex;gap:10px;padding:16px 26px 22px;border-top:1px solid var(--glass-border);
+  }
+  .action-btn{
+    display:flex;align-items:center;gap:8px;
+    background:var(--glass-strong);border:1px solid var(--glass-border);
+    padding:9px 16px;border-radius:100px;font-size:0.8rem;color:var(--ink-dim);
+    transition:background .15s ease,color .15s ease;
+  }
+  .action-btn:hover{background:#fff;color:var(--ink);}
+  .action-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;}
+
+  /* ---- compose modal ---- */
+  .compose-modal{
+    position:fixed;bottom:22px;right:22px;width:420px;max-width:calc(100vw - 44px);
+    background:var(--glass-strong);
+    backdrop-filter:blur(22px) saturate(1.5);
+    -webkit-backdrop-filter:blur(22px) saturate(1.5);
+    border:1px solid var(--glass-border);
+    border-radius:var(--radius);
+    box-shadow:0 20px 50px rgba(160,90,50,0.22);
+    z-index:50;
+    display:none;flex-direction:column;
+    overflow:hidden;
+  }
+  .compose-modal.open{display:flex;animation:riseIn .28s cubic-bezier(.22,1,.36,1);}
+  @keyframes riseIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+  .compose-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 16px;border-bottom:1px solid var(--glass-border);
+    font-family:var(--ui);font-size:0.82rem;font-weight:600;
+    cursor:move;user-select:none;
+  }
+  .compose-head button{color:var(--ink-faint);font-size:1rem;padding:2px 6px;}
+  .compose-head button:hover{color:var(--ink);}
+  .compose-field{
+    padding:10px 16px;border-bottom:1px solid var(--glass-border);
+  }
+  .compose-field input, .compose-field textarea{
+    width:100%;background:none;border:none;outline:none;font-size:0.84rem;color:var(--ink);
+  }
+  .compose-field input::placeholder,.compose-field textarea::placeholder{color:var(--ink-faint);}
+  .compose-field textarea{resize:none;height:150px;line-height:1.6;font-family:var(--body);}
+  .compose-foot{
+    display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+  }
+  .send-btn{
+    background:var(--accent);color:#fff;font-family:var(--ui);font-weight:600;font-size:0.82rem;
+    padding:9px 20px;border-radius:100px;display:flex;align-items:center;gap:8px;
+    transition:transform .15s ease, background .15s ease;
+  }
+  .send-btn:hover{transform:translateY(-1px);background:#BA855D;}
+  .send-btn svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2.2;}
+  .encrypt-note{font-size:0.68rem;color:var(--ink-faint);display:flex;align-items:center;gap:6px;}
+  .encrypt-note svg{width:12px;height:12px;stroke:var(--ink-faint);fill:none;stroke-width:2;}
+</style>
+</head>
+<body>
+
+<div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div></div>
+
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">Narada</div>
+    <div class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="searchInput" type="text" placeholder="Search mail" />
+    </div>
+    <div class="topbar-right">
+      <div class="peer-pill"><span class="live"></span>6 peers connected</div>
+      <button class="icon-btn" id="settingsBtn" title="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
+      <button class="icon-btn" id="helpBtn" title="Help">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2-2.4 3.7"/><path d="M12 17h.01"/></svg>
+      </button>
+      <button class="icon-btn" id="themeToggle" title="Toggle theme">
+        <svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>
+        <svg class="moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <div class="avatar">A</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <span class="label">Menu</span>
+        <button class="sidebar-collapse-btn" id="sidebarCollapse" title="Hide sidebar">
+          <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+
+      <button class="compose-btn" id="composeOpen" title="Compose">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="label-text">Compose</span>
+      </button>
+
+      <div class="nav-group" id="navGroup">
+        <div class="nav-item active" data-folder="inbox" title="Inbox">
+          <span class="left"><svg viewBox="0 0 24 24"><path d="M3 12h4l2 4h6l2-4h4"/><path d="M5 5h14l2 7v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2-7Z"/></svg><span class="label-text">Inbox</span></span>
+          <span class="count">4</span>
+        </div>
+        <div class="nav-item" data-folder="starred" title="Starred">
+          <span class="left"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg><span class="label-text">Starred</span></span>
+        </div>
+        <div class="nav-item" data-folder="important" title="Important">
+          <span class="left"><svg viewBox="0 0 24 24"><path d="M12 2v13"/><path d="M6 9l6 6 6-6"/><path d="M5 21h14"/></svg><span class="label-text">Important</span></span>
+        </div>
+        <div class="nav-item" data-folder="snoozed" title="Snoozed">
+          <span class="left"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/><path d="M9 2h6"/></svg><span class="label-text">Snoozed</span></span>
+        </div>
+        <div class="nav-item" data-folder="sent" title="Sent">
+          <span class="left"><svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg><span class="label-text">Sent</span></span>
+        </div>
+        <div class="nav-item" data-folder="drafts" title="Drafts">
+          <span class="left"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="label-text">Drafts</span></span>
+          <span class="count">1</span>
+        </div>
+        <div class="nav-item" data-folder="all" title="All mail">
+          <span class="left"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/></svg><span class="label-text">All mail</span></span>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-item" data-folder="encrypted" title="Encrypted">
+          <span class="left"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="label-text">Encrypted</span></span>
+        </div>
+        <div class="nav-item" data-folder="network" title="Node network">
+          <span class="left"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 10.5 15.5M16 7.5 13.5 15.5M8.5 6h7"/></svg><span class="label-text">Node network</span></span>
+        </div>
+        <div class="nav-item" data-folder="spam" title="Spam">
+          <span class="left"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span class="label-text">Spam</span></span>
+        </div>
+        <div class="nav-item" data-folder="trash" title="Trash">
+          <span class="left"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span class="label-text">Trash</span></span>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-item" data-folder="settings" title="Settings">
+          <span class="left"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="label-text">Settings</span></span>
+        </div>
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="node-id">
+          <span class="id-label">your node</span>
+          <span class="id-val">narada1q9x…f83k</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="list-pane">
+        <div class="list-head"><span id="listTitle">Inbox</span><span class="sub" id="listCount">4 conversations</span></div>
+        <div class="list-scroll" id="listScroll"></div>
+      </div>
+
+      <div class="reading" id="readingPane">
+        <div class="reading-empty">
+          <svg viewBox="0 0 24 24"><path d="M3 8l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+          <p>Select a message to read it. Nothing here ever passes through a server that can see it in plaintext.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="compose-modal" id="composeModal">
+  <div class="compose-head"><span>New message</span><button id="composeClose">✕</button></div>
+  <div class="compose-field"><input type="text" placeholder="To — narada1… or name@domain.com" /></div>
+  <div class="compose-field"><input type="text" placeholder="Subject" /></div>
+  <div class="compose-field"><textarea placeholder="Write your message…"></textarea></div>
+  <div class="compose-foot">
+    <span class="encrypt-note"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</span>
+    <button class="send-btn" id="sendBtn">Send<svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg></button>
+  </div>
+</div>
+
+<script>
+const mails = [
+  {
+    id:1, folder:'inbox', unread:true, starred:true,
+    sender:'Priya Shah', addr:'narada1p8y…2qxa', initial:'P',
+    subject:'Relay quotas for the beta cohort',
+    snippet:'Before we open this up wider, we should agree on per-recipient deposit caps…',
+    time:'9:41 AM', route:'direct',
+    body:['Before we open this up wider, we should agree on per-recipient deposit caps and how aggressively relays sweep expired deposits.','My worry is a relay filling up with beta-tester noise and starving real traffic. Can we cap it at 200MB per recipient for now and revisit once we have real usage numbers?']
+  },
+  {
+    id:2, folder:'inbox', unread:true, starred:false,
+    sender:'Tomás Reyes', addr:'narada1t4m…9jwv', initial:'T',
+    subject:'Gateway: inbound SMTP is flaky on port 25',
+    snippet:'Seeing intermittent timeouts on the SMTP→Narada path when the sending server is Gmail…',
+    time:'8:15 AM', route:'gateway',
+    body:['Seeing intermittent timeouts on the SMTP→Narada path when the sending server is Gmail specifically. Outlook and Fastmail both work fine.','My guess is a greylisting behavior on our receiving end. Going to add a retry-after handler this week.']
+  },
+  {
+    id:3, folder:'inbox', unread:false, starred:false,
+    sender:'Node Network', addr:'system', initial:'N',
+    subject:'3 peers went offline in the last hour',
+    snippet:'PeerBook marked 3 endpoints as down after 3 missed pings. Routing has rerouted around them…',
+    time:'Yesterday', route:'direct',
+    body:['PeerBook marked 3 endpoints as down after 3 missed pings automatically. Routing has already rerouted around them via the distributed directory fallback.','No action needed — this is expected behavior when a node goes offline without a clean shutdown.']
+  },
+  {
+    id:4, folder:'inbox', unread:false, starred:true,
+    sender:'Aiko Fujimori', addr:'narada1a2i…7dpc', initial:'A',
+    subject:'Mnemonic recovery worked perfectly',
+    snippet:'Just wanted to say the 12-word recovery flow saved me — reinstalled on a new laptop and…',
+    time:'Mon', route:'relay',
+    body:['Just wanted to say the 12-word recovery flow saved me. Reinstalled on a new laptop and had my identity, keys, and mailbox hint back in under a minute.','One small note: the mnemonic input could use word-completion so typos are caught earlier.']
+  },
+  {
+    id:5, folder:'drafts', unread:false, starred:false,
+    sender:'Draft', addr:'', initial:'D',
+    subject:'(no subject)',
+    snippet:'Hey — following up on the identity format doc…',
+    time:'Sun', route:'direct',
+    body:['Hey — following up on the identity format doc, do you have time this week to review the V2 hint TLV?']
+  },
+];
+
+let currentFolder = 'inbox';
+let selectedId = null;
+
+const folderMeta = {
+  inbox:'Inbox', starred:'Starred', important:'Important', snoozed:'Snoozed',
+  sent:'Sent', drafts:'Drafts', all:'All mail',
+  encrypted:'Encrypted', network:'Node network', spam:'Spam', trash:'Trash'
+};
+
+function routeBadge(route){
+  const map = {
+    direct: {cls:'direct', label:'Direct', icon:'<path d="M5 12h14M13 6l6 6-6 6"/>'},
+    relay: {cls:'relay', label:'Via relay', icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>'},
+    gateway: {cls:'gateway', label:'Via gateway', icon:'<rect x="4" y="9" width="16" height="10" rx="2"/><path d="M8 9V6a4 4 0 0 1 8 0"/>'}
+  };
+  const m = map[route] || map.direct;
+  return `<span class="badge ${m.cls}"><svg viewBox="0 0 24 24">${m.icon}</svg>${m.label}</span>`;
+}
+
+function renderList(){
+  const scroll = document.getElementById('listScroll');
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  let items;
+  if(q){
+    items = mails.filter(m => (m.sender+m.subject+m.snippet).toLowerCase().includes(q));
+  } else if(currentFolder === 'all'){
+    items = mails.slice();
+  } else {
+    items = mails.filter(m => currentFolder === 'starred' ? m.starred : m.folder === currentFolder);
+  }
+
+  document.getElementById('listTitle').textContent = q ? `Results for “${q}”` : (folderMeta[currentFolder] || currentFolder);
+  document.getElementById('listCount').textContent = items.length + (items.length===1?' conversation':' conversations');
+
+  if(items.length===0){
+    if(q){
+      scroll.innerHTML = `
+        <div style="padding:48px 20px;text-align:center;">
+          <svg viewBox="0 0 24 24" width="34" height="34" style="stroke:var(--ink-faint);fill:none;stroke-width:1.5;margin:0 auto 14px;display:block;"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <div style="color:var(--ink-dim);font-size:0.86rem;font-weight:600;margin-bottom:4px;">No messages match “${q}”</div>
+          <div style="color:var(--ink-faint);font-size:0.78rem;margin-bottom:16px;">Try a different word or phrase.</div>
+          <button id="fallbackClear" style="font-family:var(--ui);font-size:0.76rem;color:#fff;background:var(--accent);padding:8px 18px;border-radius:100px;border:none;cursor:pointer;">Clear search</button>
+        </div>`;
+      const btn = document.getElementById('fallbackClear');
+      if(btn) btn.addEventListener('click', () => {
+        document.getElementById('searchInput').value = '';
+        renderList();
+      });
+    } else {
+      scroll.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--ink-faint);font-size:0.85rem;">Nothing here.</div>';
+    }
+    return;
+  }
+
+  scroll.innerHTML = items.map(m => `
+    <div class="mail-row ${m.unread?'unread':'read'} ${m.id===selectedId?'selected':''}" data-id="${m.id}">
+      <span class="unread-dot"></span>
+      <div class="mail-body">
+        <div class="mail-top">
+          <span class="sender">${m.sender}</span>
+          <span class="time">${m.time}</span>
+        </div>
+        <div class="subject">${m.subject}</div>
+        <div class="snippet">${m.snippet}</div>
+        <div class="mail-meta">
+          ${routeBadge(m.route)}
+          <button class="star-btn ${m.starred?'starred':''}" data-star="${m.id}">
+            <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  scroll.querySelectorAll('.mail-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if(e.target.closest('.star-btn')) return;
+      selectedId = parseInt(row.dataset.id);
+      const mail = mails.find(m => m.id === selectedId);
+      mail.unread = false;
+      renderList();
+      renderReading(mail);
+    });
+  });
+
+  scroll.querySelectorAll('.star-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = parseInt(btn.dataset.star);
+      const mail = mails.find(m => m.id === id);
+      mail.starred = !mail.starred;
+      renderList();
+    });
+  });
+}
+
+function renderReading(mail){
+  const pane = document.getElementById('readingPane');
+  pane.innerHTML = `
+    <div class="reading-head">
+      <div class="reading-subject">${mail.subject}</div>
+      <div class="reading-from">
+        <div class="avatar">${mail.initial}</div>
+        <div class="reading-from-meta">
+          <div class="name">${mail.sender}</div>
+          <div class="addr">${mail.addr || ''}</div>
+        </div>
+        <div class="reading-time">${mail.time}</div>
+      </div>
+      <div class="route-strip">
+        ${routeBadge(mail.route)}
+        <span class="badge"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</span>
+      </div>
+    </div>
+    <div class="reading-body">
+      ${mail.body.map(p => `<p>${p}</p>`).join('')}
+    </div>
+    <div class="reading-actions">
+      <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Reply</button>
+      <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forward</button>
+      <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button>
+    </div>
+  `;
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    if(item.dataset.folder === 'settings'){
+      document.getElementById('composeModal').classList.remove('open');
+      alert('Settings isn\'t wired up in this preview — everything else is fully interactive.');
+      return;
+    }
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    currentFolder = item.dataset.folder;
+    selectedId = null;
+    document.getElementById('readingPane').innerHTML = `
+      <div class="reading-empty">
+        <svg viewBox="0 0 24 24"><path d="M3 8l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+        <p>Select a message to read it. Nothing here ever passes through a server that can see it in plaintext.</p>
+      </div>`;
+    renderList();
+  });
+});
+
+/* ---- sidebar collapse ---- */
+(function(){
+  const sidebar = document.getElementById('sidebar');
+  const main = sidebar.closest('.main');
+  const btn = document.getElementById('sidebarCollapse');
+  btn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    main.classList.toggle('sidebar-collapsed');
+    btn.title = sidebar.classList.contains('collapsed') ? 'Show sidebar' : 'Hide sidebar';
+  });
+})();
+
+document.getElementById('searchInput').addEventListener('input', renderList);
+
+const composeModal = document.getElementById('composeModal');
+document.getElementById('composeOpen').addEventListener('click', () => composeModal.classList.add('open'));
+document.getElementById('composeClose').addEventListener('click', () => composeModal.classList.remove('open'));
+document.getElementById('sendBtn').addEventListener('click', () => {
+  composeModal.classList.remove('open');
+  composeModal.querySelectorAll('input, textarea').forEach(el => el.value = '');
+});
+
+/* ---- generic draggable-window helper ---- */
+function makeDraggable(modal, handle){
+  let dragging = false, offsetX = 0, offsetY = 0;
+  handle.addEventListener('mousedown', (e) => {
+    if(e.target.closest('button')) return;
+    const rect = modal.getBoundingClientRect();
+    modal.style.left = rect.left + 'px';
+    modal.style.top = rect.top + 'px';
+    modal.style.right = 'auto';
+    modal.style.bottom = 'auto';
+    modal.style.transform = 'none';
+    dragging = true;
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    document.body.style.userSelect = 'none';
+  });
+  window.addEventListener('mousemove', (e) => {
+    if(!dragging) return;
+    const w = modal.offsetWidth, h = modal.offsetHeight;
+    let x = e.clientX - offsetX;
+    let y = e.clientY - offsetY;
+    x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
+    y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
+    modal.style.left = x + 'px';
+    modal.style.top = y + 'px';
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    document.body.style.userSelect = '';
+  });
+}
+makeDraggable(composeModal, composeModal.querySelector('.compose-head'));
+
+renderList();
+
+/* ---- theme toggle ---- */
+(function(){
+  const root = document.documentElement;
+  const saved = localStorage.getItem('narada-theme');
+  if(saved) root.setAttribute('data-theme', saved);
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('narada-theme', next);
+  });
+})();
+</script>
+</body>
+</html>

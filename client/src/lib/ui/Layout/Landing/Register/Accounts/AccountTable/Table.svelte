@@ -211,7 +211,7 @@
     :global {
         .account-table {
             & .tr:has(.checkbox-cell input[type="checkbox"]:checked) {
-                background-color: var(--color-hover) !important;
+                background-color: var(--glass-strong) !important;
             }
 
             & .checkbox-cell {
@@ -226,6 +226,7 @@
                 display: flex;
                 align-items: center;
                 gap: var(--spacing-2xs);
+                color: var(--ink);
 
                 & span {
                     margin-right: var(--spacing-2xs);
@@ -259,6 +260,7 @@
                 gap: var(--spacing-sm);
                 justify-content: center;
                 padding: var(--spacing-2xs);
+                color: var(--ink-faint);
             }
         }
     }

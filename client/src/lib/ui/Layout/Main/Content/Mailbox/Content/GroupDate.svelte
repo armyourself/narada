@@ -16,17 +16,13 @@
     :global {
         .mailbox .email-preview-group-separator {
             width: 100%;
-            color: var(--color-text-secondary);
-            font-size: var(--font-size-sm);
-            padding: var(--spacing-sm);
-            padding-bottom: calc(var(--spacing-sm) / 1.3);
-            text-align: center;
-            border-bottom: 1px solid var(--color-border-subtle);
-
-            & .timeline-label {
-                font-weight: var(--font-weight-bold);
-                text-transform: uppercase;
-            }
+            color: var(--ink-faint);
+            font-size: 0.68rem;
+            font-family: var(--ui);
+            padding: 10px 12px 6px;
+            text-align: left;
+            font-weight: 600;
+            letter-spacing: 0.02em;
         }
     }
 </style>

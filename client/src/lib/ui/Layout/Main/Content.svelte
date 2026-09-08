@@ -26,44 +26,19 @@
     }
 </script>
 
-
 <script lang="ts">
     import { SharedStore } from "$lib/stores/shared.svelte";
-    import { show as showAlert } from "$lib/ui/Components/Alert";
     import { local } from "$lib/locales";
     import { DEFAULT_LANGUAGE } from "$lib/constants";
-    import { showThis as showContent } from "$lib/ui/Layout/Main/Content.svelte";
-    import { showThis as showContentOfSettings } from "$lib/ui/Layout/Main/Content/Settings/Content.svelte";
-    import Settings from "./Content/Settings.svelte";
-    import Accounts from "./Content/Settings/Content/Accounts.svelte";
 
     interface Props {
         children: Snippet;
     }
 
     let { children }: Props = $props();
-
-    function manageFailedAccounts() {
-        showContent(Settings);
-        showContentOfSettings(Accounts);
-    }
-
-    $effect(() => {
-        if (SharedStore.failedAccounts.length > 0) {
-            showAlert("check-out-accounts-alert-container", {
-                content: local.accounts_failed_to_connect[DEFAULT_LANGUAGE],
-                type: "error",
-                details: "There are some failed account/mailbox connections you should manage.",
-                onManage: manageFailedAccounts,
-                onManageText: local.manage_accounts[DEFAULT_LANGUAGE],
-                closeable: false
-            });
-        }
-    });
 </script>
 
 <div class="content" bind:this={sectionContainer}>
-    <div class="alert-container" id="check-out-settings-accounts-alert-container"></div>
     {#if !isMounted}
         {@render children()}
     {/if}
@@ -72,11 +47,21 @@
 <style>
     :global {
         .content {
+            position: absolute;
+            top: 88px;
+            left: 268px;
+            bottom: 22px;
+            width: 380px;
+            z-index: 2;
+            background: var(--glass);
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            margin-top: 5vh;
-            height: 80vh;
+            overflow: hidden;
         }
     }
 </style>

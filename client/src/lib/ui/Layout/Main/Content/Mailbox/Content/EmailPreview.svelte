@@ -57,78 +57,16 @@
     const account = findAccountByEmail(email)!;
     const folder = getCurrentMailbox().folder;
 
-    let emailPreviewWrapper: HTMLElement;
-    let emailAvatar: HTMLElement;
-    let isAvatarShown = $state(true);
-
-    onMount(() => {
-        createEmailAvatar();
-    });
-
-    async function createEmailAvatar() {
-        const sender = email.sender;
-        const email_address = extractEmailAddress(sender);
-        const fullname = extractFullname(sender);
-
-        let removeSkeletonAvatar: () => void;
-        const showSkeletonAvatar = () => {
-            const skeletonAvatar = createDomElement(
-                GravatarService.renderSkeletonAvatar(),
-            );
-            const skeletonSpinner = mount(Spinner, { target: skeletonAvatar });
-            emailAvatar.appendChild(skeletonAvatar);
-            removeSkeletonAvatar = () => {
-                unmount(skeletonSpinner);
-                skeletonAvatar.remove();
-            }
-        }
-
-        const updateEmailAvatar = async () => {
-            const avatar = await GravatarService.getAvatarHTML(
-                email_address,
-                fullname
-            );
-            console.log(email_address, avatar);
-            if (removeSkeletonAvatar) removeSkeletonAvatar();
-            emailAvatar.innerHTML = avatar;
-        };
-
-        const isEmailAvatarLoaded = (event: CustomEvent) => {
-            if (
-                event.detail.account === account &&
-                event.detail.folder === folder &&
-                event.detail.uid === email.uid
-            ) {
-                document.removeEventListener("email-avatar-loaded", isEmailAvatarLoaded);
-                if (GravatarService.getCachedAvatar(email_address)) {
-                    updateEmailAvatar();
-                }
-            }
-        }
-
-        if (!GravatarService.getCachedAvatar(email_address)) {
-            showSkeletonAvatar();
-            document.removeEventListener("email-avatar-loaded", isEmailAvatarLoaded);
-            document.addEventListener("email-avatar-loaded", isEmailAvatarLoaded);
-        } else {
-            updateEmailAvatar();
-        }
-    }
-
-    const deselectAllAccounts = (e: Event) => {
-        e.stopPropagation();
-    };
+    let isSelected = $state(false);
+    let isHovered = $state(false);
 
     const showEmailContent = async (e: Event): Promise<void> => {
-        emailPreviewWrapper.setAttribute("disabled", "true");
-
         const response = await MailboxController.getEmailContent(
             account,
             getCurrentMailbox().folder,
             email.uid,
         );
 
-        emailPreviewWrapper.removeAttribute("disabled");
         mailboxContext.emailSelection.value = [];
 
         if (!response.success || !response.data) {
@@ -149,197 +87,169 @@
         return mailboxContext.emailSelection.value === "1:*" || mailboxContext.emailSelection.value.length > 0;
     }
 
-    const showEmailAvatar = () => {
-        isAvatarShown = true;
-    };
-
-    const hideEmailAvatar = () => {
-        isAvatarShown = false;
-    };
-
     $effect(() => {
-        if (isEmailChecked()) {
-            hideEmailAvatar();
-        } else {
-            showEmailAvatar();
-        }
-    })
+        isSelected = isEmailChecked();
+    });
+
+    let senderName = $derived(extractFullname(email.sender) || extractEmailAddress(email.sender));
+    let hasAttachments = $derived(Object.hasOwn(email, "attachments") && email.attachments!.length > 0);
+    let isUnread = $derived(!email.flags?.includes("\\Seen"));
 </script>
 
 <div
-    bind:this={emailPreviewWrapper}
-    class="email-preview"
+    class="mail-row"
+    class:unread={isUnread}
+    class:read={!isUnread}
+    class:selected={isSelected}
     onclick={showEmailContent}
     onkeydown={showEmailContent}
-    onmouseenter={hideEmailAvatar}
-    onmouseleave={!isEmailChecked() ? showEmailAvatar : () => {}}
-    onfocus={hideEmailAvatar}
-    onblur={!isEmailChecked() ? showEmailAvatar : () => {}}
     tabindex="0"
     role="button"
 >
-    <div class="email-preview-selection-container">
-        <div
-            bind:this={emailAvatar}
-            class="email-preview-avatar-container {isAvatarShown ? "" : "hidden"}">
+    <span class="unread-dot"></span>
+    <div class="mail-body">
+        <div class="mail-top">
+            <span class="sender">{senderName}</span>
+            <span class="time">{compactEmailDate(email.date)}</span>
         </div>
-        <Input.Basic
-            type="checkbox"
-            class="email-preview-selection {isAvatarShown ? 'hidden' : ''}"
-            bind:group={mailboxContext.emailSelection.value as string[]}
-            onclick={deselectAllAccounts}
-            value={account.email_address.concat(",", email.uid)}
-        />
-    </div>
-    <div class="email-preview-sender">
-        {extractFullname(email.sender) || extractEmailAddress(email.sender)}
-    </div>
-    {#if isRecentEmail(account, email)}
-        <div class="new-message-icon">
-            {local.new[DEFAULT_LANGUAGE]}
-        </div>
-    {/if}
-    <div class="email-preview-content">
-        {#if Object.hasOwn(email, "attachments") && email.attachments!.length > 0}
-            <div class="attachment-icon">
-                <Icon name="attachment" />
-            </div>
-        {/if}
-        <div class="email-preview-message-container">
-            <div class="email-preview-message">
-                <div class="email-preview-subject">
-                    {email.subject}
-                </div>
-                <span class="subject-body-separator">---</span>
-                <div class="email-preview-body">
-                    {truncate(email.body, MAX_BODY_LENGTH)}
-                </div>
-            </div>
-        </div>
-        <div class="tags email-preview-tags">
-            {#if Object.hasOwn(email, "flags") && email.flags!.length > 0}
-                {#each email.flags! as flag}
-                    <Badge content={flag} />
-                {/each}
+        <div class="subject">{email.subject}</div>
+        <div class="snippet">{truncate(email.body, MAX_BODY_LENGTH)}</div>
+        <div class="mail-meta">
+            {#if hasAttachments}
+                <span class="badge">
+                    <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    Files
+                </span>
+            {/if}
+            {#if email.flags?.includes("\\Flagged")}
+                <span class="badge relay">
+                    <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg>
+                    Flagged
+                </span>
             {/if}
         </div>
-    </div>
-    <div class="email-preview-date">
-        <span>{compactEmailDate(email.date)}</span>
     </div>
 </div>
 
 <style>
     :global {
-        .mailbox:has(.email-preview[disabled]) {
-            cursor: wait !important;
-
-            & .email-preview {
-                pointer-events: none !important;
-            }
+        .mail-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 11px;
+            padding: 12px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background 0.15s ease;
+            position: relative;
         }
 
-        .mailbox .email-preview-group {
+        .mail-row:hover {
+            background: var(--glass-strong);
+        }
+
+        .mail-row.selected {
+            background: var(--glass-strong);
+            box-shadow: inset 0 0 0 1px var(--glass-border);
+        }
+
+        .mail-row.unread .sender,
+        .mail-row.unread .subject {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .mail-row .unread-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent);
+            margin-top: 6px;
+            flex-shrink: 0;
+        }
+
+        .mail-row.read .unread-dot {
+            background: transparent;
+        }
+
+        .mail-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .mail-top {
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
+            gap: 8px;
+        }
 
-            &:last-child {
-                & .email-preview:last-child {
-                    border-bottom: none;
-                }
-            }
+        .sender {
+            font-size: 0.85rem;
+            color: var(--ink-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
-            & .email-preview {
-                display: flex;
-                flex-direction: row;
-                padding: var(--spacing-sm) var(--spacing-md);
-                border-bottom: 1px solid var(--color-border-subtle);
-                cursor: pointer;
-                font-size: var(--font-size-sm);
-                align-items: center;
-                width: 100%;
+        .time {
+            font-size: 0.68rem;
+            color: var(--ink-faint);
+            flex-shrink: 0;
+            font-family: var(--ui);
+        }
 
-                &:has(.email-preview-selection:checked) {
-                    background-color: var(--color-border-subtle);
-                }
+        .subject {
+            font-size: 0.83rem;
+            color: var(--ink-dim);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
-                &:hover {
-                    background-color: var(--color-hover);
-                }
+        .snippet {
+            font-size: 0.78rem;
+            color: var(--ink-faint);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
-                & .email-preview-selection-container {
-                    display: flex;
-                    width: 35px;
+        .mail-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
 
-                    & .email-preview-selection {
-                        margin-left: 2px;
-                    }
-                }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-family: var(--ui);
+            font-size: 0.62rem;
+            color: var(--ink-dim);
+            background: var(--glass-strong);
+            border: 1px solid var(--glass-border);
+            padding: 2px 8px;
+            border-radius: 100px;
+        }
 
-                & .email-preview-sender {
-                    width: 15%;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    margin-right: 2%;
-                }
+        .badge svg {
+            width: 10px;
+            height: 10px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2.2;
+        }
 
-                & .new-message-icon {
-                    font-size: var(--font-size-xs);
-                    padding: 0px var(--spacing-xs);
-                    color: var(--color-white);
-                    background-color: var(--color-info);
-                    border-radius: var(--radius-sm);
-                    font-weight: var(--font-weight-bold);
-                }
-
-                & .email-preview-content {
-                    display: flex;
-                    align-items: center;
-                    width: 75%;
-                    gap: var(--spacing-md);
-
-                    & .attachment-icon {
-                        margin-left: calc(-1 * var(--spacing-lg));
-                    }
-
-                    & .email-preview-message-container {
-                        width: 100%;
-                        white-space: nowrap;
-                        overflow: hidden;
-                        text-overflow: ellipsis;
-
-                        & .email-preview-message {
-                            display: flex;
-                            flex-direction: row;
-                            align-items: center;
-                            gap: var(--spacing-xs);
-
-                            & .subject-body-separator {
-                                color: var(--color-text-secondary);
-                            }
-
-                            & .email-preview-body {
-                                white-space: nowrap;
-                                overflow: hidden;
-                                text-overflow: ellipsis;
-                                color: var(--color-text-secondary);
-                            }
-                        }
-                    }
-                }
-
-                & .email-preview-tags {
-                    margin-top: calc(-1 * var(--spacing-2xs));
-                }
-
-                & .email-preview-date {
-                    text-align: right;
-                    color: var(--color-text-secondary);
-                    white-space: nowrap;
-                    width: 8%;
-                }
-            }
+        .badge.relay {
+            color: #A97635;
+            border-style: dashed;
+            border-color: rgba(169, 118, 53, 0.45);
+            background: rgba(169, 118, 53, 0.09);
         }
     }
 </style>

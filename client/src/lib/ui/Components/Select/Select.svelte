@@ -253,23 +253,25 @@
 
             & .custom-select {
                 position: relative;
-                border: 1px solid var(--color-border);
+                border: 1px solid var(--glass-border);
                 border-radius: var(--radius-sm);
                 border-bottom-left-radius: none;
                 border-bottom-right-radius: none;
                 padding: var(--spacing-xs) var(--spacing-sm);
                 cursor: pointer;
-                background-color: var(--color-bg-primary);
+                background: var(--glass-strong);
+                backdrop-filter: blur(18px) saturate(1.4);
+                -webkit-backdrop-filter: blur(18px) saturate(1.4);
 
                 &.visible {
-                    border-color: var(--color-text-primary);
+                    border-color: var(--accent);
                 }
 
                 & .select-trigger {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    color: var(--color-text-primary);
+                    color: var(--ink);
 
                     & .select-trigger-content {
                         display: flex;
@@ -293,8 +295,10 @@
                 top: 100%;
                 left: 0;
                 right: 0;
-                background: var(--color-bg-primary);
-                border: 1px solid var(--color-border);
+                background: var(--glass-strong);
+                backdrop-filter: blur(18px) saturate(1.4);
+                -webkit-backdrop-filter: blur(18px) saturate(1.4);
+                border: 1px solid var(--glass-border);
                 border-radius: var(--radius-sm);
                 border-top-left-radius: 0 !important;
                 border-top-right-radius: 0 !important;
@@ -303,14 +307,14 @@
                 z-index: var(--z-index-dropdown);
                 opacity: 0;
                 visibility: hidden;
-                transition: all var(--transform-fast) var(--ease-default);
-                box-shadow: var(--shadow-sm);
+                transition: all var(--transition-fast) var(--ease-default);
+                box-shadow: var(--shadow);
                 font-size: var(--font-size-sm);
 
                 & .search-box {
                     position: sticky;
                     top: 0;
-                    border-bottom: 1px solid var(--color-border-subtle);
+                    border-bottom: 1px solid var(--glass-border);
 
                     & .input-group {
                         padding-left: var(--spacing-xs);
@@ -320,7 +324,7 @@
 
                 & .no-results {
                     padding: var(--spacing-sm);
-                    color: var(--color-text-secondary);
+                    color: var(--ink-faint);
                     text-align: center;
                     font-style: italic;
                 }

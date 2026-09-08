@@ -57,22 +57,27 @@
 
 <style>
     :global {
-        .input-group{
+        .input-group {
             display: flex;
             align-items: center;
             transition: all var(--transition-fast) var(--ease-default);
-            border-bottom: 1px solid var(--color-border);
+            background: var(--glass-strong);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            padding: 4px;
 
             & input {
                 border: none !important;
+                background: transparent !important;
                 flex-grow: 1;
+                padding: 8px 12px;
             }
 
             &:has(input:focus) {
-                border-color: var(--color-text-primary);
+                border-color: var(--accent);
 
                 & svg {
-                    fill: var(--color-text-primary)!important;
+                    fill: var(--ink) !important;
                 }
             }
 
@@ -84,7 +89,7 @@
                 justify-content: center;
                 gap: 10px;
                 cursor: pointer;
-                color: var(--color-text-secondary);
+                color: var(--ink-faint);
                 background: transparent;
                 border: none;
                 transition: all var(--transition-fast) var(--ease-default);

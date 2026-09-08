@@ -28,6 +28,7 @@
 
 <script lang="ts">
     import Titlebar from "./Titlebar.svelte";
+    import Background from "./Background.svelte";
 
     interface Props {
         children: Snippet;
@@ -36,6 +37,7 @@
     let { children }: Props = $props();
 </script>
 
+<Background />
 <Titlebar/>
 
 <div class="layout-container" bind:this={sectionContainer}>
@@ -46,24 +48,21 @@
 
 <style>
     :global {
-        .layout-container{
+        .layout-container {
+            position: relative;
+            z-index: 1;
             height: 100vh;
-            padding: 0 var(--spacing-lg);
-            padding-top: var(--spacing-2xl);
-            border: 1px solid var(--color-border);
-            border-radius: var(--titlebar-radius);
+            width: 100vw;
+            padding: 18px 22px 22px;
+            padding-top: 88px;
+            overflow: hidden;
         }
 
         .alert-container {
             display: flex;
-            flex-direction: column reverse;
+            flex-direction: column-reverse;
             margin-bottom: var(--spacing-md);
-
-            &:not(:has(div.alert)) {
-                visibility: hidden;
-                height: 0;
-                margin: 0;
-            }
         }
+        .alert-container:empty { display: none; }
     }
 </style>

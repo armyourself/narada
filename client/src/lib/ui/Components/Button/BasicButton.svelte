@@ -27,72 +27,68 @@
 
 <style>
     :global {
-        .btn{
+        .btn {
             padding: var(--spacing-xs) var(--spacing-sm);
             border: none;
-            border-radius: var(--radius-sm);
+            border-radius: 100px;
             cursor: pointer;
             transition: all var(--transition-fast) var(--ease-default);
             font-size: var(--font-size-sm);
+            font-family: var(--ui);
+            font-weight: 500;
             display: flex;
             align-items: center;
             justify-content: center;
 
             &:hover,
             &.hover {
-                background-color: var(--color-hover);
+                transform: translateY(-1px);
             }
 
             &:active,
             &.active {
-                background-color: var(--color-border);
+                transform: translateY(0);
             }
 
             &.btn-cta {
                 width: 100%;
-                font-weight: var(--font-weight-bold);
-                background-color: var(--color-text-primary);
-                color: var(--color-bg-primary);
+                font-weight: 600;
+                background: var(--accent);
+                color: #fff;
+                padding: 10px 20px;
+                box-shadow: 0 4px 14px rgba(203, 154, 115, 0.20);
+
+                &:hover {
+                    background: #BA855D;
+                    box-shadow: 0 8px 20px rgba(203, 154, 115, 0.28);
+                }
             }
 
             &.btn-inline {
                 padding: var(--spacing-2xs) var(--spacing-sm);
                 margin: 0;
                 background-color: transparent;
-                color: var(--color-text-primary);
-
-                &:has(> svg:only-child) {
-                    padding: var(--spacing-2xs) var(--spacing-xs)!important;
-                }
+                color: var(--ink-dim);
+                border-radius: 100px;
 
                 &:hover,
                 &.hover {
-                    background-color: var(--color-border);
-
-                    & svg {
-                        fill: var(--color-text-primary);
-                    }
-                }
-
-                &:active,
-                &.active {
-                    background-color: var(--color-border-subtle);
+                    background: var(--glass-strong);
+                    color: var(--ink);
                 }
             }
 
             &.btn-outline {
-                background-color: transparent;
-                color: var(--color-text-primary);
-                border: 1px solid var(--color-border);
+                background: var(--glass-strong);
+                color: var(--ink-dim);
+                border: 1px solid var(--glass-border);
+                padding: 8px 14px;
+                border-radius: 100px;
 
                 &:hover,
                 &.hover {
-                    background-color: var(--color-hover);
-                }
-
-                &:active,
-                &.active {
-                    background-color: var(--color-border);
+                    background: #fff;
+                    color: var(--ink);
                 }
             }
 

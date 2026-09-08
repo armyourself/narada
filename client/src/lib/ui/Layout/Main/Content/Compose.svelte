@@ -264,25 +264,35 @@
 <style>
     :global {
         .compose {
+            position: absolute;
+            bottom: 22px;
+            right: 22px;
+            width: 420px;
+            max-width: calc(100vw - 44px);
+            background: var(--glass-strong);
+            backdrop-filter: blur(22px) saturate(1.5);
+            -webkit-backdrop-filter: blur(22px) saturate(1.5);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            box-shadow: 0 20px 50px rgba(160, 90, 50, 0.22);
+            z-index: 200;
             display: flex;
             flex-direction: column;
-            padding: var(--spacing-xl) var(--spacing-2xl);
-            border: 1px solid var(--color-border-subtle);
-            border-radius: var(--radius-sm);
-            width: 75%;
-            height: 100%;
+            overflow: hidden;
+        }
 
-            & .compose-form {
-                overflow-x: hidden;
-                overflow-y: auto;
-                height: 100%;
-                margin-bottom: 50px;
-                padding-right: 30px; /* because of the scrollbar */
-            }
+        .compose .compose-form {
+            overflow-x: hidden;
+            overflow-y: auto;
+            flex: 1;
+        }
 
-            & .compose-title {
-                margin-bottom: var(--spacing-lg);
-            }
+        .compose .compose-title {
+            font-family: var(--ui);
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--glass-border);
         }
     }
 </style>

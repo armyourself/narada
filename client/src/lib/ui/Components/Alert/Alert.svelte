@@ -92,97 +92,37 @@
 <style>
     :global {
         .alert {
-            color: var(--color-text-primary);
+            color: var(--ink);
             padding: var(--spacing-md);
-            border-radius: var(--radius-md);
+            border-radius: var(--radius);
             font-size: var(--font-size-sm);
             opacity: 0;
-            box-shadow: var(--shadow-sm);
+            box-shadow: var(--shadow);
             gap: var(--spacing-sm);
             width: 100%;
+            background: var(--glass-strong);
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            border: 1px solid var(--glass-border);
 
             &.error {
-                background-color: var(--color-bg-error);
-                border: 1px solid var(--color-border-error);
-                border-left: 2px solid var(--color-text-error);
-                color: var(--color-text-error);
-
-                & .alert-manage {
-                    border-color: var(--color-border-error);
-                    color: var(--color-text-error);
-                    background-color: var(--color-bg-error);
-                }
-
-                & .separator {
-                    background-color: var(--color-border-error);
-                }
-
-                & svg {
-                    fill: var(--color-text-error);
-                }
+                border-left: 3px solid #e74c3c;
+                color: #c0392b;
             }
 
             &.warning {
-                background-color: var(--color-bg-warning);
-                border: 1px solid var(--color-border-warning);
-                border-left: 2px solid var(--color-text-warning);
-                color: var(--color-text-warning);
-
-                & .alert-manage {
-                    border-color: var(--color-border-warning);
-                    color: var(--color-text-warning);
-                    background-color: var(--color-bg-warning);
-                }
-
-                & .separator {
-                    background-color: var(--color-border-warning);
-                }
-
-                & svg {
-                    fill: var(--color-text-warning);
-                }
+                border-left: 3px solid #f39c12;
+                color: #d68910;
             }
 
             &.info {
-                background-color: var(--color-bg-info);
-                border: 1px solid var(--color-border-info);
-                border-left: 2px solid var(--color-text-info);
-                color: var(--color-text-info);
-
-                & .alert-manage {
-                    border-color: var(--color-border-info);
-                    color: var(--color-text-info);
-                    background-color: var(--color-bg-info);
-                }
-
-                & .separator {
-                    background-color: var(--color-border-info);
-                }
-
-                & svg {
-                    fill: var(--color-text-info);
-                }
+                border-left: 3px solid var(--accent);
+                color: var(--ink-dim);
             }
 
             &.success {
-                background-color: var(--color-bg-success);
-                border: 1px solid var(--color-border-success);
-                border-left: 2px solid var(--color-text-success);
-                color: var(--color-text-success);
-
-                & .alert-manage {
-                    border-color: var(--color-border-success);
-                    color: var(--color-text-success);
-                    background-color: var(--color-bg-success);
-                }
-
-                & .separator {
-                    background-color: var(--color-border-success);
-                }
-
-                & svg {
-                    fill: var(--color-text-success);
-                }
+                border-left: 3px solid #27ae60;
+                color: #1e8449;
             }
 
             &.show {
@@ -193,7 +133,7 @@
             & .alert-body {
                 display: flex;
                 align-items: center;
-                justify-content:space-between;
+                justify-content: space-between;
 
                 & .alert-body-text {
                     display: flex;
@@ -205,32 +145,20 @@
                     margin-bottom: -4px;
 
                     & svg {
-                        width: var(--font-size-xl)!important;
-                        height: var(--font-size-xl)!important;
+                        width: var(--font-size-xl) !important;
+                        height: var(--font-size-xl) !important;
                     }
                 }
 
                 & .alert-manage {
-                    &:hover {
-                        filter: brightness(1.2);
-                    }
-
-                    &:active {
-                        filter: brightness(0.9);
-                    }
+                    &:hover { filter: brightness(1.2); }
+                    &:active { filter: brightness(0.9); }
                 }
 
                 & .alert-close {
                     background: transparent;
                     border: transparent;
-
-                    &:hover {
-                        background: rgba(255, 255, 255, 0.2);
-                    }
-
-                    &:active {
-                        background: rgba(255, 255, 255, 0.1);
-                    }
+                    &:hover { background: var(--glass-strong); }
                 }
 
                 & .alert-body-action {
@@ -259,6 +187,7 @@
 
                 & .separator {
                     margin-bottom: var(--spacing-sm);
+                    background-color: var(--glass-border);
                 }
             }
         }
