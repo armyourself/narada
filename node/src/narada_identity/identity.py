@@ -215,5 +215,6 @@ __all__ = [
     "identity_from_keystore",
     "identity_from_mnemonic",
     "rotate_identity",
+    "rotate_identity_preserve_x25519",
     "verify_public_id_signature",
 ]

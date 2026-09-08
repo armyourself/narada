@@ -392,6 +392,23 @@ Narada-specific work landed so far (under `node/` and `protocol/`):
   open relay); refuses anonymous inbound (no silent ingress).
   Live SMTP/IMAP connectivity is held to a follow-up alongside
   the Phase 6 audit.
+* **Narada ↔ IMAP gateway** (`gateway/gateway/`, Phase 5):
+  a read-only `NaradaImapServer` that exposes the Narada
+  mailbox JSONL store over IMAP4rev1 so legacy email clients
+  can read Narada messages. An `ImapIngester` provides bulk
+  import from a remote IMAP mailbox into the Narada store.
+  A `GatewayDaemon` ties everything together: long-running
+  polling, an optional IMAP server, and a REST control API
+  (`/status`, `/poll`, `/reload`).
+* **Complete key rotation** (`node/src/narada_identity/`,
+  `node/src/narada/key_update.py`): Option A rotation
+  (`rotate_identity_preserve_x25519`) preserves the X25519
+  encryption key while rotating the Ed25519 signing key.
+  On-the-wire announcement via v=3 key-update envelopes
+  (`make_key_update_envelope`) with a 7-day overlap window.
+  Exposed via CLI (`rotate-x25519`, `key-update`) and HTTP
+  endpoints (`POST /Narada/identity/rotate-x25519`,
+  `POST /Narada/identity/key-update`).
 * The formal protocol specification is **not yet implemented**
   (Phase 6).
 
@@ -439,7 +456,7 @@ Narada/
 * [x] Public-key identities
 * [x] Identity format
 * [x] Identity persistence
-* [ ] Key rotation (basic rotate-API only; on-the-wire rotation is Phase 3+)
+* [x] Key rotation (basic rotate-API + Option A X25519-preserving rotation + on-the-wire v=3 key-update envelopes; CLI and HTTP endpoints)
 * [x] Key recovery (BIP-39 mnemonic)
 
 ## Phase 2 — Narada Protocol
@@ -497,10 +514,12 @@ Narada/
       `Gateway.poll_inbound`)
 * [x] Identity mapping (`gateway/gateway/mapping.py::IdentityMapping`,
       JSON-backed; no open relay, no anonymous inbound)
-* [ ] IMAP gateway (Narada↔IMAP halves held to a follow-up;
-      the inbound SMTP→Narada path is in)
+* [x] IMAP gateway (Narada→IMAP read-only server in
+      `gateway/gateway/imap_server.py`; bulk IMAP→Narada ingest in
+      `gateway/gateway/ingester.py`; long-running daemon with
+      polling and control API in `gateway/gateway/daemon.py`)
 
-
+## Phase 6 - Security
 * [ ] Formal protocol specification
 * [ ] Threat model
 * [ ] Security audit
@@ -554,8 +573,9 @@ algorithms. The composition and wire format, however, are **alpha-grade**:
 * the formal protocol specification has not been published (Phase 6)
 * the threat model has not been published (`docs/security/` is a stub)
 * no third-party security audit has been performed
-* key rotation is partial (rotate-API exists; on-the-wire rotation is not
-  specified yet — Phase 3+)
+* key rotation is complete (basic rotate-API + Option A X25519-preserving
+  rotation + on-the-wire v=3 key-update envelopes with 7-day overlap
+  window; CLI and HTTP endpoints ship)
 * replay protection covers a 5-minute window with persistent (sender,
   message_id) dedup; longer-horizon replay and forward secrecy are
   not yet specified

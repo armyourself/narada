@@ -43,6 +43,7 @@ from src.narada_identity.identity import (
     identity_from_keystore,
     identity_from_mnemonic,
     rotate_identity,
+    rotate_identity_preserve_x25519,
 )
 from src.narada_identity.keystore import default_keystore
 from src.utils import err_msg
@@ -328,6 +329,123 @@ def rotate(request: RotateIdentityRequest) -> Response[GenerateIdentityData]:
             account_id=identity.account_id,
             public_id=identity.public_id,
             mnemonic_claim_token=token,
+        ),
+    )
+
+
+class RotateX25519IdentityRequest(BaseModel):
+    account_id: str
+
+
+class RotateX25519IdentityData(BaseModel):
+    account_id: str
+    public_id: str
+    x25519_preserved: bool = True
+    mnemonic_claim_token: str = Field(
+        ...,
+        description=(
+            "One-shot token to redeem the recovery mnemonic at "
+            "GET /narada/identity/{account_id}/mnemonic?token=... . "
+            "Expires in 60 seconds and can be used once."
+        ),
+    )
+
+
+@router.post("/Narada/identity/rotate-x25519")
+def rotate_x25519(request: RotateX25519IdentityRequest) -> Response[RotateX25519IdentityData]:
+    """Rotate the Ed25519 signing key while preserving the X25519 encryption key.
+
+    This is the recommended rotation method (Option A): the new
+    identity has a different Ed25519 key (and therefore a different
+    narada1... public id) but the same X25519 encryption key, so
+    existing peers can still decrypt messages addressed to the prior
+    identity without an out-of-band re-keying exchange.
+    """
+    err = _validate_account_id(request.account_id)
+    if err is not None:
+        return err
+    try:
+        identity, _mnemonic = rotate_identity_preserve_x25519(
+            request.account_id, _get_keystore()
+        )
+    except NaradaIdentityError as exc:
+        return Response(success=False, message=err_msg("Failed to rotate identity (X25519-preserving).", str(exc)))
+    _link_identity_to_account(request.account_id, identity.public_id)
+    _gc_claim_tokens()
+    token = _issue_claim_token(identity.public_id)
+    return Response[RotateX25519IdentityData](
+        success=True,
+        message=(
+            "Identity rotated (X25519 preserved). "
+            "Redeem the mnemonic_claim_token within 60 seconds."
+        ),
+        data=RotateX25519IdentityData(
+            account_id=identity.account_id,
+            public_id=identity.public_id,
+            x25519_preserved=True,
+            mnemonic_claim_token=token,
+        ),
+    )
+
+
+class KeyUpdateRequest(BaseModel):
+    account_id: str
+    recipient_public_id: str
+    old_mnemonic: str = Field(
+        ...,
+        max_length=_MAX_MNEMONIC_LEN,
+        description="The OLD mnemonic (required; the old key was overwritten by rotate-x25519).",
+    )
+    not_after: Optional[int] = Field(
+        None,
+        description="Overlap window end (unix seconds). Default: 7 days from now.",
+    )
+
+
+class KeyUpdateData(BaseModel):
+    envelope: dict
+    prior_public_id: str
+    new_public_id: str
+    not_after: int
+
+
+@router.post("/Narada/identity/key-update")
+def key_update(request: KeyUpdateRequest) -> Response[KeyUpdateData]:
+    """Build a key-update envelope (v=3) for a recipient.
+
+    The envelope is signed with the OLD key and sealed to the
+    recipient. The caller ships it via the Narada transport layer.
+    """
+    err = _validate_account_id(request.account_id)
+    if err is not None:
+        return err
+    if not request.old_mnemonic:
+        return Response(success=False, message="old_mnemonic is required.")
+    try:
+        from src.narada.key_update import make_key_update_envelope
+        old_identity = identity_from_mnemonic(
+            request.account_id, request.old_mnemonic, keystore=None
+        )
+        new_identity = identity_from_keystore(request.account_id, _get_keystore())
+    except NaradaIdentityError as exc:
+        return Response(success=False, message=err_msg("Failed to build key update.", str(exc)))
+    try:
+        envelope = make_key_update_envelope(
+            sender_identity=old_identity,
+            recipient_public_id=request.recipient_public_id,
+            new_identity=new_identity,
+            not_after=request.not_after,
+        )
+    except Exception as exc:
+        return Response(success=False, message=err_msg("Failed to build key update envelope.", str(exc)))
+    return Response[KeyUpdateData](
+        success=True,
+        message="Key-update envelope built. Ship via the Narada transport layer.",
+        data=KeyUpdateData(
+            envelope=envelope.as_dict(),
+            prior_public_id=old_identity.public_id,
+            new_public_id=new_identity.public_id,
+            not_after=envelope.timestamp + (7 * 24 * 60 * 60),
         ),
     )
 

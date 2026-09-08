@@ -25,6 +25,7 @@ from .identity import (
     identity_from_keystore,
     identity_from_mnemonic,
     rotate_identity,
+    rotate_identity_preserve_x25519,
 )
 from .keypair import (
     Keypair,
@@ -61,6 +62,7 @@ __all__ = [
     "keypair_from_seed",
     "mnemonic_to_seed",
     "rotate_identity",
+    "rotate_identity_preserve_x25519",
     "validate_mnemonic",
     "verify_signature",
 ]

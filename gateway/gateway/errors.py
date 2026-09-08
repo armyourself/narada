@@ -24,10 +24,15 @@ class ImapFetchError(GatewayError):
     """Raised when the IMAP adapter cannot fetch messages."""
 
 
+class ImapMarkError(GatewayError):
+    """Raised when the IMAP adapter cannot mark messages as seen."""
+
+
 __all__ = [
     "ConversionError",
     "GatewayError",
     "ImapFetchError",
+    "ImapMarkError",
     "NoMappingError",
     "SmtpSendError",
 ]

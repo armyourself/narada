@@ -12,20 +12,25 @@ narrow surface:
 * :class:`ImapReceiver` -- the inbound IMAP adapter.
 * :class:`Gateway` -- the orchestrator that wires the above
   together for both directions.
-
-The Phase 5 deliverable ships these pieces and exercises them in
-tests; live SMTP/IMAP connectivity is held until the audit in
-Phase 6.
+* :class:`NaradaImapServer` -- read-only IMAP server exposing
+  the Narada mailbox to legacy clients.
+* :class:`ImapIngester` -- bulk import from IMAP into Narada.
+* :class:`GatewayDaemon` -- long-running daemon with polling.
 """
 
 from .convert import narada_body_to_rfc822, rfc822_to_narada_body
+from .daemon import GatewayDaemon
+from .daemon_control import ControlServer
 from .errors import (
     ConversionError,
     GatewayError,
     ImapFetchError,
+    ImapMarkError,
     NoMappingError,
     SmtpSendError,
 )
+from .imap_server import NaradaImapServer
+from .ingester import ImapIngester, IngestResult
 from .mapping import IdentityMapping
 from .orchestrator import Gateway, InboundItem
 from .receiver import ImapFetch, ImapReceiver, default_fetch
@@ -34,13 +39,19 @@ from .sender import SmtpSender, SmtpTransport, default_transport
 
 __all__ = [
     "ConversionError",
+    "ControlServer",
     "Gateway",
+    "GatewayDaemon",
     "GatewayError",
     "IdentityMapping",
     "ImapFetch",
     "ImapFetchError",
+    "ImapIngester",
+    "ImapMarkError",
     "ImapReceiver",
     "InboundItem",
+    "IngestResult",
+    "NaradaImapServer",
     "NoMappingError",
     "SmtpSendError",
     "SmtpSender",
