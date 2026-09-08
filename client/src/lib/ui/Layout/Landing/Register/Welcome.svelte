@@ -4,8 +4,7 @@
     import Form from "$lib/ui/Components/Form";
     import * as Button from "$lib/ui/Components/Button";
     import { show as showAlert } from "$lib/ui/Components/Alert";
-    import AddAccountForm from "$lib/ui/Layout/Landing/Register/AddAccountForm.svelte";
-    import Accounts from "$lib/ui/Layout/Landing/Register/Accounts.svelte";
+    import GenerateIdentity from "$lib/ui/Layout/Landing/Register/GenerateIdentity.svelte";
     import { showThis as showContent } from "$lib/ui/Layout/Landing/Register.svelte";
     import Language from "./Welcome/Language.svelte";
     import Theme from "./Welcome/Theme.svelte";
@@ -20,12 +19,7 @@
 
     const saveInitialPreferences = async (e: Event): Promise<void> => {
         await PreferenceManager.savePreferences();
-        showContent(
-            SharedStore.accounts.length > 0 ||
-                SharedStore.failedAccounts.length > 0
-                ? Accounts
-                : AddAccountForm,
-        );
+        showContent(GenerateIdentity);
     };
 </script>
 

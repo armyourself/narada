@@ -1,18 +1,18 @@
 {
-    "productName": "Openmail",
+    "productName": "Narada",
     "version": "0.0.1",
-    "identifier": "com.openmail.dev",
+    "identifier": "com.narada.dev",
     "build": {
-        "beforeDevCommand": "bun run dev",
+        "beforeDevCommand": "npm run dev",
         "devUrl": "http://localhost:1420",
-        "beforeBuildCommand": "bun run build",
+        "beforeBuildCommand": "npm run build",
         "frontendDist": "../build"
     },
     "app": {
         "macOSPrivateApi": true,
         "windows": [
             {
-                "title": "Openmail",
+                "title": "Narada",
                 "width": 1200,
                 "height": 700,
                 "center": true,

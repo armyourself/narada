@@ -8,7 +8,7 @@
 
 <nav>
     <div class="nav-section">
-        <!--<h1 class="app-title">Openmail</h1>-->
+        <h1 class="app-title">Narada</h1>
         <Folders />
     </div>
     <div class="nav-section">

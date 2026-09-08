@@ -39,9 +39,9 @@
 
 <section class="landing-container" bind:this={sectionContainer}>
     <div class="landing-header">
-        <h1 class="logo">{local.openmail[DEFAULT_LANGUAGE]}</h1>
+        <h1 class="logo">{local.narada[DEFAULT_LANGUAGE] || 'Narada'}</h1>
         <p class="landing-subtitle">
-            {local.secure_and_fast_email_client[DEFAULT_LANGUAGE]}
+            {local.decentralized_email_client[DEFAULT_LANGUAGE] || 'Decentralized email with end-to-end encryption'}
         </p>
     </div>
     <div class="landing-body">
