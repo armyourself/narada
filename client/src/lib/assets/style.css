@@ -19,10 +19,14 @@
     --accent-soft: #E7C7A8;
     --glass: rgba(255, 255, 255, 0.50);
     --glass-strong: rgba(255, 255, 255, 0.72);
+    --glass-solid: rgba(255, 255, 255, 0.88);
     --glass-border: rgba(255, 255, 255, 0.65);
-    --shadow: 0 8px 30px rgba(200, 160, 130, 0.14);
-    --radius: 18px;
+    --shadow: 0 25px 60px rgba(150, 110, 80, 0.18);
+    --radius: 24px;
     --radius-sm: 12px;
+    --direct: #4C7A61;
+    --relay: #A97635;
+    --gateway: #7C6A5E;
 
     /* ---- Typography ---- */
     --ui: 'Space Grotesk', sans-serif;
@@ -99,9 +103,13 @@ html[data-color-scheme="dark"] {
     --accent: #E3B487;
     --accent-soft: #C99B76;
     --glass: rgba(255, 255, 255, 0.06);
-    --glass-strong: rgba(255, 255, 255, 0.10);
+    --glass-strong: rgba(255, 255, 255, 0.09);
+    --glass-solid: rgba(30, 27, 24, 0.75);
     --glass-border: rgba(255, 255, 255, 0.12);
-    --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    --shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+    --direct: #7FB89D;
+    --relay: #D9A257;
+    --gateway: #B0A090;
 }
 
 /* ---- Reset ---- */

@@ -474,7 +474,7 @@ Narada/
       `(sender, recipient, message_id, timestamp, status)`; sender outbox
       transitions to *acked* on valid signature)
 
-;## Phase 3 — Distributed Network
+## Phase 3 — Distributed Network
 
 * [x] Peer discovery (mDNS + bootstrap list, with TOFU peer pinning)
 * [x] Peer-to-peer communication (QUIC outbound transport + inbound listener)

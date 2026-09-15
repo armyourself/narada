@@ -1,6 +1,7 @@
 <script lang="ts" module>
     import { SharedStore } from "$lib/stores/shared.svelte";
     import { compactEmailDate, createDomElement } from "$lib/utils";
+    import type { Account, Email as TEmail } from "$lib/types";
 
     export function findAccountByEmail(email: TEmail): Account | undefined {
         if (SharedStore.currentAccount !== "home") {
@@ -28,22 +29,29 @@
 </script>
 
 <script lang="ts">
-    import { mount, onMount, unmount } from "svelte";
+    import { onMount } from "svelte";
     import { MailboxController } from "$lib/mailbox";
-    import { type Email as TEmail, type Account } from "$lib/types";
+    import { Mark } from "$lib/types";
     import { extractEmailAddress, extractFullname, truncate } from "$lib/utils";
     import { getMailboxContext } from "$lib/ui/Layout/Main/Content/Mailbox";
     import * as Input from "$lib/ui/Components/Input";
-    import Icon from "$lib/ui/Components/Icon";
-    import Badge from "$lib/ui/Components/Badge/Badge.svelte";
     import Email from "$lib/ui/Layout/Main/Content/Email.svelte";
     import { showThis as showContent } from "$lib/ui/Layout/Main/Content.svelte";
     import { show as showMessage } from "$lib/ui/Components/Message";
+    import { show as showToast } from "$lib/ui/Components/Toast";
     import { local } from "$lib/locales";
     import { DEFAULT_LANGUAGE } from "$lib/constants";
     import { getCurrentMailbox } from "$lib/ui/Layout/Main/Content/Mailbox.svelte";
     import { GravatarService } from "$lib/services/GravatarService";
     import { Spinner } from "$lib/ui/Components/Loader";
+    import RouteBadge, { emailRoute } from "$lib/ui/Components/RouteBadge.svelte";
+    import {
+        markEmails,
+        unmarkEmails,
+    } from "$lib/ui/Layout/Main/Content/Mailbox/Toolbox/Operations/MarkAs.svelte";
+    import type { GroupedUidSelection } from "$lib/ui/Layout/Main/Content/Mailbox.svelte";
+
+    const AVATAR_COLORS = ["#C99B76", "#A97635", "#4C7A61", "#8FA9C4", "#B98CA0", "#7C6A5E"];
 
     const MAX_BODY_LENGTH = 150;
 
@@ -94,96 +102,122 @@
     let senderName = $derived(extractFullname(email.sender) || extractEmailAddress(email.sender));
     let hasAttachments = $derived(Object.hasOwn(email, "attachments") && email.attachments!.length > 0);
     let isUnread = $derived(!email.flags?.includes("\\Seen"));
+    let isStarred = $derived(!!email.flags?.includes(Mark.Flagged));
+
+    let initial = $derived((senderName[0] ?? "?").toUpperCase());
+    let avatarColor = $derived.by(() => {
+        // Deterministic color per sender address so a contact's avatar
+        // stays stable across renders and mailboxes.
+        const addr = extractEmailAddress(email.sender) || email.sender;
+        let hash = 0;
+        for (let i = 0; i < addr.length; i++) {
+            hash = (hash * 31 + addr.charCodeAt(i)) >>> 0;
+        }
+        return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+    });
+
+    async function toggleStar(e: Event) {
+        e.stopPropagation();
+        const groupedSelection: GroupedUidSelection = [
+            [account.email_address, email.uid],
+        ];
+        if (isStarred) {
+            await unmarkEmails(groupedSelection, Mark.Flagged, folder, false);
+        } else {
+            await markEmails(groupedSelection, Mark.Flagged, folder, false);
+        }
+    }
 </script>
 
 <div
-    class="mail-row"
+    class="email-item"
     class:unread={isUnread}
-    class:read={!isUnread}
-    class:selected={isSelected}
+    class:active={isSelected}
     onclick={showEmailContent}
     onkeydown={showEmailContent}
     tabindex="0"
     role="button"
 >
-    <span class="unread-dot"></span>
-    <div class="mail-body">
-        <div class="mail-top">
-            <span class="sender">{senderName}</span>
-            <span class="time">{compactEmailDate(email.date)}</span>
+    <div class="avatar" style="background:{avatarColor};">{initial}</div>
+    <div class="email-content">
+        <div class="email-top">
+            <span class="email-name">{senderName}</span>
+            <span class="email-time">{compactEmailDate(email.date)}</span>
         </div>
-        <div class="subject">{email.subject}</div>
-        <div class="snippet">{truncate(email.body, MAX_BODY_LENGTH)}</div>
-        <div class="mail-meta">
+        <div class="email-preview">{truncate(email.body, MAX_BODY_LENGTH)}</div>
+        <div class="email-meta-row">
+            <RouteBadge route={emailRoute(email)} />
             {#if hasAttachments}
-                <span class="badge">
+                <span class="attach-note">
                     <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                    Files
-                </span>
-            {/if}
-            {#if email.flags?.includes("\\Flagged")}
-                <span class="badge relay">
-                    <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg>
-                    Flagged
                 </span>
             {/if}
         </div>
     </div>
+    <div class="email-right">
+        <button
+            class="star-icon"
+            class:active={isStarred}
+            onclick={toggleStar}
+            title={isStarred ? "Unstar" : "Star"}
+            aria-label={isStarred ? "Unstar" : "Star"}
+        >
+            <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg>
+        </button>
+        {#if isUnread}
+            <span class="unread-dot"></span>
+        {/if}
+    </div>
 </div>
-
 <style>
     :global {
-        .mail-row {
+        .email-item {
+            padding: 13px 12px;
             display: flex;
-            align-items: flex-start;
-            gap: 11px;
-            padding: 12px 12px;
+            gap: 12px;
             border-radius: var(--radius-sm);
             cursor: pointer;
             transition: background 0.15s ease;
             position: relative;
         }
 
-        .mail-row:hover {
+        .email-item:hover {
             background: var(--glass-strong);
         }
 
-        .mail-row.selected {
+        .email-item.active {
             background: var(--glass-strong);
-            box-shadow: inset 0 0 0 1px var(--glass-border);
+            box-shadow: inset 2px 0 0 var(--accent);
         }
 
-        .mail-row.unread .sender,
-        .mail-row.unread .subject {
-            font-weight: 600;
-            color: var(--ink);
-        }
-
-        .mail-row .unread-dot {
-            width: 7px;
-            height: 7px;
+        .email-item .avatar {
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            background: var(--accent);
-            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.72rem;
+            font-family: var(--ui);
+            font-weight: 600;
             flex-shrink: 0;
         }
 
-        .mail-row.read .unread-dot {
-            background: transparent;
-        }
-
-        .mail-body {
-            flex: 1;
+        .email-item .email-content {
+            flex-grow: 1;
             min-width: 0;
         }
 
-        .mail-top {
+        .email-item .email-top {
             display: flex;
             justify-content: space-between;
-            gap: 8px;
+            margin-bottom: 3px;
+            gap: 6px;
         }
 
-        .sender {
+        .email-item .email-name {
+            font-weight: 500;
             font-size: 0.85rem;
             color: var(--ink-dim);
             white-space: nowrap;
@@ -191,65 +225,80 @@
             text-overflow: ellipsis;
         }
 
-        .time {
-            font-size: 0.68rem;
+        .email-item.unread .email-name {
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .email-item .email-time {
+            font-size: 0.66rem;
             color: var(--ink-faint);
-            flex-shrink: 0;
             font-family: var(--ui);
+            flex-shrink: 0;
         }
 
-        .subject {
-            font-size: 0.83rem;
-            color: var(--ink-dim);
-            margin-top: 2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .snippet {
+        .email-item .email-preview {
             font-size: 0.78rem;
             color: var(--ink-faint);
-            margin-top: 2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            margin-bottom: 5px;
         }
 
-        .mail-meta {
+        .email-item .email-meta-row {
             display: flex;
             align-items: center;
             gap: 6px;
-            margin-top: 6px;
-            flex-wrap: wrap;
         }
 
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-family: var(--ui);
-            font-size: 0.62rem;
-            color: var(--ink-dim);
-            background: var(--glass-strong);
-            border: 1px solid var(--glass-border);
-            padding: 2px 8px;
-            border-radius: 100px;
+        .email-item .email-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: space-between;
+            flex-shrink: 0;
         }
 
-        .badge svg {
-            width: 10px;
-            height: 10px;
+        .email-item .star-icon {
+            color: var(--ink-faint);
+            display: flex;
+            padding: 2px;
+        }
+
+        .email-item .star-icon:hover {
+            color: var(--ink);
+        }
+
+        .email-item .star-icon.active {
+            color: var(--accent);
+        }
+
+        .email-item .star-icon svg {
+            width: 13px;
+            height: 13px;
             stroke: currentColor;
             fill: none;
-            stroke-width: 2.2;
+            stroke-width: 2;
         }
 
-        .badge.relay {
-            color: #A97635;
-            border-style: dashed;
-            border-color: rgba(169, 118, 53, 0.45);
-            background: rgba(169, 118, 53, 0.09);
+        .email-item .star-icon.active svg {
+            fill: currentColor;
+        }
+
+        .email-item .unread-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .email-item .attach-note svg {
+            width: 12px;
+            height: 12px;
+            stroke: var(--ink-faint);
+            fill: none;
+            stroke-width: 2;
         }
     }
 </style>

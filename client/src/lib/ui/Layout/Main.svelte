@@ -1,32 +1,8 @@
-<script module lang="ts">
-    import { mount, unmount } from "svelte";
-    import { type Snippet } from "svelte";
-
-    let sectionContainer: HTMLElement;
-    let isMounted = $state(false);
-    let currentMount: Record<string, any> | null = null;
-
-    export function showThis(section: any, props?: any) {
-        isMounted = true;
-        clear();
-        currentMount = mount(section, {
-            target: sectionContainer,
-            props: props
-        });
-    }
-
-    export function backToDefault() {
-        clear();
-        isMounted = false;
-    }
-
-    function clear() {
-        if (currentMount) unmount(currentMount);
-        currentMount = null;
-    }
-</script>
-
 <script lang="ts">
+    import type { Snippet } from "svelte";
+    import Rail from "./Main/Rail.svelte";
+    import Menu from "./Main/Menu.svelte";
+
     interface Props {
         children: Snippet;
     }
@@ -34,19 +10,25 @@
     let { children }: Props = $props();
 </script>
 
-<section id="main-container" bind:this={sectionContainer}>
-    {#if !isMounted}
-        {@render children()}
-    {/if}
-</section>
+<div class="dashboard">
+    <Rail />
+    <Menu />
+    {@render children()}
+</div>
 
 <style>
     :global {
-        #main-container {
+        .dashboard {
             position: relative;
             z-index: 1;
-            height: 100%;
-            width: 100%;
+            background: var(--glass);
+            backdrop-filter: blur(24px) saturate(1.4);
+            -webkit-backdrop-filter: blur(24px) saturate(1.4);
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            transition: background 0.4s ease, border-color 0.4s ease;
         }
     }
 </style>

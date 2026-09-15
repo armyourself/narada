@@ -1,9 +1,12 @@
 <script lang="ts">
     import { SharedStore } from "$lib/stores/shared.svelte";
+    import { MainNav } from "$lib/stores/mainNav.svelte";
     import Main from "$lib/ui/Layout/Main.svelte";
-    import Navbar from "$lib/ui/Layout/Main/Navbar.svelte";
     import Content from "$lib/ui/Layout/Main/Content.svelte";
-    import Mailbox, { getCurrentMailbox } from "$lib/ui/Layout/Main/Content/Mailbox.svelte";
+    import { getCurrentMailbox } from "$lib/ui/Layout/Main/Content/Mailbox.svelte";
+    import Network from "$lib/ui/Layout/Main/Views/Network.svelte";
+    import Contacts from "$lib/ui/Layout/Main/Views/Contacts.svelte";
+    import Settings from "$lib/ui/Layout/Main/Views/Settings.svelte";
     import Landing from "$lib/ui/Layout/Landing.svelte";
     import Register from "$lib/ui/Layout/Landing/Register.svelte";
     import Welcome from "$lib/ui/Layout/Landing/Register/Welcome.svelte";
@@ -17,10 +20,15 @@
 
 {#if isMailboxInitialized}
     <Main>
-        <Navbar />
-        <Content>
-            <Mailbox />
-        </Content>
+        {#if MainNav.view === "inbox"}
+            <Content />
+        {:else if MainNav.view === "network"}
+            <Network />
+        {:else if MainNav.view === "contacts"}
+            <Contacts />
+        {:else if MainNav.view === "settings"}
+            <Settings />
+        {/if}
     </Main>
 {:else}
     <Landing>

@@ -43,9 +43,10 @@
 
     interface Props {
         originalMessageContext?: OriginalMessageContext;
+        initialReceiver?: string;
     }
 
-    let { originalMessageContext }: Props = $props();
+    let { originalMessageContext, initialReceiver }: Props = $props();
 
     let composeForm: HTMLFormElement | undefined = $state();
     let senderAccount: Account = $state(
@@ -53,7 +54,7 @@
             ? SharedStore.currentAccount
             : SharedStore.accounts[0],
     );
-    let receiverList: string[] = $state([]);
+    let receiverList: string[] = $state(initialReceiver ? [initialReceiver] : []);
     let ccList: string[] = $state([]);
     let bccList: string[] = $state([]);
     let subject = $state("");

@@ -4,801 +4,955 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Narada — Inbox</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   :root{
-    --hue-1:#FBE6D6;
-    --hue-2:#F7DEE7;
-    --hue-3:#FBF0D9;
-    --hue-4:#E9E2EF;
+    --hue-1:#FBE6D6; --hue-2:#F7DEE7; --hue-3:#FBF0D9; --hue-4:#E9E2EF;
     --cream:#FFFBF7;
-    --ink:#453B35;
-    --ink-dim:#8F8177;
-    --ink-faint:#BDB0A5;
-    --accent:#C99B76;
-    --accent-soft:#E7C7A8;
+    --ink:#453B35; --ink-dim:#8F8177; --ink-faint:#BDB0A5;
+    --accent:#C99B76; --accent-soft:#E7C7A8;
     --glass:rgba(255,255,255,0.50);
     --glass-strong:rgba(255,255,255,0.72);
+    --glass-solid:rgba(255,255,255,0.88);
     --glass-border:rgba(255,255,255,0.65);
-    --shadow:0 8px 30px rgba(200,160,130,0.14);
-    --radius:18px;
-    --radius-sm:12px;
-    --ui:'Space Grotesk', sans-serif;
-    --body:'Inter', sans-serif;
+    --shadow:0 25px 60px rgba(150,110,80,0.18);
+    --radius:24px; --radius-sm:12px;
+    --ui:'Space Grotesk', sans-serif; --body:'Inter', sans-serif;
+    --direct:#4C7A61; --relay:#A97635; --gateway:#7C6A5E;
   }
   html[data-theme="dark"]{
-    --hue-1:#332821;
-    --hue-2:#2E262B;
-    --hue-3:#332C21;
-    --hue-4:#26222E;
+    --hue-1:#332821; --hue-2:#2E262B; --hue-3:#332C21; --hue-4:#26222E;
     --cream:#1B1917;
-    --ink:#EFE7E0;
-    --ink-dim:#B0A399;
-    --ink-faint:#726558;
-    --accent:#E3B487;
-    --accent-soft:#C99B76;
+    --ink:#EFE7E0; --ink-dim:#B0A399; --ink-faint:#726558;
+    --accent:#E3B487; --accent-soft:#C99B76;
     --glass:rgba(255,255,255,0.06);
-    --glass-strong:rgba(255,255,255,0.10);
+    --glass-strong:rgba(255,255,255,0.09);
+    --glass-solid:rgba(30,27,24,0.75);
     --glass-border:rgba(255,255,255,0.12);
-    --shadow:0 8px 30px rgba(0,0,0,0.35);
+    --shadow:0 25px 60px rgba(0,0,0,0.45);
+    --direct:#7FB89D; --relay:#D9A257; --gateway:#B0A090;
   }
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:inherit;}
   html,body{height:100%;}
   body{
-    font-family:var(--body);
-    color:var(--ink);
-    overflow:hidden;
-    background:var(--cream);
-    transition:background .4s ease, color .4s ease;
-  }
-  button{font:inherit;background:none;border:none;cursor:pointer;color:inherit;}
-  input{font:inherit;color:inherit;}
-  ::selection{background:var(--accent-soft);color:#fff;}
-  .topbar,.sidebar,.list-pane,.reading,.compose-modal,.bg,.nav-item,.mail-row,.avatar,.badge,.action-btn,.peer-pill{
-    transition:background .4s ease, border-color .4s ease, box-shadow .4s ease, color .3s ease;
+    font-family:var(--body);color:var(--ink);
+    height:100vh;width:100vw;
+    transition:background .4s ease,color .4s ease;overflow:hidden;
   }
 
   /* ---- ambient background ---- */
-  .bg{
-    position:fixed;inset:0;z-index:0;overflow:hidden;
-    background:linear-gradient(160deg, var(--cream) 0%, var(--hue-1) 32%, var(--hue-2) 58%, var(--hue-3) 80%, var(--hue-4) 100%);
-  }
-  .blob{
-    position:absolute;border-radius:50%;filter:blur(90px);opacity:0.4;
-    will-change:transform;
-  }
+  .bg{position:fixed;inset:0;z-index:0;overflow:hidden;
+    background:linear-gradient(160deg, var(--cream) 0%, var(--hue-1) 32%, var(--hue-2) 58%, var(--hue-3) 80%, var(--hue-4) 100%);}
+  .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:0.4;will-change:transform;}
   .blob.b1{width:560px;height:560px;background:var(--hue-1);top:-220px;left:-160px;animation:driftA 34s ease-in-out infinite;}
   .blob.b2{width:480px;height:480px;background:var(--hue-2);bottom:-220px;right:-140px;animation:driftB 40s ease-in-out infinite;}
   .blob.b3{width:380px;height:380px;background:var(--hue-3);top:32%;left:42%;animation:driftC 30s ease-in-out infinite;}
   .blob.b4{width:420px;height:420px;background:var(--hue-4);top:8%;right:12%;animation:driftD 36s ease-in-out infinite;}
-  @keyframes driftA{
-    0%{transform:translate(0,0) scale(1);}
-    25%{transform:translate(90px,60px) scale(1.1);}
-    50%{transform:translate(40px,140px) scale(0.95);}
-    75%{transform:translate(-60px,50px) scale(1.05);}
-    100%{transform:translate(0,0) scale(1);}
-  }
-  @keyframes driftB{
-    0%{transform:translate(0,0) scale(1);}
-    30%{transform:translate(-80px,-70px) scale(1.08);}
-    60%{transform:translate(-30px,-140px) scale(0.96);}
-    100%{transform:translate(0,0) scale(1);}
-  }
-  @keyframes driftC{
-    0%{transform:translate(0,0) scale(1);}
-    33%{transform:translate(70px,-50px) scale(1.12);}
-    66%{transform:translate(-70px,40px) scale(0.9);}
-    100%{transform:translate(0,0) scale(1);}
-  }
-  @keyframes driftD{
-    0%{transform:translate(0,0) scale(1);}
-    40%{transform:translate(-60px,80px) scale(1.06);}
-    70%{transform:translate(50px,40px) scale(0.94);}
-    100%{transform:translate(0,0) scale(1);}
-  }
+  @keyframes driftA{0%{transform:translate(0,0) scale(1);}25%{transform:translate(90px,60px) scale(1.1);}50%{transform:translate(40px,140px) scale(0.95);}75%{transform:translate(-60px,50px) scale(1.05);}100%{transform:translate(0,0) scale(1);}}
+  @keyframes driftB{0%{transform:translate(0,0) scale(1);}30%{transform:translate(-80px,-70px) scale(1.08);}60%{transform:translate(-30px,-140px) scale(0.96);}100%{transform:translate(0,0) scale(1);}}
+  @keyframes driftC{0%{transform:translate(0,0) scale(1);}33%{transform:translate(70px,-50px) scale(1.12);}66%{transform:translate(-70px,40px) scale(0.9);}100%{transform:translate(0,0) scale(1);}}
+  @keyframes driftD{0%{transform:translate(0,0) scale(1);}40%{transform:translate(-60px,80px) scale(1.06);}70%{transform:translate(50px,40px) scale(0.94);}100%{transform:translate(0,0) scale(1);}}
   @media (prefers-reduced-motion: reduce){ .blob{animation:none;} }
 
-  /* ---- app shell ---- */
-  .app{
+  /* ---- dashboard shell ---- */
+  .dashboard{
     position:relative;z-index:1;
-    height:100vh;
-    display:grid;
-    grid-template-rows:auto 1fr;
-    padding:18px 22px 22px;
-    gap:14px;
-  }
-
-  /* ---- top bar ---- */
-  .topbar{
-    display:flex;align-items:center;gap:18px;
     background:var(--glass);
-    backdrop-filter:blur(18px) saturate(1.4);
-    -webkit-backdrop-filter:blur(18px) saturate(1.4);
-    border:1px solid var(--glass-border);
-    border-radius:var(--radius);
-    padding:10px 18px;
-    box-shadow:var(--shadow);
-  }
-  .brand{
-    display:flex;align-items:center;gap:9px;
-    font-family:var(--ui);font-weight:600;font-size:1.02rem;
-    white-space:nowrap;padding-right:6px;
+    backdrop-filter:blur(24px) saturate(1.4);
+    -webkit-backdrop-filter:blur(24px) saturate(1.4);
+    width:100vw;height:100vh;
+    border:none;
+    border-radius:0;
+    box-shadow:none;
+    display:flex;overflow:hidden;
+    transition:background .4s ease,border-color .4s ease;
   }
 
-  .search{
-    flex:1;display:flex;align-items:center;gap:10px;
-    background:var(--glass-strong);
-    border:1px solid var(--glass-border);
-    border-radius:100px;
-    padding:9px 16px;
-    max-width:560px;
-    color:var(--ink-dim);
-  }
-  .search svg{width:16px;height:16px;flex-shrink:0;stroke:var(--ink-dim);fill:none;stroke-width:2;}
-  .search input{background:none;border:none;outline:none;flex:1;font-size:0.87rem;color:var(--ink);}
-  .search input::placeholder{color:var(--ink-faint);}
-
-  .topbar-right{display:flex;align-items:center;gap:14px;margin-left:auto;}
-  .peer-pill{
-    display:flex;align-items:center;gap:7px;
-    font-family:var(--ui);font-size:0.68rem;color:var(--ink-dim);
-    background:var(--glass-strong);border:1px solid var(--glass-border);
-    padding:6px 12px;border-radius:100px;white-space:nowrap;
-  }
-  .peer-pill .live{width:6px;height:6px;border-radius:50%;background:#7CBF9E;}
-  .icon-btn{
-    width:34px;height:34px;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;
-    color:var(--ink-dim);flex-shrink:0;
-  }
-  .icon-btn:hover{background:var(--glass-strong);color:var(--ink);}
-  .icon-btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
-  .icon-btn .moon{display:none;}
-  html[data-theme="dark"] .icon-btn .sun{display:none;}
-  html[data-theme="dark"] .icon-btn .moon{display:block;}
-  .avatar{
-    width:34px;height:34px;border-radius:50%;
-    background:linear-gradient(145deg,var(--accent-soft),var(--accent));
-    display:flex;align-items:center;justify-content:center;
-    color:#fff;font-family:var(--ui);font-weight:600;font-size:0.8rem;
-    flex-shrink:0;
-  }
-
-  /* ---- main grid ---- */
-  .main{
-    display:grid;
-    grid-template-columns:232px 1fr;
-    gap:14px;
-    min-height:0;
-    transition:grid-template-columns .25s ease;
-  }
-  .main.sidebar-collapsed{grid-template-columns:76px 1fr;}
-
-  /* ---- sidebar ---- */
+  /* ---- 1. icon rail ---- */
   .sidebar{
-    background:var(--glass);
-    backdrop-filter:blur(18px) saturate(1.4);
-    -webkit-backdrop-filter:blur(18px) saturate(1.4);
-    border:1px solid var(--glass-border);
-    border-radius:var(--radius);
-    box-shadow:var(--shadow);
-    padding:14px 14px 16px;
-    display:flex;flex-direction:column;
-    min-height:0;
-    transition:padding .25s ease, background .4s ease, border-color .4s ease;
+    width:74px;border-right:1px solid var(--glass-border);
+    display:flex;flex-direction:column;align-items:center;padding:26px 0;
+    background:var(--glass-strong);flex-shrink:0;
   }
-  .sidebar-head{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:4px 4px 12px;margin-bottom:6px;
-    border-bottom:1px solid var(--glass-border);
+  .logo{width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(145deg,var(--accent-soft),var(--accent));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;margin-bottom:36px;}
+  .nav-icons{display:flex;flex-direction:column;gap:26px;flex-grow:1;align-items:center;}
+  .nav-icons button{
+    width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    color:var(--ink-faint);font-size:16px;transition:background .15s,color .15s;
   }
-  .sidebar-head .label{font-family:var(--ui);font-size:0.72rem;color:var(--ink-faint);letter-spacing:.03em;}
-  .sidebar-collapse-btn{
-    width:26px;height:26px;border-radius:8px;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;color:var(--ink-faint);
+  .nav-icons button:hover{background:var(--glass-solid);color:var(--ink);}
+  .nav-icons button.active{background:var(--glass-solid);color:var(--accent);box-shadow:inset 0 0 0 1px var(--glass-border);}
+  .rail-foot{display:flex;flex-direction:column;align-items:center;gap:16px;}
+  .theme-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);font-size:14px;}
+  .theme-btn:hover{background:var(--glass-solid);color:var(--ink);}
+  .theme-btn .moon{display:none;}
+  html[data-theme="dark"] .theme-btn .sun{display:none;}
+  html[data-theme="dark"] .theme-btn .moon{display:inline-block;}
+  .profile-pic{
+    width:36px;height:36px;border-radius:50%;
+    background:linear-gradient(145deg,var(--accent-soft),var(--accent));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--ui);font-weight:600;font-size:0.75rem;
   }
-  .sidebar-collapse-btn:hover{background:var(--glass-strong);color:var(--ink);}
-  .sidebar-collapse-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;transition:transform .25s ease;}
-  .sidebar.collapsed .sidebar-collapse-btn svg{transform:rotate(180deg);}
-  .sidebar.collapsed .sidebar-head{justify-content:center;}
-  .sidebar.collapsed .sidebar-head .label{display:none;}
 
-  .compose-btn{
-    display:flex;align-items:center;justify-content:center;gap:10px;
-    background:var(--glass-strong);
-    border:1px solid var(--glass-border);
-    color:var(--ink);
-    font-family:var(--ui);font-weight:600;font-size:0.86rem;
-    padding:12px 18px;border-radius:var(--radius-sm);
-    box-shadow:0 4px 14px rgba(203,154,115,0.20);
-    transition:transform .18s ease, box-shadow .18s ease;
-    margin-bottom:18px;
+  /* ---- 2. menu panel ---- */
+  .menu-panel{
+    width:250px;border-right:1px solid var(--glass-border);
+    padding:26px 18px;display:flex;flex-direction:column;background:var(--glass-strong);
+    flex-shrink:0;overflow:hidden;transition:width .25s ease,padding .25s ease;
   }
-  .compose-btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(203,154,115,0.28);}
-  .compose-btn svg{width:17px;height:17px;stroke:var(--accent);fill:none;stroke-width:2.2;stroke-linecap:round;flex-shrink:0;}
-  .sidebar.collapsed .compose-btn{padding:12px;}
-  .sidebar.collapsed .compose-btn .label-text{display:none;}
-
-  .nav-group{display:flex;flex-direction:column;gap:2px;margin-bottom:16px;}
-  .nav-item{
-    display:flex;align-items:center;justify-content:space-between;gap:10px;
-    padding:9px 11px;border-radius:var(--radius-sm);
-    font-size:0.85rem;color:var(--ink-dim);
-    border-left:2px solid transparent;
-    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  .menu-panel.collapsed{width:0;padding:26px 0;border-right:none;}
+  .menu-panel.collapsed .menu-inner{opacity:0;pointer-events:none;}
+  .menu-inner{display:flex;flex-direction:column;height:100%;min-width:212px;transition:opacity .15s ease;}
+  .menu-header{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
+  .menu-header h2{font-family:var(--ui);font-size:1.05rem;font-weight:600;}
+  .peer-pill{
+    display:flex;align-items:center;gap:6px;font-family:var(--ui);font-size:0.62rem;color:var(--ink-dim);
+    background:var(--glass-solid);border:1px solid var(--glass-border);padding:4px 10px;border-radius:100px;margin-bottom:20px;width:fit-content;
   }
-  .nav-item .left{display:flex;align-items:center;gap:11px;min-width:0;}
-  .nav-item .label-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .nav-item svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0;}
-  .nav-item:hover{background:var(--glass-strong);color:var(--ink);}
-  .nav-item.active{background:var(--glass-strong);color:var(--ink);font-weight:600;border-left-color:var(--accent);}
-  .nav-item.active .left svg{stroke:var(--accent);}
-  .count{font-size:0.68rem;color:var(--ink-faint);font-family:var(--ui);flex-shrink:0;}
-  .nav-item.active .count{color:var(--accent);}
-  .sidebar.collapsed .nav-item{justify-content:center;padding:10px;border-left:none;}
-  .sidebar.collapsed .nav-item.active{box-shadow:inset 0 0 0 1px var(--glass-border);}
-  .sidebar.collapsed .nav-item .label-text,
-  .sidebar.collapsed .nav-item .count{display:none;}
-
-  .sidebar-foot{
-    margin-top:auto;padding-top:14px;border-top:1px solid var(--glass-border);
+  .peer-pill .live{width:6px;height:6px;border-radius:50%;background:var(--direct);}
+  .btn-new{
+    background:var(--glass-solid);border:1px solid var(--glass-border);color:var(--ink);
+    padding:12px;border-radius:var(--radius-sm);font-weight:600;font-family:var(--ui);font-size:0.85rem;
+    display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:26px;
+    box-shadow:0 4px 14px rgba(203,154,115,0.20);transition:transform .18s ease,box-shadow .18s ease;
   }
-  .sidebar.collapsed .sidebar-foot{display:none;}
-  .node-id{
-    font-family:var(--ui);font-size:0.66rem;color:var(--ink-faint);
-    display:flex;flex-direction:column;gap:6px;
+  .btn-new i{color:var(--accent);}
+  .btn-new:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(203,154,115,0.28);}
+  .folder-list{list-style:none;margin-bottom:28px;}
+  .folder-list li{
+    padding:9px 11px;margin-bottom:3px;border-radius:var(--radius-sm);
+    display:flex;align-items:center;gap:13px;cursor:pointer;color:var(--ink-dim);font-size:0.85rem;font-weight:500;
+    border-left:2px solid transparent;transition:background .15s,color .15s,border-color .15s;
   }
+  .folder-list li:hover{background:var(--glass-solid);}
+  .folder-list li i{width:16px;text-align:center;color:var(--ink-faint);}
+  .folder-list li.active{background:var(--glass-solid);color:var(--ink);border-left-color:var(--accent);}
+  .folder-list li.active i{color:var(--accent);}
+  .fbadge{background:var(--accent);color:#fff;font-size:0.6rem;padding:1px 7px;border-radius:100px;margin-left:auto;font-family:var(--ui);}
+  .routes-header{display:flex;justify-content:space-between;align-items:center;font-size:0.66rem;color:var(--ink-faint);
+    text-transform:uppercase;font-weight:600;letter-spacing:.03em;margin-bottom:12px;padding:0 11px;}
+  .route-list{list-style:none;margin-bottom:20px;}
+  .route-list li{padding:7px 11px;display:flex;align-items:center;gap:11px;font-size:0.8rem;color:var(--ink-dim);
+    cursor:pointer;border-radius:var(--radius-sm);transition:background .15s,color .15s;}
+  .route-list li:hover{background:var(--glass-solid);}
+  .route-list li.active{background:var(--glass-solid);color:var(--ink);font-weight:600;}
+  .rdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .rdot.direct{background:var(--direct);}
+  .rdot.relay{background:var(--relay);}
+  .rdot.gateway{background:var(--gateway);}
+  .menu-foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--glass-border);}
+  .node-id{font-family:var(--ui);font-size:0.64rem;color:var(--ink-faint);display:flex;flex-direction:column;gap:5px;}
   .node-id .id-val{color:var(--ink-dim);word-break:break-all;}
-  .node-id .id-label{letter-spacing:.02em;}
 
-  /* ---- content: list + reading pane ---- */
-  .content{
-    display:grid;
-    grid-template-columns:380px 1fr;
-    gap:14px;
-    min-height:0;
-  }
-  @media (max-width:980px){ .content{grid-template-columns:1fr;} .reading{display:none;} }
+  /* ---- 3. email list panel ---- */
+  .list-panel{width:330px;border-right:1px solid var(--glass-border);background:var(--glass-solid);
+    display:flex;flex-direction:column;flex-shrink:0;}
+  .search-container{padding:20px;border-bottom:1px solid var(--glass-border);}
+  .search-box{background:var(--glass);border:1px solid var(--glass-border);border-radius:100px;padding:9px 15px;
+    display:flex;align-items:center;gap:10px;}
+  .search-box i{color:var(--ink-faint);font-size:0.85rem;}
+  .search-box input{border:none;background:transparent;outline:none;width:100%;font-size:0.85rem;color:var(--ink);font-family:var(--body);}
+  .search-box input::placeholder{color:var(--ink-faint);}
+  .list-title-row{display:flex;justify-content:space-between;align-items:center;padding:14px 20px 4px;}
+  .list-title-row span.title{font-family:var(--ui);font-weight:600;font-size:0.9rem;}
+  .list-title-row span.count{font-size:0.68rem;color:var(--ink-faint);}
+  .email-list{overflow-y:auto;flex-grow:1;padding:4px 8px 10px;}
+  .email-list::-webkit-scrollbar{width:6px;}
+  .email-list::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
+  .email-item{padding:13px 12px;display:flex;gap:12px;border-radius:var(--radius-sm);cursor:pointer;
+    transition:background .15s ease;position:relative;}
+  .email-item:hover{background:var(--glass-strong);}
+  .email-item.active{background:var(--glass-strong);box-shadow:inset 2px 0 0 var(--accent);}
+  .avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:0.72rem;font-family:var(--ui);font-weight:600;flex-shrink:0;}
+  .email-content{flex-grow:1;min-width:0;}
+  .email-top{display:flex;justify-content:space-between;margin-bottom:3px;gap:6px;}
+  .email-name{font-weight:600;font-size:0.85rem;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .email-item.unread .email-name{color:var(--ink);}
+  .email-time{font-size:0.66rem;color:var(--ink-faint);font-family:var(--ui);flex-shrink:0;}
+  .email-preview{font-size:0.78rem;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px;}
+  .email-meta-row{display:flex;align-items:center;gap:6px;}
+  .rbadge{display:inline-flex;align-items:center;gap:3px;font-family:var(--ui);font-size:0.58rem;
+    padding:1px 7px;border-radius:100px;border:1px solid;}
+  .rbadge.direct{color:var(--direct);border-color:color-mix(in srgb, var(--direct) 40%, transparent);background:color-mix(in srgb, var(--direct) 10%, transparent);}
+  .rbadge.relay{color:var(--relay);border-style:dashed;border-color:color-mix(in srgb, var(--relay) 45%, transparent);background:color-mix(in srgb, var(--relay) 9%, transparent);}
+  .rbadge.gateway{color:var(--gateway);border-radius:5px;border-color:color-mix(in srgb, var(--gateway) 40%, transparent);background:color-mix(in srgb, var(--gateway) 9%, transparent);}
+  .email-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;flex-shrink:0;}
+  .star-icon{color:var(--ink-faint);font-size:0.78rem;}
+  .star-icon.active{color:var(--accent);}
+  .unread-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
 
-  .list-pane, .reading{
-    background:var(--glass);
-    backdrop-filter:blur(18px) saturate(1.4);
-    -webkit-backdrop-filter:blur(18px) saturate(1.4);
-    border:1px solid var(--glass-border);
-    border-radius:var(--radius);
-    box-shadow:var(--shadow);
-    min-height:0;
-    display:flex;flex-direction:column;
-    overflow:hidden;
-  }
+  /* ---- 4. detail panel ---- */
+  .detail-panel{flex-grow:1;padding:28px 36px;background:var(--cream);display:flex;flex-direction:column;overflow-y:auto;min-width:0;}
+  .detail-panel::-webkit-scrollbar{width:6px;}
+  .detail-panel::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
+  .detail-header-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px;flex-wrap:wrap;gap:10px;}
+  .tag-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .tag{background:var(--glass-strong);border:1px solid var(--glass-border);color:var(--ink-dim);padding:6px 12px;
+    border-radius:var(--radius-sm);font-size:0.72rem;font-weight:600;display:flex;align-items:center;gap:7px;font-family:var(--ui);}
+  .tag.encrypted i{color:var(--direct);}
+  .detail-actions{display:flex;gap:6px;}
+  .detail-actions button{width:32px;height:32px;border-radius:50%;color:var(--ink-faint);display:flex;align-items:center;justify-content:center;}
+  .detail-actions button:hover{background:var(--glass-strong);color:var(--ink);}
+  .mail-date{font-size:0.72rem;color:var(--ink-faint);margin-bottom:8px;font-family:var(--ui);}
+  .mail-subject{font-family:var(--ui);font-size:1.5rem;font-weight:600;color:var(--ink);margin-bottom:24px;}
+  .thread-history{margin-bottom:24px;}
+  .thread-item{display:flex;align-items:center;gap:13px;padding:9px 0;border-bottom:1px solid var(--glass-border);font-size:0.78rem;}
+  .thread-item .avatar{width:26px;height:26px;font-size:0.6rem;}
+  .thread-text{color:var(--ink-faint);flex-grow:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .main-message{margin-bottom:32px;}
+  .msg-header{display:flex;align-items:center;gap:13px;margin-bottom:18px;}
+  .msg-name{font-weight:600;font-size:0.85rem;}
+  .msg-addr{font-size:0.68rem;color:var(--ink-faint);font-family:var(--ui);}
+  .msg-time{color:var(--ink-faint);font-size:0.7rem;margin-left:auto;font-family:var(--ui);}
+  .msg-body{font-size:0.88rem;line-height:1.7;color:var(--ink);}
+  .msg-body p+p{margin-top:12px;}
 
-  .list-head{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:14px 18px 10px;
-    font-family:var(--ui);font-size:0.95rem;font-weight:600;
-  }
-  .list-head span.sub{font-family:var(--body);font-weight:400;font-size:0.72rem;color:var(--ink-faint);}
-  .list-scroll{overflow-y:auto;flex:1;padding:0 8px 10px;}
-  .list-scroll::-webkit-scrollbar{width:6px;}
-  .list-scroll::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
+  .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:var(--ink-faint);gap:12px;text-align:center;}
+  .empty-state i{font-size:2.2rem;opacity:.6;}
+  .empty-state p{font-size:0.85rem;max-width:28ch;}
 
-  .mail-row{
-    display:flex;align-items:flex-start;gap:11px;
-    padding:12px 12px;border-radius:var(--radius-sm);
-    cursor:pointer;transition:background .15s ease;
-    position:relative;
+  .reply-box{border:1px solid var(--glass-border);background:var(--glass-strong);border-radius:var(--radius);padding:18px;margin-top:auto;}
+  .reply-box textarea{width:100%;border:none;background:transparent;resize:none;outline:none;font-size:0.85rem;
+    min-height:56px;margin-bottom:12px;color:var(--ink);font-family:var(--body);}
+  .reply-box textarea::placeholder{color:var(--ink-faint);}
+  .reply-toolbar{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--glass-border);
+    padding-top:12px;flex-wrap:wrap;gap:10px;}
+  .format-tools{display:flex;gap:13px;color:var(--ink-faint);font-size:0.82rem;}
+  .format-tools i{cursor:pointer;transition:color .15s;}
+  .format-tools i:hover,.format-tools i.active{color:var(--accent);}
+  .send-actions{display:flex;align-items:center;gap:14px;}
+  .send-actions i{color:var(--ink-faint);cursor:pointer;font-size:0.85rem;transition:color .15s;}
+  .send-actions i:hover{color:var(--ink);}
+  .btn-send{background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:100px;font-weight:600;
+    font-family:var(--ui);font-size:0.8rem;cursor:pointer;display:flex;align-items:center;gap:8px;transition:transform .15s ease,background .15s ease;}
+  .btn-send:hover{transform:translateY(-1px);background:#BA855D;}
+
+  @media (max-width:1150px){ .menu-panel{width:210px;} .list-panel{width:290px;} }
+
+  /* ---- settings view ---- */
+  .list-panel.hidden,.detail-panel.hidden{display:none;}
+  .settings-panel{
+    flex-grow:1;display:none;flex-direction:column;background:var(--cream);
+    padding:32px 44px;overflow-y:auto;min-width:0;
   }
-  .mail-row:hover{background:var(--glass-strong);}
-  .mail-row.selected{background:var(--glass-strong);box-shadow:inset 0 0 0 1px var(--glass-border);}
-  .mail-row.unread .sender, .mail-row.unread .subject{font-weight:600;color:var(--ink);}
-  .mail-row .unread-dot{
-    width:7px;height:7px;border-radius:50%;background:var(--accent);
-    margin-top:6px;flex-shrink:0;
+  .settings-panel.active{display:flex;}
+  .settings-panel::-webkit-scrollbar{width:6px;}
+  .settings-panel::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
+  .settings-title{font-family:var(--ui);font-size:1.5rem;font-weight:600;margin-bottom:6px;}
+  .settings-sub{font-size:0.82rem;color:var(--ink-faint);margin-bottom:34px;}
+  .settings-section{max-width:560px;margin-bottom:34px;padding-bottom:34px;border-bottom:1px solid var(--glass-border);}
+  .settings-section:last-of-type{border-bottom:none;}
+  .settings-section h3{font-family:var(--ui);font-size:0.68rem;font-weight:600;color:var(--ink-faint);
+    text-transform:uppercase;letter-spacing:.04em;margin-bottom:16px;}
+  .settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;}
+  .settings-row-label{font-size:0.86rem;color:var(--ink);font-weight:500;}
+  .settings-row-desc{font-size:0.74rem;color:var(--ink-faint);margin-top:2px;}
+  .settings-node-id{
+    font-family:var(--ui);font-size:0.78rem;color:var(--ink-dim);
+    background:var(--glass-strong);border:1px solid var(--glass-border);border-radius:var(--radius-sm);
+    padding:11px 14px;word-break:break-all;display:flex;align-items:center;justify-content:space-between;gap:10px;
   }
-  .mail-row.read .unread-dot{background:transparent;}
-  .mail-body{flex:1;min-width:0;}
-  .mail-top{display:flex;justify-content:space-between;gap:8px;}
-  .sender{font-size:0.85rem;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .time{font-size:0.68rem;color:var(--ink-faint);flex-shrink:0;font-family:var(--ui);}
-  .subject{font-size:0.83rem;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .snippet{font-size:0.78rem;color:var(--ink-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .mail-meta{display:flex;align-items:center;gap:6px;margin-top:6px;}
-  .badge{
-    display:inline-flex;align-items:center;gap:4px;
-    font-family:var(--ui);font-size:0.62rem;color:var(--ink-dim);
+  .settings-node-id button{color:var(--ink-faint);flex-shrink:0;}
+  .settings-node-id button:hover{color:var(--accent);}
+  .seg-group{display:flex;gap:8px;flex-wrap:wrap;}
+  .seg-btn{
+    font-family:var(--ui);font-size:0.78rem;color:var(--ink-dim);
     background:var(--glass-strong);border:1px solid var(--glass-border);
-    padding:2px 8px;border-radius:100px;
+    padding:8px 16px;border-radius:100px;transition:background .15s,color .15s,border-color .15s;
   }
-  .badge svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.2;}
-  .badge.direct{
-    color:#4C7A61;border-color:rgba(76,122,97,0.35);
-    background:rgba(76,122,97,0.10);
-  }
-  .badge.relay{
-    color:#A97635;border-style:dashed;border-color:rgba(169,118,53,0.45);
-    background:rgba(169,118,53,0.09);
-  }
-  .badge.gateway{
-    color:#7C6A5E;border-radius:6px;border-color:rgba(124,106,94,0.35);
-    background:rgba(124,106,94,0.09);
-  }
-  .star-btn{margin-left:auto;flex-shrink:0;padding:2px;}
-  .star-btn svg{width:15px;height:15px;stroke:var(--ink-faint);fill:none;stroke-width:1.6;}
-  .star-btn.starred svg{stroke:var(--accent);fill:var(--accent-soft);}
-
-  /* ---- reading pane ---- */
-  .reading{padding:0;}
-  .reading-empty{
-    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    color:var(--ink-faint);gap:10px;text-align:center;padding:40px;
-  }
-  .reading-empty svg{width:44px;height:44px;stroke:var(--ink-faint);fill:none;stroke-width:1.3;opacity:.8;}
-  .reading-empty p{font-size:0.85rem;max-width:26ch;}
-
-  .reading-head{
-    padding:20px 26px 16px;border-bottom:1px solid var(--glass-border);
-  }
-  .reading-subject{font-family:var(--ui);font-size:1.15rem;font-weight:600;margin-bottom:14px;}
-  .reading-from{display:flex;align-items:center;gap:12px;}
-  .reading-from .avatar{width:38px;height:38px;font-size:0.85rem;}
-  .reading-from-meta{flex:1;min-width:0;}
-  .reading-from-meta .name{font-size:0.88rem;font-weight:600;}
-  .reading-from-meta .addr{font-size:0.72rem;color:var(--ink-faint);font-family:var(--ui);}
-  .reading-time{font-size:0.72rem;color:var(--ink-faint);font-family:var(--ui);white-space:nowrap;}
-  .route-strip{
-    display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;
-  }
-  .route-strip .badge{font-size:0.66rem;padding:4px 10px;}
-
-  .reading-body{
-    flex:1;overflow-y:auto;padding:22px 26px 30px;
-    font-size:0.92rem;line-height:1.75;color:var(--ink);
-  }
-  .reading-body::-webkit-scrollbar{width:6px;}
-  .reading-body::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
-  .reading-body p+p{margin-top:14px;}
-
-  .reading-actions{
-    display:flex;gap:10px;padding:16px 26px 22px;border-top:1px solid var(--glass-border);
-  }
-  .action-btn{
-    display:flex;align-items:center;gap:8px;
+  .seg-btn:hover{background:var(--glass-solid);color:var(--ink);}
+  .seg-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .switch{position:relative;width:38px;height:22px;flex-shrink:0;cursor:pointer;}
+  .switch input{opacity:0;width:0;height:0;position:absolute;}
+  .switch .track{position:absolute;inset:0;background:var(--glass-border);border-radius:100px;transition:background .2s ease;}
+  .switch .thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,0.2);transition:transform .2s ease;}
+  .switch input:checked ~ .track{background:var(--accent);}
+  .switch input:checked ~ .thumb{transform:translateX(16px);}
+  .settings-btn{
+    font-family:var(--ui);font-size:0.8rem;font-weight:600;color:var(--ink);
     background:var(--glass-strong);border:1px solid var(--glass-border);
-    padding:9px 16px;border-radius:100px;font-size:0.8rem;color:var(--ink-dim);
-    transition:background .15s ease,color .15s ease;
+    padding:9px 18px;border-radius:100px;transition:background .15s ease,transform .15s ease;
   }
-  .action-btn:hover{background:#fff;color:var(--ink);}
-  .action-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;}
+  .settings-btn:hover{background:var(--glass-solid);transform:translateY(-1px);}
+  .settings-btn.danger{color:#B4553E;border-color:rgba(180,85,62,0.35);background:rgba(180,85,62,0.08);}
+  .settings-btn.danger:hover{background:rgba(180,85,62,0.15);}
 
-  /* ---- compose modal ---- */
-  .compose-modal{
-    position:fixed;bottom:22px;right:22px;width:420px;max-width:calc(100vw - 44px);
-    background:var(--glass-strong);
-    backdrop-filter:blur(22px) saturate(1.5);
-    -webkit-backdrop-filter:blur(22px) saturate(1.5);
-    border:1px solid var(--glass-border);
-    border-radius:var(--radius);
-    box-shadow:0 20px 50px rgba(160,90,50,0.22);
-    z-index:50;
-    display:none;flex-direction:column;
-    overflow:hidden;
+  /* ---- node network + contacts pages (share .settings-panel shell) ---- */
+  .stat-row{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:6px;}
+  .stat{display:flex;flex-direction:column;gap:2px;}
+  .stat .stat-num{font-family:var(--ui);font-size:1.5rem;font-weight:600;color:var(--ink);}
+  .stat .stat-label{font-size:0.68rem;color:var(--ink-faint);}
+  .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .status-dot.up{background:var(--direct);}
+  .status-dot.degraded{background:var(--relay);}
+  .status-dot.down{background:var(--ink-faint);}
+  .peer-row,.contact-row{
+    display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--glass-border);
   }
-  .compose-modal.open{display:flex;animation:riseIn .28s cubic-bezier(.22,1,.36,1);}
-  @keyframes riseIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
-  .compose-head{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:12px 16px;border-bottom:1px solid var(--glass-border);
-    font-family:var(--ui);font-size:0.82rem;font-weight:600;
-    cursor:move;user-select:none;
+  .peer-row:last-child,.contact-row:last-child{border-bottom:none;}
+  .peer-main,.contact-main{flex:1;min-width:0;}
+  .peer-name,.contact-name{font-size:0.86rem;font-weight:600;color:var(--ink);}
+  .peer-addr,.contact-addr{font-size:0.72rem;color:var(--ink-faint);font-family:var(--ui);word-break:break-all;}
+  .peer-meta{font-size:0.7rem;color:var(--ink-faint);white-space:nowrap;text-align:right;}
+  .icon-mini-btn{
+    width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:var(--ink-faint);flex-shrink:0;
   }
-  .compose-head button{color:var(--ink-faint);font-size:1rem;padding:2px 6px;}
-  .compose-head button:hover{color:var(--ink);}
-  .compose-field{
-    padding:10px 16px;border-bottom:1px solid var(--glass-border);
+  .icon-mini-btn:hover{background:var(--glass-strong);color:var(--accent);}
+  .add-row{display:flex;gap:10px;margin-top:16px;}
+  .add-row input{
+    flex:1;background:var(--glass-strong);border:1px solid var(--glass-border);border-radius:100px;
+    padding:9px 16px;font-size:0.82rem;color:var(--ink);outline:none;font-family:var(--body);
   }
-  .compose-field input, .compose-field textarea{
-    width:100%;background:none;border:none;outline:none;font-size:0.84rem;color:var(--ink);
-  }
-  .compose-field input::placeholder,.compose-field textarea::placeholder{color:var(--ink-faint);}
-  .compose-field textarea{resize:none;height:150px;line-height:1.6;font-family:var(--body);}
-  .compose-foot{
-    display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
-  }
-  .send-btn{
-    background:var(--accent);color:#fff;font-family:var(--ui);font-weight:600;font-size:0.82rem;
-    padding:9px 20px;border-radius:100px;display:flex;align-items:center;gap:8px;
-    transition:transform .15s ease, background .15s ease;
-  }
-  .send-btn:hover{transform:translateY(-1px);background:#BA855D;}
-  .send-btn svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2.2;}
-  .encrypt-note{font-size:0.68rem;color:var(--ink-faint);display:flex;align-items:center;gap:6px;}
-  .encrypt-note svg{width:12px;height:12px;stroke:var(--ink-faint);fill:none;stroke-width:2;}
+  .add-row input::placeholder{color:var(--ink-faint);}
+  .contacts-search{margin-bottom:22px;max-width:340px;}
 </style>
 </head>
 <body>
 
 <div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div></div>
 
-<div class="app">
+<div class="dashboard">
 
-  <div class="topbar">
-    <div class="brand">Narada</div>
-    <div class="search">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="searchInput" type="text" placeholder="Search mail" />
+  <!-- 1. ICON RAIL -->
+  <div class="sidebar">
+    <div class="logo"><i class="fa-solid fa-lock"></i></div>
+    <div class="nav-icons">
+      <button class="active" data-nav="inbox" title="Mail"><i class="fa-regular fa-envelope"></i></button>
+      <button data-nav="network" title="Node network"><i class="fa-solid fa-diagram-project"></i></button>
+      <button data-nav="contacts" title="Contacts"><i class="fa-regular fa-user"></i></button>
+      <button data-nav="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
     </div>
-    <div class="topbar-right">
-      <div class="peer-pill"><span class="live"></span>6 peers connected</div>
-      <button class="icon-btn" id="settingsBtn" title="Settings">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+    <div class="rail-foot">
+      <button class="theme-btn" id="themeToggle" title="Toggle theme">
+        <i class="fa-solid fa-sun sun"></i><i class="fa-solid fa-moon moon"></i>
       </button>
-      <button class="icon-btn" id="helpBtn" title="Help">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2-2.4 3.7"/><path d="M12 17h.01"/></svg>
-      </button>
-      <button class="icon-btn" id="themeToggle" title="Toggle theme">
-        <svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>
-        <svg class="moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-      </button>
-      <div class="avatar">A</div>
+      <div class="profile-pic">A</div>
     </div>
   </div>
 
-  <div class="main">
-    <div class="sidebar" id="sidebar">
-      <div class="sidebar-head">
-        <span class="label">Menu</span>
-        <button class="sidebar-collapse-btn" id="sidebarCollapse" title="Hide sidebar">
-          <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
-        </button>
+  <!-- 2. MENU PANEL -->
+  <div class="menu-panel" id="menuPanel">
+    <div class="menu-inner">
+      <div class="menu-header">
+        <button class="theme-btn" id="menuCollapse" title="Hide menu"><i class="fa-solid fa-chevron-left"></i></button>
+        <h2>Narada</h2>
       </div>
+      <div class="peer-pill"><span class="live"></span>6 peers connected</div>
 
-      <button class="compose-btn" id="composeOpen" title="Compose">
-        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        <span class="label-text">Compose</span>
-      </button>
+      <button class="btn-new" id="composeOpen"><i class="fa-solid fa-pen-to-square"></i> Compose</button>
 
-      <div class="nav-group" id="navGroup">
-        <div class="nav-item active" data-folder="inbox" title="Inbox">
-          <span class="left"><svg viewBox="0 0 24 24"><path d="M3 12h4l2 4h6l2-4h4"/><path d="M5 5h14l2 7v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2-7Z"/></svg><span class="label-text">Inbox</span></span>
-          <span class="count">4</span>
-        </div>
-        <div class="nav-item" data-folder="starred" title="Starred">
-          <span class="left"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg><span class="label-text">Starred</span></span>
-        </div>
-        <div class="nav-item" data-folder="important" title="Important">
-          <span class="left"><svg viewBox="0 0 24 24"><path d="M12 2v13"/><path d="M6 9l6 6 6-6"/><path d="M5 21h14"/></svg><span class="label-text">Important</span></span>
-        </div>
-        <div class="nav-item" data-folder="snoozed" title="Snoozed">
-          <span class="left"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/><path d="M9 2h6"/></svg><span class="label-text">Snoozed</span></span>
-        </div>
-        <div class="nav-item" data-folder="sent" title="Sent">
-          <span class="left"><svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg><span class="label-text">Sent</span></span>
-        </div>
-        <div class="nav-item" data-folder="drafts" title="Drafts">
-          <span class="left"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="label-text">Drafts</span></span>
-          <span class="count">1</span>
-        </div>
-        <div class="nav-item" data-folder="all" title="All mail">
-          <span class="left"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/></svg><span class="label-text">All mail</span></span>
-        </div>
-      </div>
+      <ul class="folder-list" id="folderList">
+        <li class="active" data-folder="inbox"><i class="fa-solid fa-inbox"></i> Inbox <span class="fbadge">4</span></li>
+        <li data-folder="starred"><i class="fa-regular fa-star"></i> Starred</li>
+        <li data-folder="sent"><i class="fa-regular fa-paper-plane"></i> Sent</li>
+        <li data-folder="drafts"><i class="fa-solid fa-pen"></i> Drafts <span class="fbadge">1</span></li>
+        <li data-folder="all"><i class="fa-regular fa-envelope-open"></i> All mail</li>
+        <li data-folder="encrypted"><i class="fa-solid fa-lock"></i> Encrypted</li>
+        <li data-folder="network"><i class="fa-solid fa-circle-nodes"></i> Node network</li>
+        <li data-folder="trash"><i class="fa-regular fa-trash-can"></i> Trash</li>
+      </ul>
 
-      <div class="nav-group">
-        <div class="nav-item" data-folder="encrypted" title="Encrypted">
-          <span class="left"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="label-text">Encrypted</span></span>
-        </div>
-        <div class="nav-item" data-folder="network" title="Node network">
-          <span class="left"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 10.5 15.5M16 7.5 13.5 15.5M8.5 6h7"/></svg><span class="label-text">Node network</span></span>
-        </div>
-        <div class="nav-item" data-folder="spam" title="Spam">
-          <span class="left"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span class="label-text">Spam</span></span>
-        </div>
-        <div class="nav-item" data-folder="trash" title="Trash">
-          <span class="left"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span class="label-text">Trash</span></span>
-        </div>
-      </div>
+      <div class="routes-header"><span>Delivery route</span></div>
+      <ul class="route-list" id="routeList">
+        <li data-route="direct"><span class="rdot direct"></span> Direct</li>
+        <li data-route="relay"><span class="rdot relay"></span> Via relay</li>
+        <li data-route="gateway"><span class="rdot gateway"></span> Via gateway</li>
+      </ul>
 
-      <div class="nav-group">
-        <div class="nav-item" data-folder="settings" title="Settings">
-          <span class="left"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="label-text">Settings</span></span>
-        </div>
-      </div>
-
-      <div class="sidebar-foot">
+      <div class="menu-foot">
         <div class="node-id">
-          <span class="id-label">your node</span>
+          <span>your node</span>
           <span class="id-val">narada1q9x…f83k</span>
         </div>
       </div>
     </div>
+  </div>
 
-    <div class="content">
-      <div class="list-pane">
-        <div class="list-head"><span id="listTitle">Inbox</span><span class="sub" id="listCount">4 conversations</span></div>
-        <div class="list-scroll" id="listScroll"></div>
+  <!-- 3. EMAIL LIST -->
+  <div class="list-panel">
+    <div class="search-container">
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="searchInput" placeholder="Search mail">
       </div>
+    </div>
+    <div class="list-title-row">
+      <span class="title" id="listTitle">Inbox</span>
+      <span class="count" id="listCount">4 conversations</span>
+    </div>
+    <div class="email-list" id="emailList"></div>
+  </div>
 
-      <div class="reading" id="readingPane">
-        <div class="reading-empty">
-          <svg viewBox="0 0 24 24"><path d="M3 8l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
-          <p>Select a message to read it. Nothing here ever passes through a server that can see it in plaintext.</p>
+  <!-- 4. DETAIL PANEL -->
+  <div class="detail-panel" id="detailPanel"></div>
+
+  <!-- SETTINGS VIEW -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-title">Settings</div>
+    <div class="settings-sub">Your node, your keys, your rules.</div>
+
+    <div class="settings-section">
+      <h3>Appearance</h3>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Theme</div>
+          <div class="settings-row-desc">Switch between light and dark.</div>
+        </div>
+        <div class="seg-group" id="settingsThemeGroup">
+          <button class="seg-btn" data-theme-choice="light">Light</button>
+          <button class="seg-btn" data-theme-choice="dark">Dark</button>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<div class="compose-modal" id="composeModal">
-  <div class="compose-head"><span>New message</span><button id="composeClose">✕</button></div>
-  <div class="compose-field"><input type="text" placeholder="To — narada1… or name@domain.com" /></div>
-  <div class="compose-field"><input type="text" placeholder="Subject" /></div>
-  <div class="compose-field"><textarea placeholder="Write your message…"></textarea></div>
-  <div class="compose-foot">
-    <span class="encrypt-note"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</span>
-    <button class="send-btn" id="sendBtn">Send<svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg></button>
+    <div class="settings-section">
+      <h3>Node &amp; identity</h3>
+      <div class="settings-row" style="display:block;">
+        <div class="settings-row-label" style="margin-bottom:8px;">Your node id</div>
+        <div class="settings-node-id">
+          <span>narada1q9x7m2k…v8f83k</span>
+          <button title="Copy"><i class="fa-regular fa-copy"></i></button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Recovery phrase</div>
+          <div class="settings-row-desc">12-word mnemonic — write it down, don't screenshot it.</div>
+        </div>
+        <button class="settings-btn" id="revealMnemonic">Reveal</button>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Key rotation</div>
+          <div class="settings-row-desc">Rotate your signing key without changing your address.</div>
+        </div>
+        <button class="settings-btn">Rotate keys</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Delivery &amp; privacy</h3>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Preferred route</div>
+          <div class="settings-row-desc">Fall back to relay or gateway only when direct delivery fails.</div>
+        </div>
+        <div class="seg-group" id="settingsRouteGroup">
+          <button class="seg-btn active" data-route-choice="direct">Direct only</button>
+          <button class="seg-btn" data-route-choice="relay">Allow relay</button>
+          <button class="seg-btn" data-route-choice="gateway">Allow gateway</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Read receipts</div>
+          <div class="settings-row-desc">Let senders see a signed delivery acknowledgement.</div>
+        </div>
+        <label class="switch"><input type="checkbox" checked><span class="track"></span><span class="thumb"></span></label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Notifications</h3>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Desktop notifications</div>
+          <div class="settings-row-desc">Show a banner when new mail arrives.</div>
+        </div>
+        <label class="switch"><input type="checkbox" checked><span class="track"></span><span class="thumb"></span></label>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Sound</div>
+          <div class="settings-row-desc">Play a sound on new mail.</div>
+        </div>
+        <label class="switch"><input type="checkbox"><span class="track"></span><span class="thumb"></span></label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Danger zone</h3>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Sign out</div>
+          <div class="settings-row-desc">You'll need your recovery phrase to sign back in.</div>
+        </div>
+        <button class="settings-btn danger">Sign out</button>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Delete node identity</div>
+          <div class="settings-row-desc">Permanently destroys your keys. Mail addressed to you becomes undeliverable.</div>
+        </div>
+        <button class="settings-btn danger">Delete identity</button>
+      </div>
+    </div>
   </div>
+
+  <!-- NODE NETWORK VIEW -->
+  <div class="settings-panel" id="networkPanel">
+    <div class="settings-title">Node network</div>
+    <div class="settings-sub">Who your node is talking to right now.</div>
+
+    <div class="settings-section">
+      <h3>Your node</h3>
+      <div class="settings-node-id">
+        <span>narada1q9x7m2k…v8f83k</span>
+        <button title="Copy"><i class="fa-regular fa-copy"></i></button>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Status</div>
+          <div class="settings-row-desc">Listening on QUIC, discoverable via mDNS.</div>
+        </div>
+        <div class="tag encrypted"><span class="status-dot up" style="margin-right:7px;"></span>Online</div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Network health</h3>
+      <div class="stat-row">
+        <div class="stat"><span class="stat-num">6</span><span class="stat-label">peers connected</span></div>
+        <div class="stat"><span class="stat-num">4</span><span class="stat-label">direct reachable</span></div>
+        <div class="stat"><span class="stat-num">1</span><span class="stat-label">relayed</span></div>
+        <div class="stat"><span class="stat-num">3</span><span class="stat-label">down (last hour)</span></div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Connected peers</h3>
+      <div id="peerList">
+        <div class="peer-row">
+          <span class="status-dot up"></span>
+          <div class="peer-main">
+            <div class="peer-name">node1a7f…3kd9</div>
+            <div class="peer-addr">192.168.1.42 · QUIC · TOFU pinned</div>
+          </div>
+          <div class="peer-meta">12ms · seen just now</div>
+        </div>
+        <div class="peer-row">
+          <span class="status-dot up"></span>
+          <div class="peer-main">
+            <div class="peer-name">node1m2p…7xqe</div>
+            <div class="peer-addr">10.0.0.18 · QUIC · TOFU pinned</div>
+          </div>
+          <div class="peer-meta">34ms · seen just now</div>
+        </div>
+        <div class="peer-row">
+          <span class="status-dot degraded"></span>
+          <div class="peer-main">
+            <div class="peer-name">node1r5t…9vwc</div>
+            <div class="peer-addr">relay.narada.dev · 1 missed ping</div>
+          </div>
+          <div class="peer-meta">210ms · seen 40s ago</div>
+        </div>
+        <div class="peer-row">
+          <span class="status-dot down"></span>
+          <div class="peer-main">
+            <div class="peer-name">node1z8k…2mfa</div>
+            <div class="peer-addr">bootstrap peer · 3 missed pings</div>
+          </div>
+          <div class="peer-meta">down · routed around</div>
+        </div>
+        <div class="peer-row">
+          <span class="status-dot down"></span>
+          <div class="peer-main">
+            <div class="peer-name">node1h4n…6bse</div>
+            <div class="peer-addr">bootstrap peer · 3 missed pings</div>
+          </div>
+          <div class="peer-meta">down · routed around</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Bootstrap peers</h3>
+      <div class="settings-row-desc" style="margin-bottom:4px;">Add a known peer address to help your node find the rest of the network.</div>
+      <div class="add-row">
+        <input type="text" id="bootstrapInput" placeholder="node1… or host:port">
+        <button class="settings-btn" id="addBootstrap">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTACTS VIEW -->
+  <div class="settings-panel" id="contactsPanel">
+    <div class="settings-title">Contacts</div>
+    <div class="settings-sub">People you've exchanged keys with.</div>
+
+    <div class="contacts-search">
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="contactsSearch" placeholder="Search contacts">
+      </div>
+    </div>
+
+    <div class="settings-section" style="border-bottom:none;">
+      <div id="contactList"></div>
+      <div class="add-row">
+        <input type="text" placeholder="Add by node id or name…">
+        <button class="settings-btn" id="addContact">Add contact</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
 const mails = [
-  {
-    id:1, folder:'inbox', unread:true, starred:true,
-    sender:'Priya Shah', addr:'narada1p8y…2qxa', initial:'P',
+  { id:1, folder:'inbox', unread:true, starred:true,
+    sender:'Priya Shah', addr:'narada1p8y…2qxa', initial:'P', color:'#C99B76',
     subject:'Relay quotas for the beta cohort',
-    snippet:'Before we open this up wider, we should agree on per-recipient deposit caps…',
-    time:'9:41 AM', route:'direct',
+    preview:'Before we open this up wider, we should agree on per-recipient deposit caps…',
+    time:'9:41 AM', date:'Today, 12 September 2026, 9:41', route:'direct',
+    thread:[{who:'Priya Shah', text:'Hi, flagging the relay quota question before rollout…', time:'10.09.2026 14:02'}],
     body:['Before we open this up wider, we should agree on per-recipient deposit caps and how aggressively relays sweep expired deposits.','My worry is a relay filling up with beta-tester noise and starving real traffic. Can we cap it at 200MB per recipient for now and revisit once we have real usage numbers?']
   },
-  {
-    id:2, folder:'inbox', unread:true, starred:false,
-    sender:'Tomás Reyes', addr:'narada1t4m…9jwv', initial:'T',
+  { id:2, folder:'inbox', unread:true, starred:false,
+    sender:'Tomás Reyes', addr:'narada1t4m…9jwv', initial:'T', color:'#A97635',
     subject:'Gateway: inbound SMTP is flaky on port 25',
-    snippet:'Seeing intermittent timeouts on the SMTP→Narada path when the sending server is Gmail…',
-    time:'8:15 AM', route:'gateway',
+    preview:'Seeing intermittent timeouts on the SMTP→Narada path when the sending server is Gmail…',
+    time:'8:15 AM', date:'Today, 12 September 2026, 8:15', route:'gateway',
+    thread:[],
     body:['Seeing intermittent timeouts on the SMTP→Narada path when the sending server is Gmail specifically. Outlook and Fastmail both work fine.','My guess is a greylisting behavior on our receiving end. Going to add a retry-after handler this week.']
   },
-  {
-    id:3, folder:'inbox', unread:false, starred:false,
-    sender:'Node Network', addr:'system', initial:'N',
+  { id:3, folder:'inbox', unread:false, starred:false,
+    sender:'Node Network', addr:'system', initial:'N', color:'#7C6A5E',
     subject:'3 peers went offline in the last hour',
-    snippet:'PeerBook marked 3 endpoints as down after 3 missed pings. Routing has rerouted around them…',
-    time:'Yesterday', route:'direct',
+    preview:'PeerBook marked 3 endpoints as down after 3 missed pings. Routing has rerouted around them…',
+    time:'Yesterday', date:'Yesterday, 11 September 2026', route:'direct',
+    thread:[],
     body:['PeerBook marked 3 endpoints as down after 3 missed pings automatically. Routing has already rerouted around them via the distributed directory fallback.','No action needed — this is expected behavior when a node goes offline without a clean shutdown.']
   },
-  {
-    id:4, folder:'inbox', unread:false, starred:true,
-    sender:'Aiko Fujimori', addr:'narada1a2i…7dpc', initial:'A',
+  { id:4, folder:'inbox', unread:false, starred:true,
+    sender:'Aiko Fujimori', addr:'narada1a2i…7dpc', initial:'A', color:'#4C7A61',
     subject:'Mnemonic recovery worked perfectly',
-    snippet:'Just wanted to say the 12-word recovery flow saved me — reinstalled on a new laptop and…',
-    time:'Mon', route:'relay',
+    preview:'Just wanted to say the 12-word recovery flow saved me — reinstalled on a new laptop and…',
+    time:'Mon', date:'Mon, 8 September 2026', route:'relay',
+    thread:[{who:'Aiko Fujimori', text:'Quick one — does mnemonic recovery also restore mailbox hints?', time:'07.09.2026 16:40'},
+            {who:'You', text:'Yes, the V2 hint travels with the identity bundle.', time:'07.09.2026 17:05'}],
     body:['Just wanted to say the 12-word recovery flow saved me. Reinstalled on a new laptop and had my identity, keys, and mailbox hint back in under a minute.','One small note: the mnemonic input could use word-completion so typos are caught earlier.']
   },
-  {
-    id:5, folder:'drafts', unread:false, starred:false,
-    sender:'Draft', addr:'', initial:'D',
+  { id:5, folder:'drafts', unread:false, starred:false,
+    sender:'Draft', addr:'', initial:'D', color:'#BDB0A5',
     subject:'(no subject)',
-    snippet:'Hey — following up on the identity format doc…',
-    time:'Sun', route:'direct',
+    preview:'Hey — following up on the identity format doc…',
+    time:'Sun', date:'Sun, 7 September 2026', route:'direct',
+    thread:[],
     body:['Hey — following up on the identity format doc, do you have time this week to review the V2 hint TLV?']
   },
 ];
 
 let currentFolder = 'inbox';
-let selectedId = null;
+let currentRoute = null;
+let selectedId = 1;
 
-const folderMeta = {
-  inbox:'Inbox', starred:'Starred', important:'Important', snoozed:'Snoozed',
-  sent:'Sent', drafts:'Drafts', all:'All mail',
-  encrypted:'Encrypted', network:'Node network', spam:'Spam', trash:'Trash'
-};
+const folderMeta = { inbox:'Inbox', starred:'Starred', sent:'Sent', drafts:'Drafts', all:'All mail',
+  encrypted:'Encrypted', network:'Node network', trash:'Trash' };
 
-function routeBadge(route){
-  const map = {
-    direct: {cls:'direct', label:'Direct', icon:'<path d="M5 12h14M13 6l6 6-6 6"/>'},
-    relay: {cls:'relay', label:'Via relay', icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>'},
-    gateway: {cls:'gateway', label:'Via gateway', icon:'<rect x="4" y="9" width="16" height="10" rx="2"/><path d="M8 9V6a4 4 0 0 1 8 0"/>'}
-  };
-  const m = map[route] || map.direct;
-  return `<span class="badge ${m.cls}"><svg viewBox="0 0 24 24">${m.icon}</svg>${m.label}</span>`;
+const routeIcon = { direct:'fa-arrow-right-long', relay:'fa-shuffle', gateway:'fa-right-left' };
+const routeLabel = { direct:'Direct', relay:'Via relay', gateway:'Via gateway' };
+
+function rbadge(route){
+  return `<span class="rbadge ${route}"><i class="fa-solid ${routeIcon[route]}"></i> ${routeLabel[route]}</span>`;
+}
+
+function getItems(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  let items = mails;
+  if(currentFolder === 'starred') items = items.filter(m => m.starred);
+  else if(currentFolder !== 'all') items = items.filter(m => m.folder === currentFolder);
+  if(currentRoute) items = items.filter(m => m.route === currentRoute);
+  if(q) items = items.filter(m => (m.sender+m.subject+m.preview).toLowerCase().includes(q));
+  return items;
 }
 
 function renderList(){
-  const scroll = document.getElementById('listScroll');
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const items = getItems();
+  const listEl = document.getElementById('emailList');
 
-  let items;
-  if(q){
-    items = mails.filter(m => (m.sender+m.subject+m.snippet).toLowerCase().includes(q));
-  } else if(currentFolder === 'all'){
-    items = mails.slice();
-  } else {
-    items = mails.filter(m => currentFolder === 'starred' ? m.starred : m.folder === currentFolder);
-  }
+  document.getElementById('listTitle').textContent = folderMeta[currentFolder] || currentFolder;
+  document.getElementById('listCount').textContent = items.length + (items.length===1 ? ' conversation' : ' conversations');
 
-  document.getElementById('listTitle').textContent = q ? `Results for “${q}”` : (folderMeta[currentFolder] || currentFolder);
-  document.getElementById('listCount').textContent = items.length + (items.length===1?' conversation':' conversations');
-
-  if(items.length===0){
-    if(q){
-      scroll.innerHTML = `
-        <div style="padding:48px 20px;text-align:center;">
-          <svg viewBox="0 0 24 24" width="34" height="34" style="stroke:var(--ink-faint);fill:none;stroke-width:1.5;margin:0 auto 14px;display:block;"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-          <div style="color:var(--ink-dim);font-size:0.86rem;font-weight:600;margin-bottom:4px;">No messages match “${q}”</div>
-          <div style="color:var(--ink-faint);font-size:0.78rem;margin-bottom:16px;">Try a different word or phrase.</div>
-          <button id="fallbackClear" style="font-family:var(--ui);font-size:0.76rem;color:#fff;background:var(--accent);padding:8px 18px;border-radius:100px;border:none;cursor:pointer;">Clear search</button>
-        </div>`;
-      const btn = document.getElementById('fallbackClear');
-      if(btn) btn.addEventListener('click', () => {
-        document.getElementById('searchInput').value = '';
-        renderList();
-      });
-    } else {
-      scroll.innerHTML = '<div style="padding:40px 16px;text-align:center;color:var(--ink-faint);font-size:0.85rem;">Nothing here.</div>';
-    }
+  if(items.length === 0){
+    listEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:var(--ink-faint);font-size:0.82rem;">Nothing matches here.</div>`;
     return;
   }
 
-  scroll.innerHTML = items.map(m => `
-    <div class="mail-row ${m.unread?'unread':'read'} ${m.id===selectedId?'selected':''}" data-id="${m.id}">
-      <span class="unread-dot"></span>
-      <div class="mail-body">
-        <div class="mail-top">
-          <span class="sender">${m.sender}</span>
-          <span class="time">${m.time}</span>
+  listEl.innerHTML = items.map(m => `
+    <div class="email-item ${m.unread?'unread':''} ${m.id===selectedId?'active':''}" data-id="${m.id}">
+      <div class="avatar" style="background:${m.color};">${m.initial}</div>
+      <div class="email-content">
+        <div class="email-top">
+          <span class="email-name">${m.sender}</span>
+          <span class="email-time">${m.time}</span>
         </div>
-        <div class="subject">${m.subject}</div>
-        <div class="snippet">${m.snippet}</div>
-        <div class="mail-meta">
-          ${routeBadge(m.route)}
-          <button class="star-btn ${m.starred?'starred':''}" data-star="${m.id}">
-            <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6L12 3Z"/></svg>
-          </button>
-        </div>
+        <div class="email-preview">${m.preview}</div>
+        <div class="email-meta-row">${rbadge(m.route)}</div>
+      </div>
+      <div class="email-right">
+        <i class="fa-solid fa-star star-icon ${m.starred?'active':''}" data-star="${m.id}"></i>
+        ${m.unread ? '<span class="unread-dot"></span>' : ''}
       </div>
     </div>
   `).join('');
 
-  scroll.querySelectorAll('.mail-row').forEach(row => {
+  listEl.querySelectorAll('.email-item').forEach(row => {
     row.addEventListener('click', (e) => {
-      if(e.target.closest('.star-btn')) return;
+      if(e.target.closest('.star-icon')) return;
       selectedId = parseInt(row.dataset.id);
       const mail = mails.find(m => m.id === selectedId);
       mail.unread = false;
       renderList();
-      renderReading(mail);
+      renderDetail(mail);
     });
   });
 
-  scroll.querySelectorAll('.star-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+  listEl.querySelectorAll('.star-icon').forEach(icon => {
+    icon.addEventListener('click', (e) => {
       e.stopPropagation();
-      const id = parseInt(btn.dataset.star);
+      const id = parseInt(icon.dataset.star);
       const mail = mails.find(m => m.id === id);
       mail.starred = !mail.starred;
       renderList();
+      if(id === selectedId) renderDetail(mail);
     });
   });
 }
 
-function renderReading(mail){
-  const pane = document.getElementById('readingPane');
-  pane.innerHTML = `
-    <div class="reading-head">
-      <div class="reading-subject">${mail.subject}</div>
-      <div class="reading-from">
-        <div class="avatar">${mail.initial}</div>
-        <div class="reading-from-meta">
-          <div class="name">${mail.sender}</div>
-          <div class="addr">${mail.addr || ''}</div>
-        </div>
-        <div class="reading-time">${mail.time}</div>
-      </div>
-      <div class="route-strip">
-        ${routeBadge(mail.route)}
-        <span class="badge"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>End-to-end encrypted</span>
-      </div>
-    </div>
-    <div class="reading-body">
-      ${mail.body.map(p => `<p>${p}</p>`).join('')}
-    </div>
-    <div class="reading-actions">
-      <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Reply</button>
-      <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forward</button>
-      <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button>
-    </div>
-  `;
-}
-
-document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => {
-    if(item.dataset.folder === 'settings'){
-      document.getElementById('composeModal').classList.remove('open');
-      alert('Settings isn\'t wired up in this preview — everything else is fully interactive.');
-      return;
-    }
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    item.classList.add('active');
-    currentFolder = item.dataset.folder;
-    selectedId = null;
-    document.getElementById('readingPane').innerHTML = `
-      <div class="reading-empty">
-        <svg viewBox="0 0 24 24"><path d="M3 8l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+function renderDetail(mail){
+  const panel = document.getElementById('detailPanel');
+  if(!mail){
+    panel.innerHTML = `
+      <div class="empty-state">
+        <i class="fa-regular fa-envelope-open"></i>
         <p>Select a message to read it. Nothing here ever passes through a server that can see it in plaintext.</p>
       </div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="detail-header-top">
+      <div class="tag-row">
+        ${rbadge(mail.route).replace('rbadge', 'tag')}
+        <div class="tag encrypted"><i class="fa-solid fa-lock"></i> End-to-end encrypted</div>
+      </div>
+      <div class="detail-actions">
+        <button title="Star"><i class="fa-regular fa-star ${mail.starred?'active':''}"></i></button>
+        <button title="Print"><i class="fa-solid fa-print"></i></button>
+        <button title="More"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+      </div>
+    </div>
+
+    <div class="mail-date">${mail.date}</div>
+    <h1 class="mail-subject">${mail.subject}</h1>
+
+    ${mail.thread.length ? `
+    <div class="thread-history">
+      ${mail.thread.map(t => `
+        <div class="thread-item">
+          <div class="avatar" style="background:${t.who==='You' ? 'var(--accent)' : mail.color};font-size:0.6rem;">${t.who==='You'?'Y':mail.initial}</div>
+          <span style="font-weight:600;">${t.who}</span>
+          <span class="thread-text">— ${t.text}</span>
+          <span style="color:var(--ink-faint);font-size:0.7rem;">${t.time}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    <div class="main-message">
+      <div class="msg-header">
+        <div class="avatar" style="background:${mail.color};">${mail.initial}</div>
+        <div>
+          <div class="msg-name">${mail.sender}</div>
+          <div class="msg-addr">${mail.addr || ''}</div>
+        </div>
+        <span class="msg-time">${mail.date}</span>
+      </div>
+      <div class="msg-body">${mail.body.map(p => `<p>${p}</p>`).join('')}</div>
+    </div>
+
+    <div class="reply-box">
+      <textarea placeholder="Write your message…"></textarea>
+      <div class="reply-toolbar">
+        <div class="format-tools">
+          <i class="fa-solid fa-bold"></i><i class="fa-solid fa-italic"></i><i class="fa-solid fa-underline"></i>
+          <i class="fa-solid fa-list-ul"></i><i class="fa-solid fa-list-ol"></i>
+          <i class="fa-solid fa-align-left"></i><i class="fa-solid fa-align-center"></i><i class="fa-solid fa-align-right"></i>
+        </div>
+        <div class="send-actions">
+          <i class="fa-solid fa-paperclip"></i>
+          <i class="fa-regular fa-image"></i>
+          <i class="fa-solid fa-microphone"></i>
+          <button class="btn-send">Send <i class="fa-regular fa-paper-plane"></i></button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll('.format-tools i').forEach(icon => {
+    icon.addEventListener('click', () => icon.classList.toggle('active'));
+  });
+  const sendBtn = panel.querySelector('.btn-send');
+  if(sendBtn) sendBtn.addEventListener('click', () => {
+    const ta = panel.querySelector('textarea');
+    if(ta) ta.value = '';
+  });
+}
+
+// ---- folder nav ----
+document.querySelectorAll('#folderList li').forEach(li => {
+  li.addEventListener('click', () => {
+    document.querySelectorAll('#folderList li').forEach(l => l.classList.remove('active'));
+    li.classList.add('active');
+    currentFolder = li.dataset.folder;
+    selectedId = null;
+    renderList();
+    renderDetail(null);
+  });
+});
+
+// ---- route quick filter (toggle) ----
+document.querySelectorAll('#routeList li').forEach(li => {
+  li.addEventListener('click', () => {
+    const route = li.dataset.route;
+    if(currentRoute === route){
+      currentRoute = null;
+      li.classList.remove('active');
+    } else {
+      document.querySelectorAll('#routeList li').forEach(l => l.classList.remove('active'));
+      currentRoute = route;
+      li.classList.add('active');
+    }
     renderList();
   });
 });
 
-/* ---- sidebar collapse ---- */
-(function(){
-  const sidebar = document.getElementById('sidebar');
-  const main = sidebar.closest('.main');
-  const btn = document.getElementById('sidebarCollapse');
+// ---- top-rail nav: switches between Mail, Node network, Contacts and Settings ----
+function showView(view){
+  document.querySelector('.list-panel').classList.toggle('hidden', view !== 'inbox');
+  document.getElementById('detailPanel').classList.toggle('hidden', view !== 'inbox');
+  document.getElementById('settingsPanel').classList.toggle('active', view === 'settings');
+  document.getElementById('networkPanel').classList.toggle('active', view === 'network');
+  document.getElementById('contactsPanel').classList.toggle('active', view === 'contacts');
+}
+
+document.querySelectorAll('.nav-icons button').forEach(btn => {
   btn.addEventListener('click', () => {
-    sidebar.classList.toggle('collapsed');
-    main.classList.toggle('sidebar-collapsed');
-    btn.title = sidebar.classList.contains('collapsed') ? 'Show sidebar' : 'Hide sidebar';
+    document.querySelectorAll('.nav-icons button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    showView(btn.dataset.nav);
   });
-})();
-
-document.getElementById('searchInput').addEventListener('input', renderList);
-
-const composeModal = document.getElementById('composeModal');
-document.getElementById('composeOpen').addEventListener('click', () => composeModal.classList.add('open'));
-document.getElementById('composeClose').addEventListener('click', () => composeModal.classList.remove('open'));
-document.getElementById('sendBtn').addEventListener('click', () => {
-  composeModal.classList.remove('open');
-  composeModal.querySelectorAll('input, textarea').forEach(el => el.value = '');
 });
 
-/* ---- generic draggable-window helper ---- */
-function makeDraggable(modal, handle){
-  let dragging = false, offsetX = 0, offsetY = 0;
-  handle.addEventListener('mousedown', (e) => {
-    if(e.target.closest('button')) return;
-    const rect = modal.getBoundingClientRect();
-    modal.style.left = rect.left + 'px';
-    modal.style.top = rect.top + 'px';
-    modal.style.right = 'auto';
-    modal.style.bottom = 'auto';
-    modal.style.transform = 'none';
-    dragging = true;
-    offsetX = e.clientX - rect.left;
-    offsetY = e.clientY - rect.top;
-    document.body.style.userSelect = 'none';
-  });
-  window.addEventListener('mousemove', (e) => {
-    if(!dragging) return;
-    const w = modal.offsetWidth, h = modal.offsetHeight;
-    let x = e.clientX - offsetX;
-    let y = e.clientY - offsetY;
-    x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
-    y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
-    modal.style.left = x + 'px';
-    modal.style.top = y + 'px';
-  });
-  window.addEventListener('mouseup', () => {
-    dragging = false;
-    document.body.style.userSelect = '';
+// ---- contacts ----
+const contacts = [
+  { name:'Priya Shah', addr:'narada1p8y…2qxa', initial:'P', color:'#C99B76', route:'direct' },
+  { name:'Tomás Reyes', addr:'narada1t4m…9jwv', initial:'T', color:'#A97635', route:'gateway' },
+  { name:'Aiko Fujimori', addr:'narada1a2i…7dpc', initial:'A', color:'#4C7A61', route:'relay' },
+  { name:'Marcus Webb', addr:'narada1m3c…5tqz', initial:'M', color:'#8FA9C4', route:'direct' },
+  { name:'Yuki Tanaka', addr:'narada1y2t…8rvn', initial:'Y', color:'#B98CA0', route:'direct' },
+];
+
+function renderContacts(){
+  const q = document.getElementById('contactsSearch').value.trim().toLowerCase();
+  const list = document.getElementById('contactList');
+  const items = contacts.filter(c => (c.name + c.addr).toLowerCase().includes(q));
+  if(items.length === 0){
+    list.innerHTML = `<div style="padding:24px 0;color:var(--ink-faint);font-size:0.82rem;">No contacts match “${q}”.</div>`;
+    return;
+  }
+  list.innerHTML = items.map(c => `
+    <div class="contact-row">
+      <div class="avatar" style="background:${c.color};">${c.initial}</div>
+      <div class="contact-main">
+        <div class="contact-name">${c.name}</div>
+        <div class="contact-addr">${c.addr}</div>
+      </div>
+      ${rbadge(c.route)}
+      <button class="icon-mini-btn" title="Message"><i class="fa-regular fa-paper-plane"></i></button>
+    </div>
+  `).join('');
+}
+document.getElementById('contactsSearch').addEventListener('input', renderContacts);
+document.getElementById('addContact').addEventListener('click', () => {
+  alert('Adding a contact isn\'t wired up in this preview.');
+});
+renderContacts();
+
+// ---- node network: add-bootstrap placeholder ----
+document.getElementById('addBootstrap').addEventListener('click', () => {
+  const val = document.getElementById('bootstrapInput').value.trim();
+  if(val) alert('Bootstrap peers aren\'t wired up in this preview — would add: ' + val);
+});
+
+// ---- menu collapse ----
+document.getElementById('menuCollapse').addEventListener('click', () => {
+  const panel = document.getElementById('menuPanel');
+  panel.classList.toggle('collapsed');
+  const icon = document.querySelector('#menuCollapse i');
+  icon.style.transform = panel.classList.contains('collapsed') ? 'rotate(180deg)' : 'rotate(0deg)';
+});
+
+// ---- search ----
+document.getElementById('searchInput').addEventListener('input', renderList);
+
+// ---- compose (simple inline placeholder) ----
+document.getElementById('composeOpen').addEventListener('click', () => {
+  alert('Compose isn\'t wired up in this preview.');
+});
+
+// ---- theme toggle (rail button + settings page stay in sync) ----
+function setTheme(next){
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('narada-theme', next);
+  document.querySelectorAll('#settingsThemeGroup .seg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.themeChoice === next);
   });
 }
-makeDraggable(composeModal, composeModal.querySelector('.compose-head'));
-
-renderList();
-
-/* ---- theme toggle ---- */
 (function(){
-  const root = document.documentElement;
-  const saved = localStorage.getItem('narada-theme');
-  if(saved) root.setAttribute('data-theme', saved);
+  const saved = localStorage.getItem('narada-theme') || 'light';
+  setTheme(saved);
   document.getElementById('themeToggle').addEventListener('click', () => {
-    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    localStorage.setItem('narada-theme', next);
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+  });
+  document.querySelectorAll('#settingsThemeGroup .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTheme(btn.dataset.themeChoice));
   });
 })();
+
+// ---- settings: preferred-route segmented control ----
+document.querySelectorAll('#settingsRouteGroup .seg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#settingsRouteGroup .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// ---- settings: copy node id ----
+document.querySelectorAll('.settings-node-id button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const text = btn.previousElementSibling.textContent;
+    navigator.clipboard.writeText(text).catch(() => {});
+  });
+});
+
+// ---- settings: mnemonic reveal (placeholder — never actually show real key material here) ----
+document.getElementById('revealMnemonic').addEventListener('click', () => {
+  alert('Recovery-phrase reveal isn\'t wired up in this preview.');
+});
+
+renderList();
+renderDetail(mails.find(m => m.id === selectedId));
 </script>
 </body>
-</html>
+</html> 

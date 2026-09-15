@@ -272,14 +272,118 @@
     import Content from "$lib/ui/Layout/Main/Content/Mailbox/Content.svelte";
     import { setContext } from "svelte";
     import { PreferenceManager, PreferenceStore } from "$lib/preferences";
+    import { debounce } from "$lib/utils";
+    import { REALTIME_SEARCH_DELAY_MS } from "$lib/constants";
+    import { show as showMessage } from "$lib/ui/Components/Message";
+    import { local } from "$lib/locales";
+    import { DEFAULT_LANGUAGE } from "$lib/constants";
 
     setContext<MailboxContext>(CONTEXT_KEY, {
         currentOffset,
         emailSelection,
         getGroupedUidSelection: () => groupedUidSelection,
     });
+
+    let searchQuery = $state("");
+
+    const runSearch = async (query: string) => {
+        const accounts =
+            SharedStore.currentAccount === "home"
+                ? SharedStore.accounts
+                : [SharedStore.currentAccount];
+        if (accounts.length === 0 || accounts[0] === undefined) return;
+
+        if (query.trim().length >= 3) {
+            const results = await Promise.allSettled(
+                accounts.map(async (account) => {
+                    const response = await MailboxController.getMailbox(
+                        account,
+                        undefined,
+                        query.trim(),
+                    );
+                    if (!response.success) throw new Error(response.message);
+                }),
+            );
+            const failed = results.filter((r) => r.status === "rejected");
+            if (failed.length > 0) {
+                showMessage({ title: local.error_search_emails[DEFAULT_LANGUAGE] });
+                failed.forEach((f) => console.error(f.reason));
+            }
+        } else if (query.length === 0) {
+            // Empty query restores the current folder's mailbox.
+            const restore = await Promise.allSettled(
+                accounts.map((account) =>
+                    MailboxController.getMailbox(account),
+                ),
+            );
+            if (restore.some((r) => r.status === "rejected")) {
+                showMessage({
+                    title: local.error_search_emails[DEFAULT_LANGUAGE],
+                });
+            }
+        }
+    };
+
+    const debouncedSearch = debounce(
+        (e: Event) => runSearch((e.currentTarget as HTMLInputElement).value),
+        REALTIME_SEARCH_DELAY_MS,
+    );
 </script>
 
+<div class="search-container">
+    <div class="search-box">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input
+            type="text"
+            bind:value={searchQuery}
+            oninput={debouncedSearch}
+            placeholder="Search mail"
+        />
+    </div>
+</div>
 <Context />
 <Toolbox />
 <Content />
+
+<style>
+    :global {
+        .search-container {
+            padding: 20px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .search-container .search-box {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            padding: 9px 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .search-container .search-box svg {
+            color: var(--ink-faint);
+            width: 15px;
+            height: 15px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            flex-shrink: 0;
+        }
+
+        .search-container .search-box input {
+            border: none;
+            background: transparent;
+            outline: none;
+            width: 100%;
+            font-size: 0.85rem;
+            color: var(--ink);
+            font-family: var(--body);
+        }
+
+        .search-container .search-box input::placeholder {
+            color: var(--ink-faint);
+        }
+    }
+</style>

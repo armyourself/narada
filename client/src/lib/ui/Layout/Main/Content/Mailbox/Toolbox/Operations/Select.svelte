@@ -35,7 +35,7 @@
     });
 
     const selectShownEmails = () => {
-        mailboxContext.emailSelection.value = selectShownCheckbox.checked
+        mailboxContext.emailSelection.value = selectShownCheckbox?.checked
             ? shownEmailUids
             : [];
     };

@@ -1,20 +1,33 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import path from "path";
 
-// https://vitejs.dev/config/
+var inTauri = !!process.env.TAURI_PLATFORM;
+
+function resolveTauri(pkg) {
+    return inTauri ? pkg : path.resolve("src/lib/mocks", pkg + ".ts");
+}
+
 export default defineConfig(async () => ({
   plugins: [sveltekit()],
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent vite from obscuring rust errors
+  resolve: {
+    alias: {
+      "@tauri-apps/api/window":               resolveTauri("tauri-api-window"),
+      "@tauri-apps/api/path":                 resolveTauri("tauri-api-path"),
+      "@tauri-apps/plugin-fs":                resolveTauri("tauri-plugin-fs"),
+      "@tauri-apps/plugin-notification":      resolveTauri("tauri-plugin-notification"),
+      "@tauri-apps/plugin-autostart":         resolveTauri("tauri-plugin-autostart"),
+      "@tauri-apps/plugin-os":                resolveTauri("tauri-plugin-os"),
+      "@tauri-apps/plugin-process":           resolveTauri("tauri-plugin-process"),
+    },
+  },
+
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
     strictPort: true,
     watch: {
-      // 3. tell vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
   },

@@ -32,7 +32,7 @@
         const selectAllButton = event.target as HTMLButtonElement;
         mailboxContext.emailSelection.value = "1:*";
         selectAllButton.innerHTML = getMailboxClearSelectionTemplate();
-        selectShownCheckbox.checked = true;
+        if (selectShownCheckbox) selectShownCheckbox.checked = true;
     };
 
     const deselectAllEmails = (event: Event) => {
@@ -41,7 +41,7 @@
         selectAllButton.innerHTML = getMailboxSelectAllTemplate(
             getCurrentMailbox().total.toString(),
         );
-        selectShownCheckbox.checked = false;
+        if (selectShownCheckbox) selectShownCheckbox.checked = false;
     };
 
     const emptyTrash = async () => {

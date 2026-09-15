@@ -7,6 +7,8 @@
     import EmailPreview from "./Content/EmailPreview.svelte";
     import { onMount } from "svelte";
     import { getCurrentMailbox } from "$lib/ui/Layout/Main/Content/Mailbox.svelte";
+    import { MainNav } from "$lib/stores/mainNav.svelte";
+    import { emailRoute } from "$lib/ui/Components/RouteBadge.svelte";
 
     type DateGroup =
         | (typeof local.today)[typeof DEFAULT_LANGUAGE]
@@ -40,6 +42,15 @@
             const emailDate = new Date(email.date);
             emailDate.setHours(0, 0, 0, 0);
 
+            // Route quick-filter: skip emails not matching the menu filter.
+            if (
+                MainNav.routeFilter &&
+                emailRoute(email) !== MainNav.routeFilter
+            ) {
+                return;
+            }
+
+
             if (emailDate.getTime() === today.getTime()) {
                 groupedEmails[local.today[DEFAULT_LANGUAGE]].push(email);
             } else if (emailDate.getTime() === yesterday.getTime()) {
@@ -64,11 +75,14 @@
         const selectShownCheckbox = document.getElementById(
             "select-shown"
         ) as HTMLInputElement;
+        // The select-all checkbox lives in the mailbox toolbox, which the
+        // current list design does not render; absence is not an error.
+        if (!selectShownCheckbox) return;
         selectShownCheckbox.addEventListener("change", (e: Event) => {
             const target = e.target as HTMLInputElement;
             isSelectShownChecked = target.checked;
         });
-    })
+    });
 </script>
 
 <div class="mailbox">
