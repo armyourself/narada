@@ -28,12 +28,12 @@ class MessageSource(str, Enum):
 
     Used by the Narada client UI to show a small indicator distinguishing
     messages delivered over conventional email (IMAP) from those delivered
-    over the Narada protocol. Today only ``IMAP`` is produced; ``Narada``
-    will appear in Phase 2+.
+    over the Narada protocol or Nostr transport.
     """
 
     IMAP = "imap"
     Narada = "Narada"
+    Nostr = "nostr"
 
 
 @dataclass(frozen=True)

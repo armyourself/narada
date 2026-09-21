@@ -106,21 +106,21 @@ Narada is designed as several independent layers.
 │ send() · receive() · sync() · search()      │
 └──────────────────────┬──────────────────────┘
                        │
-             ┌─────────┴─────────┐
-             │                   │
-             ▼                   ▼
-      ┌──────────────┐    ┌───────────────┐
-      │ IMAP / SMTP  │    │ Narada       │
-      │ Adapter      │    │ Protocol      │
-      └──────────────┘    └───────┬───────┘
-                                  │
-                           ┌──────▼──────┐
-                           │ Narada     │
-                           │ Network     │
-                           └─────────────┘
+             ┌─────────┼─────────┐
+             │         │         │
+             ▼         ▼         ▼
+      ┌──────────┐ ┌────────┐ ┌────────┐
+      │ IMAP /   │ │Narada  │ │ Nostr  │
+      │ SMTP     │ │Protocol│ │Adapter │
+      │ Adapter  │ └───┬────┘ └───┬────┘
+      └──────────┘     │          │
+                 ┌─────▼───┐ ┌────▼─────┐
+                 │ Narada  │ │  Nostr   │
+                 │ Network │ │  Relays  │
+                 └─────────┘ └──────────┘
 ```
 
-The client should not need to know whether a message arrived through conventional email infrastructure or the Narada protocol.
+The client should not need to know whether a message arrived through conventional email infrastructure, the Narada protocol, or Nostr relays.
 
 ---
 
@@ -411,6 +411,33 @@ Narada-specific work landed so far (under `node/` and `protocol/`):
   `POST /Narada/identity/key-update`).
 * The formal protocol specification is **not yet implemented**
   (Phase 6).
+
+Narada-specific work for Nostr integration:
+
+* **Nostr transport adapter** (`node/src/nostr/`, new):
+  a `NostrAdapter` implementing the `MailAdapter` interface, enabling
+  Narada to send/receive messages through Nostr relays instead of
+  (or in addition to) the legacy Narada protocol. The adapter
+  translates between Narada email semantics and Nostr events, supports
+  multiple relay failover, and handles encryption/decryption transparently.
+* **Nostr identity** (`node/src/nostr/identity.py`): Nostr-compatible
+  identity layer using Ed25519 keys with hex encoding (NIP-01) and
+  bech32 encoding (NIP-19 npub/nsec). Supports deriving Nostr identities
+  from existing Narada Ed25519 seeds for migration.
+* **Nostr events** (`node/src/nostr/events.py`): NIP-01 event creation,
+  signing, and verification. Includes a Narada-specific event kind (1050)
+  for email messages, plus filters for subscription.
+* **NIP-04 encryption** (`node/src/nostr/encryption.py`): AES-256-CBC
+  encrypted direct messages per NIP-04, with proper Ed25519→X25519 key
+  conversion for ECDH. Also includes a ChaCha20-Poly1305 (NIP-44-like)
+  mode for Narada-to-Narada communication.
+* **Nostr relay pool** (`node/src/nostr/relay.py`): multi-relay support
+  with automatic failover, deduplication, reconnection, and subscription
+  management. Narada does not depend on a single relay.
+* **Nostr configuration** (`node/src/nostr/config.py`): transport
+  selection (`nostr`/`legacy_narada`/`smtp`), relay URLs, encryption
+  method, and other settings. Configurable via JSON file or environment
+  variables.
 
 ---
 
