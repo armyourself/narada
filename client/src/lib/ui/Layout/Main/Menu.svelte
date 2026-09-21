@@ -115,7 +115,7 @@
     </button>
     <div class="menu-inner">
         <div class="menu-header">
-            <h2>Openmail</h2>
+            <h2>Narada</h2>
         </div>
         <div class="peer-pill"><span class="live"></span> node offline</div>
 

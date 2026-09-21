@@ -1,6 +1,6 @@
 // TODO: Check out here later...
 
-export const APP_NAME = "Openmail";
+export const APP_NAME = "Narada";
 export const DEFAULT_LANGUAGE = "en"; // TODO: Remove this later.
 export const DEFAULT_SERVER_URL = "http://127.0.0.1:8000";
 

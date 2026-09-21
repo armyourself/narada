@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Openmail is an alpha-grade decentralized email application using Nostr transport. It's a monorepo with two packages:
+Narada is an alpha-grade decentralized email application using Nostr transport. It's a monorepo with two packages:
 
 - `node/` - Python/FastAPI server (core application)
 - `client/` - SvelteKit + Tauri desktop client

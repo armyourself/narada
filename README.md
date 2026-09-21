@@ -1,4 +1,4 @@
-<h1 align="center">Openmail</h1>
+<h1 align="center">Narada</h1>
 
 <p align="center">
   Decentralized email with Nostr transport.
@@ -19,8 +19,7 @@
 ## What is this?
 
 An open-source email application that uses [Nostr](https://nostr.com) as its
-decentralized transport layer. Instead of relying on centralized email servers,
-messages are published to Nostr relays as encrypted events.
+decentralized transport layer.
 
 ```text
     Email Client
@@ -283,14 +282,14 @@ Contributions are welcome, particularly around:
 
 This project is derived from
 [Openmail](https://github.com/burakorkmez/openmail), an open-source
-self-hosted email client/server. The original project's license and
-attribution requirements remain applicable to the code derived from it.
+self-hosted email client/server. Narada extends that foundation with
+decentralized Nostr transport.
 
 See [`LICENSE`](LICENSE) for details (Apache License 2.0).
 
 ---
 
 <p align="center">
-  <strong>Openmail</strong><br>
+  <strong>Narada</strong><br>
   Decentralized email with Nostr transport.
 </p>

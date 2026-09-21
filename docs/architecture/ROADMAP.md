@@ -1,9 +1,9 @@
-# Openmail - Roadmap:
+# Narada - Roadmap:
 
 > [!NOTE]
 > The roadmap is still a work in progress and will be updated frequently.
 
-Current development progress for Openmail `v0.0.1-alpha0`:
+Current development progress for Narada `v0.0.1-alpha0`:
 
 ## App
 - [x] ~~macOS support~~

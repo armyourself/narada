@@ -1,10 +1,10 @@
-# Openmail – Installation Guide
+# Narada – Installation Guide
 
-This document describes the installation and setup process for Openmail.
+This document describes the installation and setup process for Narada.
 
-Openmail consists of two components:
-- Openmail App – the client application (referred to as app in this guide)
-- Openmail Server – the backend service (referred to as server in this guide)
+Narada consists of two components:
+- Narada App – the client application (referred to as app in this guide)
+- Narada Server – the backend service (referred to as server in this guide)
 
 ## Downloads
 
@@ -13,16 +13,16 @@ Each release contains the following assets:
 
 | Platform                 | Component | File Name                                   |
 | ------------------------ | --------- | ------------------------------------------- |
-| Windows              | Server             | `Openmail-Server_v0.0.1-alpha0_windows.exe` |
-| Windows                  | App              | `Openmail_v0.0.1-alpha0_windows.exe`        |
-| macOS (Intel)        | Server          | `Openmail-Server_v0.0.1-alpha0_macos-x64`   |
-| macOS (Apple Silicon)    | Server            | `Openmail-Server_v0.0.1-alpha0_macos-arm64` |
-| macOS (Intel)            | App                 | `Openmail_v0.0.1-alpha0_macos-x64.dmg`      |
-| macOS (Apple Silicon)    | App               | `Openmail_v0.0.1-alpha0_macos-arm64.dmg`    |
-| Linux (Universal)        | Server           | `Openmail-Server_v0.0.1-alpha0_linux`       |
-| Linux (Debian-based) | App               | `Openmail_v0.0.1-alpha0_linux.deb`    |
-| Linux (Red Hat-based)    | App               | `Openmail_v0.0.1-alpha0_linux.rpm`    |
-| Linux (Universal)        | App            | `Openmail_v0.0.1-alpha0_linux.AppImage`     |
+| Windows              | Server             | `Narada-Server_v0.0.1-alpha0_windows.exe` |
+| Windows                  | App              | `Narada_v0.0.1-alpha0_windows.exe`        |
+| macOS (Intel)        | Server          | `Narada-Server_v0.0.1-alpha0_macos-x64`   |
+| macOS (Apple Silicon)    | Server            | `Narada-Server_v0.0.1-alpha0_macos-arm64` |
+| macOS (Intel)            | App                 | `Narada_v0.0.1-alpha0_macos-x64.dmg`      |
+| macOS (Apple Silicon)    | App               | `Narada_v0.0.1-alpha0_macos-arm64.dmg`    |
+| Linux (Universal)        | Server           | `Narada-Server_v0.0.1-alpha0_linux`       |
+| Linux (Debian-based) | App               | `Narada_v0.0.1-alpha0_linux.deb`    |
+| Linux (Red Hat-based)    | App               | `Narada_v0.0.1-alpha0_linux.rpm`    |
+| Linux (Universal)        | App            | `Narada_v0.0.1-alpha0_linux.AppImage`     |
 
 
 ## Installation
@@ -44,7 +44,7 @@ Each release contains the following assets:
 
 ### Windows
 
-1. Download **`Openmail-Server_v0.0.1-alpha0_windows.exe`**.
+1. Download **`Narada-Server_v0.0.1-alpha0_windows.exe`**.
 2. Run the executable.
 3. The server will start immediately.
 4. Continue to install [app](#windows-1)
@@ -52,15 +52,15 @@ Each release contains the following assets:
 ### macOS (Intel & Apple Silicon)
 
 1. Download the correct file for your chipset:
-   * **Intel:** `Openmail-Server_v0.0.1-alpha0_macos-x64`
-   * **Apple Silicon (M1/M2/M3):** `Openmail-Server_v0.0.1-alpha0_macos-arm64`
+   * **Intel:** `Narada-Server_v0.0.1-alpha0_macos-x64`
+   * **Apple Silicon (M1/M2/M3):** `Narada-Server_v0.0.1-alpha0_macos-arm64`
 2. Make it executable:
    ```bash
-   chmod +x Openmail-Server_v0.0.1-alpha0_macos-*
+   chmod +x Narada-Server_v0.0.1-alpha0_macos-*
    ```
 3. Run it:
    ```bash
-   ./Openmail-Server_v0.0.1-alpha0_macos-*
+   ./Narada-Server_v0.0.1-alpha0_macos-*
    ```
 4. Continue to install [app](#macos-intel--apple-silicon-1)
 
@@ -68,15 +68,15 @@ Each release contains the following assets:
 
 1. Download the standalone binary:
    ```
-   Openmail-Server_v0.0.1-alpha0_linux
+   Narada-Server_v0.0.1-alpha0_linux
    ```
 2. Make executable:
    ```bash
-   chmod +x Openmail-Server_v0.0.1-alpha0_linux
+   chmod +x Narada-Server_v0.0.1-alpha0_linux
    ```
 3. Run:
    ```bash
-   ./Openmail-Server_v0.0.1-alpha0_linux
+   ./Narada-Server_v0.0.1-alpha0_linux
    ```
 4. Continue to install [app](#app)
 
@@ -84,18 +84,18 @@ Each release contains the following assets:
 
 ### Windows
 
-1. Download **`Openmail_v0.0.1-alpha0_windows.exe`**.
+1. Download **`Narada_v0.0.1-alpha0_windows.exe`**.
 2. Run the installer.
-3. Launch **Openmail** from Start Menu or Desktop.
+3. Launch **Narada** from Start Menu or Desktop.
 4. Continue with [configuration](#configuration).
 
 ### macOS (Intel & Apple Silicon)
 
 1. Download the appropriate DMG:
-   * **Intel:** `Openmail_v0.0.1-alpha0_macos-x64.dmg`
-   * **Apple Silicon (arm):** `Openmail_v0.0.1-alpha0_macos-arm64.dmg`
+   * **Intel:** `Narada_v0.0.1-alpha0_macos-x64.dmg`
+   * **Apple Silicon (arm):** `Narada_v0.0.1-alpha0_macos-arm64.dmg`
 2. Open the `.dmg`.
-3. Drag **Openmail.app** into Applications.
+3. Drag **Narada.app** into Applications.
 4. Open it (you may need to right-click → Open for Gatekeeper).
 5. Continue with [configuration](#configuration).
 
@@ -103,15 +103,15 @@ Each release contains the following assets:
 
 1. Download:
    ```
-   Openmail_v0.0.1-alpha0_linux.deb
+   Narada_v0.0.1-alpha0_linux.deb
    ```
 2. Install:
    ```bash
-   sudo apt install Openmail_v0.0.1-alpha0_linux.deb
+   sudo apt install Narada_v0.0.1-alpha0_linux.deb
    ```
 3. Launch:
    ```bash
-   Openmail
+   Narada
    ```
 4. Continue with [configuration](#configuration).
 
@@ -119,15 +119,15 @@ Each release contains the following assets:
 
 1. Download:
    ```
-   Openmail_v0.0.1-alpha0_linux.rpm
+   Narada_v0.0.1-alpha0_linux.rpm
    ```
 2. Install:
    ```bash
-   sudo dnf install Openmail_v0.0.1-alpha0_linux.rpm
+   sudo dnf install Narada_v0.0.1-alpha0_linux.rpm
    ```
 3. Launch:
    ```bash
-   Openmail
+   Narada
    ```
 4. Continue with [configuration](#configuration).
 
@@ -135,15 +135,15 @@ Each release contains the following assets:
 
 1. Download the AppImage:
    ```
-   Openmail_v0.0.1-alpha0_linux.AppImage
+   Narada_v0.0.1-alpha0_linux.AppImage
    ```
 2. Make it executable:
    ```bash
-   chmod +x Openmail_v0.0.1-alpha0_linux.AppImage
+   chmod +x Narada_v0.0.1-alpha0_linux.AppImage
    ```
 3. Launch:
    ```bash
-   ./Openmail_v0.0.1-alpha0_linux.AppImage
+   ./Narada_v0.0.1-alpha0_linux.AppImage
    ```
 4. Continue with [configuration](#configuration).
 
@@ -158,7 +158,7 @@ need to restart it to change the configuration.
 2- When you launch the app, configure the same host and port during the initial setup
 (or later via the Settings page) so it can connect to your running server.
 3- Once the app is connected to the server, you can add your email accounts and start
-exploring everything Openmail offers.
+exploring everything Narada offers.
 
 ## Building from Source (Optional)
 
@@ -169,8 +169,8 @@ If you prefer to build manually:
 cd server
 uv sync
 uv pip install pyinstaller
-uv run pyinstaller --onefile --name openmail-server --paths=. src/main.py
-# Server build outputs will be in ./dist/openmail-server
+uv run pyinstaller --onefile --name narada-server --paths=. src/main.py
+# Server build outputs will be in ./dist/narada-server
 
 # App
 cd app
@@ -182,11 +182,11 @@ bun tauri build
 ## Updating
 
 > [!WARNING]
-> Openmail does **not currently have auto-update feature.**
+> Narada does **not currently have auto-update feature.**
 
 1. Go to the [latest release](../../releases/latest) page on GitHub.
 2. Download the latest **app** and **server** builds for your operating system.
-3. Replace your existing `openmail` app and `openmail-server` files with the new ones.
+3. Replace your existing `narada` app and `narada-server` files with the new ones.
 4. Restart both to complete the update.
 
 ## Troubleshooting
@@ -205,11 +205,11 @@ which pyinstaller  # should point inside .venv/bin/
 # you can try to install it within the .venv like
 source .venv/bin/activate # or .venv\Scripts\Activate for windows
 uv pip install pyinstaller
-pyinstaller --onefile --name openmail-server --paths=. src/main.py
+pyinstaller --onefile --name narada-server --paths=. src/main.py
 
 # If pyinstaller is IN the .venv then:
 uv pip install pyinstaller
-uv run pyinstaller --onefile --name openmail-server --paths=. src/main.py
+uv run pyinstaller --onefile --name narada-server --paths=. src/main.py
 ```
 
 ---
@@ -232,4 +232,4 @@ bun tauri build
 
 ---
 
-**Enjoy using Openmail! Feel free to contributing**
+**Enjoy using Narada! Feel free to contributing**
