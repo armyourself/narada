@@ -2,7 +2,14 @@
     import { SharedStore } from "$lib/stores/shared.svelte";
     import { nostrIdentity } from "$lib/nostr/identity.svelte";
     import { show as showToast } from "$lib/ui/Components/Toast";
+    import { onMount } from "svelte";
     import type { Account } from "$lib/types";
+
+    interface RelayRow {
+        url: string;
+        connected: boolean;
+        last_error: string | null;
+    }
 
     interface PeerRow {
         status: "up" | "down";
@@ -12,19 +19,17 @@
     }
 
     let bootstrapInput = $state("");
+    let relays: RelayRow[] = $state([]);
+    let isLoadingRelays = $state(false);
 
     let nodeId = $derived(
-        nostrIdentity.state.publicId ?? "no identity on this account",
+        nostrIdentity.state.npub ||
+        nostrIdentity.state.publicId ||
+        "no identity on this account",
     );
 
     let accounts = $derived(SharedStore.accounts);
 
-    /**
-     * Server-reachable accounts. The node daemon has no peer-list HTTP
-     * API yet, so "peers" here are the mailbox accounts the daemon
-     * reports it can talk to; everything else in this view is stubbed
-     * until the QUIC PeerBook is exposed over HTTP (Phase 6).
-     */
     let peers = $derived.by(() => {
         const rows: PeerRow[] = accounts.map((account) => ({
             status: "up",
@@ -45,24 +50,51 @@
 
     let upCount = $derived(peers.filter((p) => p.status === "up").length);
     let downCount = $derived(peers.filter((p) => p.status === "down").length);
+    let relaysConnected = $derived(relays.filter((r) => r.connected).length);
+
+    async function fetchRelays() {
+        isLoadingRelays = true;
+        try {
+            const res = await fetch(`${SharedStore.server}/nostr/relays`);
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) {
+                relays = json.data;
+            }
+        } catch {
+            relays = [];
+        } finally {
+            isLoadingRelays = false;
+        }
+    }
+
+    onMount(() => {
+        fetchRelays();
+    });
 
     async function copyNodeId() {
         try {
             await navigator.clipboard.writeText(nodeId);
             showToast({ content: "node id copied" });
         } catch {
-            /* clipboard unavailable (e.g. insecure context) — ignore */
+            /* clipboard unavailable — ignore */
         }
     }
 
     function addBootstrap() {
         const value = bootstrapInput.trim();
         if (!value) return;
-        // The daemon does not accept bootstrap peers over HTTP yet.
         showToast({
             content: "bootstrap peers need the node API — not wired yet",
         });
         bootstrapInput = "";
+    }
+
+    function relayName(url: string): string {
+        try {
+            return new URL(url).hostname;
+        } catch {
+            return url;
+        }
     }
 </script>
 
@@ -81,31 +113,64 @@
         <div class="settings-row">
             <div>
                 <div class="settings-row-label">Status</div>
-                <div class="settings-row-desc">Listening on QUIC, discoverable via mDNS.</div>
+                <div class="settings-row-desc">Connected to Nostr relays for decentralized mail delivery.</div>
             </div>
-            <div class="tag"><span class="status-dot up"></span>Online</div>
+            <div class="tag">
+                <span class="status-dot" class:up={relaysConnected > 0} class:down={relaysConnected === 0}></span>
+                {relaysConnected > 0 ? `${relaysConnected} relay${relaysConnected !== 1 ? "s" : ""}` : "offline"}
+            </div>
         </div>
     </div>
 
     <div class="settings-section">
         <h3>Network health</h3>
         <div class="stat-row">
-            <div class="stat"><span class="stat-num">{peers.length}</span><span class="stat-label">peers connected</span></div>
-            <div class="stat"><span class="stat-num">{upCount}</span><span class="stat-label">reachable</span></div>
-            <div class="stat"><span class="stat-num">0</span><span class="stat-label">relayed</span></div>
-            <div class="stat"><span class="stat-num">{downCount}</span><span class="stat-label">down</span></div>
+            <div class="stat"><span class="stat-num">{relays.length}</span><span class="stat-label">relays configured</span></div>
+            <div class="stat"><span class="stat-num">{relaysConnected}</span><span class="stat-label">connected</span></div>
+            <div class="stat"><span class="stat-num">{peers.length}</span><span class="stat-label">accounts</span></div>
+            <div class="stat"><span class="stat-num">{downCount}</span><span class="stat-label">failed</span></div>
         </div>
     </div>
 
     <div class="settings-section">
-        <h3>Connected peers</h3>
+        <h3>Nostr relays</h3>
+        {#if isLoadingRelays}
+            <div class="empty-note">Loading relay status…</div>
+        {:else if relays.length === 0}
+            <div class="empty-note">No relays configured. Register a Nostr identity to connect.</div>
+        {:else}
+            <div class="peer-list">
+                {#each relays as relay}
+                    <div class="peer-row">
+                        <span class="status-dot" class:up={relay.connected} class:down={!relay.connected}></span>
+                        <div class="peer-main">
+                            <div class="peer-name">{relayName(relay.url)}</div>
+                            <div class="peer-addr">{relay.url}</div>
+                        </div>
+                        <div class="peer-meta">
+                            {#if relay.connected}
+                                connected
+                            {:else if relay.last_error}
+                                {relay.last_error}
+                            {:else}
+                                disconnected
+                            {/if}
+                        </div>
+                    </div>
+                {/each}
+            </div>
+        {/if}
+    </div>
+
+    <div class="settings-section">
+        <h3>Connected accounts</h3>
         {#if peers.length === 0}
-            <div class="empty-note">No peers yet — the node reports no reachable accounts.</div>
+            <div class="empty-note">No accounts yet.</div>
         {:else}
             <div class="peer-list">
                 {#each peers as peer}
                     <div class="peer-row">
-                        <span class="status-dot {peer.status}"></span>
+                        <span class="status-dot" class:up={peer.status === "up"} class:down={peer.status === "down"}></span>
                         <div class="peer-main">
                             <div class="peer-name">{peer.name}</div>
                             <div class="peer-addr">{peer.addr}</div>
@@ -115,11 +180,6 @@
                 {/each}
             </div>
         {/if}
-        <p class="stub-note">
-            Live QUIC PeerBook data (latency, missed pings, TOFU pins) isn't
-            exposed over the node API yet — this list shows account
-            reachability instead.
-        </p>
     </div>
 
     <div class="settings-section">

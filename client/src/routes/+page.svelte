@@ -1,17 +1,14 @@
 <script lang="ts">
     import { SharedStore } from "$lib/stores/shared.svelte";
     import { MainNav } from "$lib/stores/mainNav.svelte";
-    import Main from "$lib/ui/Layout/Main.svelte";
-    import Content from "$lib/ui/Layout/Main/Content.svelte";
+    import { registry } from "$lib/ui/registry";
     import { getCurrentMailbox } from "$lib/ui/Layout/Main/Content/Mailbox.svelte";
-    import Network from "$lib/ui/Layout/Main/Views/Network.svelte";
-    import Contacts from "$lib/ui/Layout/Main/Views/Contacts.svelte";
-    import Settings from "$lib/ui/Layout/Main/Views/Settings.svelte";
-    import Landing from "$lib/ui/Layout/Landing.svelte";
     import Register from "$lib/ui/Layout/Landing/Register.svelte";
     import Welcome from "$lib/ui/Layout/Landing/Register/Welcome.svelte";
     import Accounts from "$lib/ui/Layout/Landing/Register/Accounts.svelte";
     import SetupServer from "$lib/ui/Layout/Landing/Register/SetupServer.svelte";
+
+    const { layout, dashboard, views } = registry;
 
     let isConnectedToServer = $derived(SharedStore.server.length > 0);
     let isAnyAccountFound = $derived(SharedStore.accounts.length > 0 || SharedStore.failedAccounts.length > 0);
@@ -19,19 +16,19 @@
 </script>
 
 {#if isMailboxInitialized}
-    <Main>
+    <layout.main>
         {#if MainNav.view === "inbox"}
-            <Content />
+            <dashboard.content />
         {:else if MainNav.view === "network"}
-            <Network />
+            <views.network />
         {:else if MainNav.view === "contacts"}
-            <Contacts />
+            <views.contacts />
         {:else if MainNav.view === "settings"}
-            <Settings />
+            <views.settings />
         {/if}
-    </Main>
+    </layout.main>
 {:else}
-    <Landing>
+    <layout.landing>
         <Register>
             {#if isAnyAccountFound}
                 <Accounts />
@@ -41,5 +38,5 @@
                 <SetupServer/>
             {/if}
         </Register>
-    </Landing>
+    </layout.landing>
 {/if}

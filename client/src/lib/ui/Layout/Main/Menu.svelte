@@ -20,7 +20,7 @@
         id: string;
         label: string;
         icon: string;
-        folder?: string; // IMAP folder to load; omit for virtual views
+        folder?: string;
     }
 
     const folders: FolderItem[] = [
@@ -42,6 +42,8 @@
 
     let isCollapsed = $state(false);
     let isLoadingFolder = $state(false);
+    let relayCount = $state(0);
+    let relaysConnected = $state(false);
 
     let currentAccount = $derived(
         SharedStore.currentAccount !== "home"
@@ -68,12 +70,48 @@
     });
 
     let nostrId = $derived(
-        nostrIdentity.state.publicId
-            ? nostrIdentity.state.publicId.slice(0, 12) +
+        nostrIdentity.state.npub
+            ? nostrIdentity.state.npub.slice(0, 12) +
               "…" +
-              nostrIdentity.state.publicId.slice(-4)
-            : "not set",
+              nostrIdentity.state.npub.slice(-4)
+            : nostrIdentity.state.publicId
+                ? nostrIdentity.state.publicId.slice(0, 12) +
+                  "…" +
+                  nostrIdentity.state.publicId.slice(-4)
+                : "not set",
     );
+
+    let peerPillText = $derived.by(() => {
+        if (relayCount > 0) return `${relayCount} relay${relayCount !== 1 ? "s" : ""} connected`;
+        return "node offline";
+    });
+
+    async function fetchRelayStatus() {
+        try {
+            const res = await fetch(`${SharedStore.server}/nostr/relays`);
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) {
+                relayCount = json.data.filter((r: any) => r.connected).length;
+                relaysConnected = relayCount > 0;
+            }
+        } catch {
+            relayCount = 0;
+            relaysConnected = false;
+        }
+    }
+
+    // Poll relay status every 30s
+    let relayPollInterval: ReturnType<typeof setInterval> | null = null;
+    import { onMount, onDestroy } from "svelte";
+
+    onMount(() => {
+        fetchRelayStatus();
+        relayPollInterval = setInterval(fetchRelayStatus, 30000);
+    });
+
+    onDestroy(() => {
+        if (relayPollInterval) clearInterval(relayPollInterval);
+    });
 
     async function selectFolder(item: FolderItem) {
         if (item.id === "network") {
@@ -117,7 +155,9 @@
         <div class="menu-header">
             <h2>Narada</h2>
         </div>
-        <div class="peer-pill"><span class="live"></span> node offline</div>
+        <div class="peer-pill" class:online={relaysConnected}>
+            <span class="live"></span> {peerPillText}
+        </div>
 
         <button class="btn-new" onclick={openCompose}>
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
@@ -267,6 +307,10 @@
             width: 6px;
             height: 6px;
             border-radius: 50%;
+            background: var(--ink-faint);
+        }
+
+        .menu-inner .peer-pill.online .live {
             background: var(--direct);
         }
 

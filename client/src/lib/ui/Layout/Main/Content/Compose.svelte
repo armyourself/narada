@@ -40,6 +40,7 @@
     import Icon from "$lib/ui/Components/Icon";
     import { backToDefault } from "$lib/ui/Layout/Main/Content.svelte";
     import * as Button from "$lib/ui/Components/Button";
+    import { nostrIdentity } from "$lib/nostr/identity.svelte";
 
     interface Props {
         originalMessageContext?: OriginalMessageContext;
@@ -130,14 +131,23 @@
         const sendTimeout = setTimeout(async () => {
             isSendingEmail = true;
 
-            // Remove draft from drafts folder if exists,
-            // before sending them email and create a new/updated
-            // one from form.
             await deleteDraft();
             const draft = createDraft();
 
+            // Check if all recipients are Nostr pubkeys
+            const allRecipients = [
+                ...receiverList,
+                ...ccList,
+            ];
+            const isNostrSend = allRecipients.length > 0 && allRecipients.every(
+                (r) => isNostrPubkey(r.trim())
+            );
+
             let response;
-            if (originalMessageContext?.composeType === "reply") {
+            if (isNostrSend) {
+                // Send via Nostr relays
+                response = await sendNostrEmail(draft);
+            } else if (originalMessageContext?.composeType === "reply") {
                 response = await MailboxController.replyEmail(
                     originalMessageContext.messageId,
                     draft,
@@ -161,16 +171,48 @@
             }
 
             showSentMailbox();
-            showToast({ content: "Email sent" });
+            showToast({ content: isNostrSend ? "Message sent via Nostr" : "Email sent" });
         }, SEND_RECALL_DELAY_MS);
 
         showToast({
-            content: "Email sending...",
+            content: "Sending...",
             autoCloseDelay: SEND_RECALL_DELAY_MS,
             onUndo: () => {
                 clearTimeout(sendTimeout);
             },
         });
+    }
+
+    function isNostrPubkey(value: string): boolean {
+        const v = value.trim();
+        if (v.startsWith("npub1")) return true;
+        if (/^[0-9a-fA-F]{64}$/.test(v)) return true;
+        return false;
+    }
+
+    async function sendNostrEmail(draft: FormData): Promise<{ success: boolean; message: string }> {
+        try {
+            const senderNpub = nostrIdentity.state.npub || "";
+            const recipients = receiverList.map((r) => r.trim());
+            const body = draft.get("body") as string || "";
+            const subject = draft.get("subject") as string || "";
+
+            const res = await fetch(`${SharedStore.server}/nostr/send-email`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sender_npub: senderNpub,
+                    recipient_npub: recipients[0],
+                    subject,
+                    body,
+                    cc: ccList.map((c) => c.trim()),
+                }),
+            });
+            const json = await res.json();
+            return { success: json.success, message: json.message };
+        } catch (err) {
+            return { success: false, message: String(err) };
+        }
     }
 
     const saveDraft = async () => {
