@@ -11,8 +11,8 @@
      * Infer the delivery route of an email from its sender address.
      *
      * The IMAP-era mailbox model carries no transport metadata, so we
-     * use the only observable signal: native Narada senders appear as
-     * bech32m ids ("narada1…" / "node1…"), while anything with a
+     * use the only observable signal: native Nostr senders appear as
+     * bech32m ids ("npub1…" / "nsec1…"), while anything with a
      * conventional @domain address arrived through the SMTP gateway.
      * Relay-delivered native mail is indistinguishable from direct at
      * this layer and is reported as direct until the protocol exposes
@@ -20,8 +20,8 @@
      */
     export function emailRoute(email: { sender?: string }): DeliveryRoute {
         const sender = email.sender ?? "";
-        const isNaradaId = /(?:^|<\s*)[a-z0-9]{1,8}1[a-z0-9]{20,}/i.test(sender);
-        return isNaradaId ? "direct" : "gateway";
+        const isNostrId = /(?:^|<\s*)[a-z0-9]{1,8}1[a-z0-9]{20,}/i.test(sender);
+        return isNostrId ? "direct" : "gateway";
     }
 </script>
 

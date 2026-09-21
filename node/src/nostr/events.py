@@ -19,10 +19,10 @@ The signature is an Ed25519 signature over the event id hex string.
 
 This module implements:
 
-* :class:`NostrEvent` — the event data structure
-* :class:`NostrFilter` — subscription filter (NIP-01)
-* :func:`create_event` — create and sign an event
-* :func:`verify_event` — verify an event's id and signature
+* :class:`NostrEvent` -- the event data structure
+* :class:`NostrFilter` -- subscription filter (NIP-01)
+* :func:`create_event` -- create and sign an event
+* :func:`verify_event` -- verify an event's id and signature
 """
 
 from __future__ import annotations
@@ -42,16 +42,13 @@ from .identity import NostrIdentity
 KIND_META = 0
 KIND_TEXT_NOTE = 1
 KIND_ENCRYPTED_DM = 4
-KIND_NARADA_EMAIL = 1050  # Narada-specific: email message relayed via Nostr
+KIND_EMAIL = 1050  # Application-specific: email message relayed via Nostr
 
-# Narada uses a custom event kind for email messages to avoid colliding
-# with standard Nostr kinds. This is registered here as a private kind
-# in the 10000-19999 range (NIP-01: "replaceable" events, but we use
-# it as an application-specific kind).
+# Application-specific event kind for email messages in the 10000-19999 range
+# (NIP-01: "replaceable" events, used here as an application-specific kind).
 #
-# The kind 1050 carries an encrypted NaradaBody (NaradaBody JSON) inside
-# the Nostr event content. The encryption follows NIP-04 for 1:1 DMs
-# and NIP-44 for group messages.
+# The kind 1050 carries an encrypted email body inside the Nostr event content.
+# Encryption follows NIP-04 for 1:1 DMs and NIP-44 for enhanced security.
 
 
 # --- Event ------------------------------------------------------------------
@@ -63,13 +60,13 @@ class NostrEvent:
 
     Fields:
 
-    * ``id`` — 32-byte hex SHA-256 hash of the serialized event
-    * ``pubkey`` — 32-byte hex public key of the author
-    * ``created_at`` — unix timestamp (seconds)
-    * ``kind`` — event kind (0=meta, 1=text, 4=encrypted DM, 1050=narada email)
-    * ``tags`` — list of tag arrays (e.g. [["p", "<pubkey>"], ["e", "<event_id>"]])
-    * ``content`` — the event content (plaintext or encrypted)
-    * ``sig`` — 64-byte hex Ed25519 signature
+    * ``id`` -- 32-byte hex SHA-256 hash of the serialized event
+    * ``pubkey`` -- 32-byte hex public key of the author
+    * ``created_at`` -- unix timestamp (seconds)
+    * ``kind`` -- event kind (0=meta, 1=text, 4=encrypted DM, 1050=email)
+    * ``tags`` -- list of tag arrays (e.g. [["p", "<pubkey>"], ["e", "<event_id>"]])
+    * ``content`` -- the event content (plaintext or encrypted)
+    * ``sig`` -- 64-byte hex Ed25519 signature
     """
 
     id: str = ""
@@ -154,7 +151,7 @@ def create_event(
         The signing identity.
     kind:
         Event kind. Use KIND_ENCRYPTED_DM (4) for encrypted DMs,
-        KIND_NARADA_EMAIL (1050) for Narada email messages.
+        KIND_EMAIL (1050) for email messages.
     content:
         Event content. For encrypted events, pass the ciphertext.
     tags:
@@ -180,10 +177,8 @@ def create_event(
         sig="",
     )
 
-    # Compute id
     event.id = event.compute_id()
 
-    # Sign the event id (NIP-01: sign the hex id string)
     sig_bytes = identity.sign(event.id.encode("utf-8"))
     event.sig = sig_bytes.hex()
 
@@ -201,12 +196,10 @@ def verify_event(event: NostrEvent) -> bool:
     """
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-    # Check id
     computed_id = event.compute_id()
     if computed_id != event.id:
         return False
 
-    # Check signature
     if not event.pubkey or not event.sig:
         return False
 
@@ -242,7 +235,6 @@ class NostrFilter:
     since: Optional[int] = None
     until: Optional[int] = None
     limit: Optional[int] = None
-    # NIP-01: #e and #p tag filters
     e_tag: Optional[list[str]] = None
     p_tag: Optional[list[str]] = None
 
@@ -300,12 +292,12 @@ def filter_for_dm(recipient_pubkey: str, sender_pubkey: Optional[str] = None) ->
     )
 
 
-def filter_for_narada_email(
+def filter_for_email(
     recipient_pubkey: str,
     since: Optional[int] = None,
     limit: Optional[int] = None,
 ) -> NostrFilter:
-    """Create a filter for Narada email events (kind 1050).
+    """Create a filter for email events (kind 1050).
 
     Parameters
     ----------
@@ -317,7 +309,7 @@ def filter_for_narada_email(
         Maximum number of events to return.
     """
     return NostrFilter(
-        kinds=[KIND_NARADA_EMAIL],
+        kinds=[KIND_EMAIL],
         p_tag=[recipient_pubkey],
         since=since,
         limit=limit,
@@ -327,12 +319,12 @@ def filter_for_narada_email(
 __all__ = [
     "KIND_ENCRYPTED_DM",
     "KIND_META",
-    "KIND_NARADA_EMAIL",
+    "KIND_EMAIL",
     "KIND_TEXT_NOTE",
     "NostrEvent",
     "NostrFilter",
     "create_event",
     "filter_for_dm",
-    "filter_for_narada_email",
+    "filter_for_email",
     "verify_event",
 ]

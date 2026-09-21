@@ -1,22 +1,22 @@
-import { NaradaIdentityService } from "$lib/services/NaradaIdentityService";
+import { NostrIdentityService } from "$lib/services/NostrIdentityService";
 import { SharedStore } from "$lib/stores/shared.svelte";
 
-export interface NaradaIdentityState {
+export interface NostrIdentityState {
     accountId: string;
     publicId: string | null;
     loading: boolean;
     error: string | null;
 }
 
-export class NaradaIdentityManager {
-    private _state: NaradaIdentityState = $state({
+export class NostrIdentityManager {
+    private _state: NostrIdentityState = $state({
         accountId: "",
         publicId: null,
         loading: false,
         error: null,
     });
 
-    get state(): NaradaIdentityState {
+    get state(): NostrIdentityState {
         return this._state;
     }
 
@@ -30,7 +30,7 @@ export class NaradaIdentityManager {
         this._state.error = null;
 
         try {
-            const identity = await NaradaIdentityService.getIdentity(accountId);
+            const identity = await NostrIdentityService.getIdentity(accountId);
             if (identity) {
                 this._state.publicId = identity.public_id;
                 this._state.loading = false;
@@ -52,7 +52,7 @@ export class NaradaIdentityManager {
         this._state.error = null;
 
         try {
-            const result = await NaradaIdentityService.generateIdentity(accountId);
+            const result = await NostrIdentityService.generateIdentity(accountId);
             if (result) {
                 this._state.publicId = result.public_id;
                 this._state.loading = false;
@@ -73,7 +73,7 @@ export class NaradaIdentityManager {
         this._state.error = null;
 
         try {
-            const identity = await NaradaIdentityService.recoverIdentity(accountId, mnemonic);
+            const identity = await NostrIdentityService.recoverIdentity(accountId, mnemonic);
             if (identity) {
                 this._state.publicId = identity.public_id;
                 this._state.loading = false;
@@ -93,7 +93,7 @@ export class NaradaIdentityManager {
         this._state.error = null;
 
         try {
-            const success = await NaradaIdentityService.deleteIdentity(accountId);
+            const success = await NostrIdentityService.deleteIdentity(accountId);
             if (success) {
                 this._state.publicId = null;
                 this._state.accountId = "";
@@ -108,4 +108,4 @@ export class NaradaIdentityManager {
     }
 }
 
-export const naradaIdentity = new NaradaIdentityManager();
+export const nostrIdentity = new NostrIdentityManager();

@@ -2,27 +2,25 @@
 
 This is the production adapter for the Nostr transport. It implements
 the same :class:`src.mail_abstraction.MailAdapter` interface as the
-IMAP/SMTP adapter and the legacy Narada adapter.
+IMAP/SMTP adapter.
 
 The adapter translates between:
 
-* NaradaMessage (email semantics) ↔ NostrEvent (Nostr transport)
-* NaradaIdentity ↔ NostrIdentity
-* MailAdapter methods ↔ Nostr relay operations
+* Email semantics <-> NostrEvent (Nostr transport)
+* MailAdapter methods <-> Nostr relay operations
 
 Architecture::
 
     NostrAdapter
-        │
-        ├── NostrIdentity (sign/verify)
-        ├── NostrRelayPool (publish/subscribe)
-        ├── NaradaInbox (persist messages)
-        └── Outbox (retry failed delivery)
+        |
+        +-- NostrIdentity (sign/verify)
+        +-- NostrRelayPool (publish/subscribe)
+        +-- Mailbox persistence (JSONL)
 
 The adapter supports:
 
-* Sending encrypted Narada email messages via Nostr relays
-* Receiving and decrypting Nostr events into Narada messages
+* Sending encrypted email messages via Nostr relays
+* Receiving and decrypting Nostr events into email messages
 * Multiple relay failover
 * Duplicate event detection
 * Offline message delivery (relays as store-and-forward)
@@ -45,14 +43,14 @@ from src.mail_abstraction.base import (
     MessageSource,
 )
 
-from .config import NostrConfig, DEFAULT_RELAYS, NARADA_EMAIL_KIND
+from .config import NostrConfig, DEFAULT_RELAYS, EMAIL_KIND
 from .events import (
     NostrEvent,
     NostrFilter,
     create_event,
     verify_event,
-    filter_for_narada_email,
-    KIND_NARADA_EMAIL,
+    filter_for_email,
+    KIND_EMAIL,
     KIND_ENCRYPTED_DM,
 )
 from .identity import NostrIdentity, generate_nostr_identity
@@ -62,7 +60,7 @@ from .relay import RelayPool
 class NostrAdapter(MailAdapter):
     """Nostr-protocol adapter implementing the MailAdapter interface.
 
-    Translates between Narada email semantics and Nostr event transport.
+    Translates between email semantics and Nostr event transport.
     Supports multiple relays, encryption, and offline delivery.
 
     Parameters
@@ -70,8 +68,8 @@ class NostrAdapter(MailAdapter):
     account_id:
         The local account that owns this adapter instance.
     identity:
-        The Nostr identity for signing events. If None, loaded from
-        the Narada keystore for this account.
+        The Nostr identity for signing events. If None, a new identity
+        is generated for this account.
     config:
         Nostr transport configuration. Defaults to NostrConfig.default().
     relay_pool:
@@ -118,27 +116,10 @@ class NostrAdapter(MailAdapter):
     # --- Identity --------------------------------------------------------
 
     def _ensure_identity(self) -> NostrIdentity:
-        """Load or generate the Nostr identity for this account.
-
-        If the account has an existing Narada identity, the Nostr identity
-        is derived from the same Ed25519 seed (enabling migration).
-        """
+        """Load or generate the Nostr identity for this account."""
         if self._identity is not None:
             return self._identity
-
-        try:
-            from src.narada_identity.identity import identity_from_keystore
-            from src.narada_identity.keystore import default_keystore
-            from .identity import nostr_identity_from_narada_seed
-
-            keystore = default_keystore()
-            narada_identity = identity_from_keystore(self._account_id, keystore)
-            # Derive Nostr identity from the Narada Ed25519 seed
-            self._identity = nostr_identity_from_narada_seed(narada_identity.keypair.ed25519_seed)
-        except Exception:
-            # No existing Narada identity: generate a new Nostr identity
-            self._identity = generate_nostr_identity()
-
+        self._identity = generate_nostr_identity()
         return self._identity
 
     # --- Lifecycle -------------------------------------------------------
@@ -147,7 +128,6 @@ class NostrAdapter(MailAdapter):
         """Connect to Nostr relays and start listening for messages."""
         try:
             self._ensure_identity()
-            # Connect to relays (async in thread)
             import asyncio
             loop = asyncio.new_event_loop()
             try:
@@ -192,10 +172,10 @@ class NostrAdapter(MailAdapter):
         limit: int = 50,
         offset: int = 0,
     ) -> list[Message]:
-        """Fetch Narada email messages stored locally.
+        """Fetch email messages stored locally.
 
         Messages were received from Nostr relays and persisted to the
-        mailbox JSONL file (same as the legacy Narada adapter).
+        mailbox JSONL file.
         """
         if not self._mailbox_path.exists():
             return []
@@ -227,11 +207,11 @@ class NostrAdapter(MailAdapter):
         attachments: list[tuple[str, bytes]] | None = None,
         is_html: bool = False,
     ) -> tuple[bool, str]:
-        """Send a Narada email message via Nostr relays.
+        """Send an email message via Nostr relays.
 
         The message is:
 
-        1. Wrapped in a NaradaBody
+        1. Wrapped in an email body dict
         2. Encrypted with NIP-04 or NIP-44
         3. Signed as a Nostr event (kind 1050)
         4. Published to configured Nostr relays
@@ -268,7 +248,6 @@ class NostrAdapter(MailAdapter):
         """Send to a single recipient via Nostr."""
         recipient_pubkey_hex = to_address.address
 
-        # Validate that the recipient address looks like a hex pubkey
         try:
             bytes.fromhex(recipient_pubkey_hex)
             if len(recipient_pubkey_hex) != 64:
@@ -276,8 +255,7 @@ class NostrAdapter(MailAdapter):
         except ValueError:
             return False, f"Recipient is not a valid Nostr pubkey: {recipient_pubkey_hex[:16]}..."
 
-        # Build NaradaBody
-        narada_body = {
+        email_body = {
             "subject": subject,
             "sender": str(from_address),
             "to": [str(to_address)],
@@ -286,13 +264,11 @@ class NostrAdapter(MailAdapter):
             "sent_at": int(time.time()),
         }
 
-        # Encrypt the body
         from .encryption import nip04_encrypt, nip44_encrypt, _x25519_public_from_ed25519
-        body_json = json.dumps(narada_body, separators=(",", ":"))
-        # NIP-04 uses Ed25519 seed for signing + X25519 public for encryption
+        body_json = json.dumps(email_body, separators=(",", ":"))
         sender_ed25519_seed = identity._private_key_bytes
         recipient_x25519_pub = _x25519_public_from_ed25519(
-            bytes.fromhex(recipient_pubkey_hex)  # Nostr pubkey is Ed25519
+            bytes.fromhex(recipient_pubkey_hex)
         )
 
         if self._config.encryption == "nip44":
@@ -309,15 +285,13 @@ class NostrAdapter(MailAdapter):
                 recipient_x25519_pub,
             )
 
-        # Create Nostr event (kind 1050 = Narada email)
         event = create_event(
             identity,
-            kind=KIND_NARADA_EMAIL,
+            kind=KIND_EMAIL,
             content=content,
             tags=[["p", recipient_pubkey_hex]],
         )
 
-        # Publish to relays
         import asyncio
         loop = asyncio.new_event_loop()
         try:
@@ -338,15 +312,15 @@ class NostrAdapter(MailAdapter):
         self,
         on_message: Optional[Callable[[Message], None]] = None,
     ) -> str:
-        """Subscribe to incoming Narada email events on Nostr relays.
+        """Subscribe to incoming email events on Nostr relays.
 
         Returns a subscription ID that can be used to unsubscribe.
         """
         identity = self._ensure_identity()
-        sub_id = f"narada_{self._account_id}_{int(time.time())}"
+        sub_id = f"nostr_{self._account_id}_{int(time.time())}"
 
         filters = [
-            filter_for_narada_email(
+            filter_for_email(
                 identity.public_key_hex,
                 limit=100,
             )
@@ -355,7 +329,6 @@ class NostrAdapter(MailAdapter):
         import asyncio
         loop = asyncio.new_event_loop()
         try:
-            # Use a callback that decrypts and persists the event
             def _on_event(event: NostrEvent) -> None:
                 self._handle_incoming_event(event, identity)
                 if on_message:
@@ -374,11 +347,9 @@ class NostrAdapter(MailAdapter):
 
     def _handle_incoming_event(self, event: NostrEvent, identity: NostrIdentity) -> None:
         """Handle an incoming Nostr event: verify, decrypt, persist."""
-        # Verify the event
         if not verify_event(event):
             return
 
-        # Decrypt the content
         try:
             from .encryption import _x25519_public_from_ed25519
             sender_x25519_pub = _x25519_public_from_ed25519(bytes.fromhex(event.pubkey))
@@ -403,7 +374,6 @@ class NostrAdapter(MailAdapter):
         except Exception:
             return
 
-        # Persist to mailbox
         self._persist_event(event, body_data)
 
     def _event_to_message(self, event: NostrEvent) -> Optional[Message]:
@@ -436,7 +406,7 @@ class NostrAdapter(MailAdapter):
         return Message(
             uid=event.id,
             folder="nostr",
-            source=MessageSource.Narada,
+            source=MessageSource.Nostr,
             subject=body_data.get("subject", ""),
             from_address=_address_from_string(body_data.get("sender", "")),
             to_addresses=[_address_from_string(t) for t in body_data.get("to", [])],
@@ -466,7 +436,7 @@ class NostrAdapter(MailAdapter):
             "list_unsubscribe_post": "",
             "flags": ["\\Seen"],
             "attachments": [],
-            "message_id": f"<{event.id}@Nostr>",
+            "message_id": f"<{event.id}@nostr>",
             "nostr_event_id": event.id,
             "nostr_pubkey": event.pubkey,
             "nostr_kind": event.kind,

@@ -11,7 +11,7 @@ import pytest
 
 from src.nostr.adapter import NostrAdapter
 from src.nostr.config import NostrConfig
-from src.nostr.events import KIND_NARADA_EMAIL, create_event, verify_event
+from src.nostr.events import KIND_EMAIL, create_event, verify_event
 from src.nostr.identity import generate_nostr_identity
 from src.nostr.relay import RelayPool
 from src.mail_abstraction.base import Address, MessageSource
@@ -26,7 +26,6 @@ def _make_adapter(
     """Create a NostrAdapter with in-memory relay pool (no network)."""
     config = NostrConfig(
         relay_urls=relay_urls or [],
-        transport="nostr",
     )
     pool = RelayPool(relay_urls=[])
     return NostrAdapter(
@@ -85,7 +84,6 @@ class TestNostrAdapterFetch:
             "date": "1700000000",
             "flags": ["\\Seen"],
         }
-        # The adapter uses _safe(account_id) which keeps @, so the file is "mailbox.test@example.com.jsonl"
         mailbox_path = mailbox_dir / "mailbox.test@example.com.jsonl"
         mailbox_path.write_text(json.dumps(record) + "\n")
 
@@ -153,7 +151,7 @@ class TestNostrAdapterEventHandling:
 
         event = create_event(
             identity,
-            kind=KIND_NARADA_EMAIL,
+            kind=KIND_EMAIL,
             content=json.dumps({
                 "subject": "Test",
                 "sender": "Alice",
@@ -172,7 +170,6 @@ class TestNostrAdapterEventHandling:
         }
         adapter._persist_event(event, body_data)
 
-        # Verify persisted
         mailbox_path = tmp_path / "etc" / "mailbox.test@example.com.jsonl"
         assert mailbox_path.exists()
         lines = [l for l in mailbox_path.read_text().strip().split("\n") if l]

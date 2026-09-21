@@ -2,7 +2,7 @@
     import { onMount } from "svelte";
     import * as Button from "$lib/ui/Components/Button";
     import { show as showMessage } from "$lib/ui/Components/Message";
-    import { NaradaIdentityService } from "$lib/services/NaradaIdentityService";
+    import { NostrIdentityService } from "$lib/services/NostrIdentityService";
     import { showThis as showContent } from "$lib/ui/Layout/Landing/Register.svelte";
     import Accounts from "./Accounts.svelte";
 
@@ -15,7 +15,7 @@
 
     onMount(async () => {
         try {
-            const result = await NaradaIdentityService.claimMnemonic(accountId, mnemonicToken);
+            const result = await NostrIdentityService.claimMnemonic(accountId, mnemonicToken);
             if (result && result.mnemonic) {
                 mnemonic = result.mnemonic;
             } else {
@@ -43,7 +43,7 @@
 
 <div class="mnemonic-container">
     <div class="mnemonic-header">
-        <h3>Your Narada Identity</h3>
+        <h3>Your Nostr Identity</h3>
         <p class="public-id-label">Public ID</p>
         <code class="public-id">{publicId}</code>
     </div>

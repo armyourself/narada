@@ -24,10 +24,10 @@
         currentFolder = id;
     }
 
-    let naradaId = $derived(
+    let nostrId = $derived(
         SharedStore.accounts.length > 0
-            ? `narada1q${SharedStore.accounts[0].email_address.slice(0, 6)}...`
-            : "narada1q...not set"
+            ? `npub1${SharedStore.accounts[0].email_address.slice(0, 6)}...`
+            : "npub1...not set"
     );
 </script>
 
@@ -77,7 +77,7 @@
     <div class="sidebar-foot">
         <div class="node-id">
             <span class="id-label">your node</span>
-            <span class="id-val">{naradaId}</span>
+            <span class="id-val">{nostrId}</span>
         </div>
     </div>
 </aside>

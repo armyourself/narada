@@ -22,7 +22,7 @@
 </script>
 
 <div data-tauri-drag-region class="topbar">
-    <div class="brand">Narada</div>
+    <div class="brand">Openmail</div>
 
     <div class="search">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>

@@ -2,8 +2,8 @@ import { Language } from "$lib/preferences";
 import { SharedStore } from "$lib/stores/shared.svelte";
 
 export const local = {
-    narada: {
-        en: "Narada",
+    openmail: {
+        en: "Openmail",
     },
     decentralized_email_client: {
         en: "Decentralized email with end-to-end encryption",

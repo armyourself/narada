@@ -1,28 +1,23 @@
-"""Nostr transport backend for Narada.
+"""Nostr transport backend.
 
-This package implements a Nostr-compatible transport that allows Narada
-to send and receive messages through Nostr relays. It implements the
-:class:`src.mail_abstraction.MailAdapter` interface so the rest of the
-Narada node can use Nostr as a transport without knowing the details.
+This package implements a Nostr-compatible transport that allows the
+application to send and receive messages through Nostr relays. It implements
+the :class:`src.mail_abstraction.MailAdapter` interface so the rest of the
+application can use Nostr as a transport without knowing the details.
 
 Supported NIPs:
 
-* **NIP-01** — basic protocol flow, events, subscriptions, relay communication
-* **NIP-04** — encrypted direct messages (using Schnorr-based encryption)
-* **NIP-19** — bech32-encoded entities (npub, nsec, note)
+* **NIP-01** -- basic protocol flow, events, subscriptions, relay communication
+* **NIP-04** -- encrypted direct messages (AES-256-CBC + X25519 ECDH)
+* **NIP-19** -- bech32-encoded entities (npub, nsec)
 
 Architecture::
 
-    NaradaAdapter (legacy)     NostrAdapter (new)
-           │                          │
-           ▼                          ▼
-    NaradaEnvelope              Nostr Event (NIP-01)
-           │                          │
-           ▼                          ▼
-    NaradaTransport            NostrRelay (WebSocket)
-           │                          │
-           ▼                          ▼
-    HTTP / QUIC                 Nostr Relays
+    NostrAdapter
+        |
+        +-- NostrIdentity (sign/verify)
+        +-- NostrRelayPool (publish/subscribe)
+        +-- Mailbox persistence (JSONL)
 """
 
 from .identity import NostrIdentity, generate_nostr_identity

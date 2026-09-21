@@ -1,8 +1,8 @@
 <script lang="ts">
     import { SharedStore } from "$lib/stores/shared.svelte";
     import { PreferenceManager, PreferenceStore, Theme } from "$lib/preferences";
-    import { naradaIdentity } from "$lib/narada/identity.svelte";
-    import { NaradaIdentityService } from "$lib/services/NaradaIdentityService";
+    import { nostrIdentity } from "$lib/nostr/identity.svelte";
+    import { NostrIdentityService } from "$lib/services/NostrIdentityService";
     import { show as showConfirm } from "$lib/ui/Components/Confirm";
     import { show as showToast } from "$lib/ui/Components/Toast";
     import { show as showMessage } from "$lib/ui/Components/Message";
@@ -18,7 +18,7 @@
     );
 
     let accountId = $derived(currentAccount?.email_address ?? "");
-    let nodeId = $derived(naradaIdentity.state.publicId ?? "not set");
+    let nodeId = $derived(nostrIdentity.state.publicId ?? "not set");
 
     let themePreference = $derived(
         PreferenceStore.theme === Theme.Dark ? "dark" : "light",
@@ -34,9 +34,9 @@
         if (!accountId || isRotating) return;
         isRotating = true;
         try {
-            const result = await NaradaIdentityService.rotateX25519(accountId);
+            const result = await NostrIdentityService.rotateX25519(accountId);
             if (result) {
-                await naradaIdentity.loadIdentity(accountId);
+                await nostrIdentity.loadIdentity(accountId);
                 showToast({ content: "keys rotated" });
             } else {
                 showMessage({ title: "key rotation failed" });
@@ -83,9 +83,9 @@
                 if (!accountId || isDeleting) return;
                 isDeleting = true;
                 try {
-                    const ok = await NaradaIdentityService.deleteIdentity(accountId);
+                    const ok = await NostrIdentityService.deleteIdentity(accountId);
                     if (ok) {
-                        naradaIdentity.state.publicId = null;
+                        nostrIdentity.state.publicId = null;
                         showToast({ content: "identity deleted" });
                     } else {
                         showMessage({ title: "identity deletion failed" });

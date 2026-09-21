@@ -1,6 +1,6 @@
 <script lang="ts">
     import { SharedStore } from "$lib/stores/shared.svelte";
-    import { naradaIdentity } from "$lib/narada/identity.svelte";
+    import { nostrIdentity } from "$lib/nostr/identity.svelte";
     import { show as showToast } from "$lib/ui/Components/Toast";
     import type { Account } from "$lib/types";
 
@@ -14,7 +14,7 @@
     let bootstrapInput = $state("");
 
     let nodeId = $derived(
-        naradaIdentity.state.publicId ?? "no identity on this account",
+        nostrIdentity.state.publicId ?? "no identity on this account",
     );
 
     let accounts = $derived(SharedStore.accounts);

@@ -1,1 +1,1 @@
-"""narada CLI commands."""
+"""CLI commands."""

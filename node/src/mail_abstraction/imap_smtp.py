@@ -1,30 +1,13 @@
 """IMAP/SMTP adapter that wraps the existing Openmail client.
 
-This adapter is the production adapter for the Narada node today: every
-account that has been added through the existing ``/add-account`` endpoint
-talks IMAP and SMTP through the ``Openmail`` class in
-``src.modules.openmail``.
+This adapter is the production adapter for IMAP/SMTP: every account that
+has been added through the ``/add-account`` endpoint talks IMAP and SMTP
+through the ``Openmail`` class in ``src.modules.openmail``.
 
 The :class:`IMAPSMTPAdapter` exposes the narrow :class:`MailAdapter`
-interface used by future code, while still holding a reference to the
-underlying :class:`Openmail` instance for callers (like today's routers)
-that need the full IMAP/SMTP surface. The migration path is therefore:
-
-1. Adapters (this file) are tested in isolation.
-2. Routers are migrated to use the adapter methods that fit their needs
-   in follow-up PRs. The :attr:`client` accessor keeps that migration
-   incremental.
-
-Note on the underlying API:
-
-The Openmail IMAP/SMTP surface is rich and idiomatic for those protocols
-(e.g. ``IMAPManager.get_emails`` requires a prior ``search_emails`` call
-and operates on a search result, not a folder; ``SMTPManager.send_email``
-takes a :class:`Draft` object rather than loose parameters). The methods
-on this adapter are intentionally narrow: the :class:`MailAdapter`
-interface is the contract the rest of the Narada node should rely on,
-not a 1:1 mirror of the IMAP/SMTP API. As routers migrate, more
-translation will live in helper functions next to the adapter.
+interface, while still holding a reference to the underlying
+:class:`Openmail` instance for callers that need the full IMAP/SMTP
+surface.
 """
 
 from __future__ import annotations
@@ -60,7 +43,7 @@ def _has_flag(flags: Optional[list[str]], needle: str) -> bool:
 
 
 class IMAPSMTPAdapter(MailAdapter):
-    """Adapts the Openmail IMAP+SMTP client to the Narada MailAdapter interface."""
+    """Adapts the Openmail IMAP+SMTP client to the MailAdapter interface."""
 
     source = MessageSource.IMAP
 
@@ -210,7 +193,7 @@ def convert_email(raw: OpenmailEmail, folder: str) -> Message:
     return Message(
         uid=str(raw.uid or ""),
         folder=folder,
-        source=MessageSource.IMAP if source_value == "imap" else MessageSource.Narada,
+        source=MessageSource.IMAP,
         subject=raw.subject or "",
         from_address=_address_from_string(raw.sender or ""),
         to_addresses=[_address_from_string(a) for a in (raw.receivers or "").split(",") if a.strip()],

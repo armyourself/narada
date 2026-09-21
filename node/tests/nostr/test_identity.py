@@ -11,8 +11,7 @@ from src.nostr.identity import (
     npub_decode,
     nsec_encode,
     nsec_decode,
-    nostr_identity_from_narada_seed,
-    nostr_identity_to_narada_pubid,
+    nostr_identity_from_seed,
 )
 
 
@@ -85,7 +84,6 @@ def test_repr_does_not_expose_secret():
 
 
 def test_npub_decode_wrong_prefix():
-    # nsec1... should not decode as npub
     from src.nostr.identity import generate_nostr_identity
     identity = generate_nostr_identity()
     nsec = identity.secret_key_bech32
@@ -98,25 +96,14 @@ def test_npub_decode_invalid_bech32():
         npub_decode("npub1invalidbech32")
 
 
-def test_nostr_identity_from_narada_seed():
+def test_nostr_identity_from_seed():
     import secrets
     seed = secrets.token_bytes(32)
-    identity = nostr_identity_from_narada_seed(seed)
+    identity = nostr_identity_from_seed(seed)
     assert len(identity.public_key_hex) == 64
     # Same seed should produce same identity
-    identity2 = nostr_identity_from_narada_seed(seed)
+    identity2 = nostr_identity_from_seed(seed)
     assert identity.public_key_hex == identity2.public_key_hex
-
-
-def test_nostr_identity_to_narada_pubid():
-    import secrets
-    seed = secrets.token_bytes(32)
-    identity = nostr_identity_from_narada_seed(seed)
-    pubid = nostr_identity_to_narada_pubid(identity)
-    assert pubid.startswith("narada1")
-    # The public id should be deterministically derived
-    pubid2 = nostr_identity_to_narada_pubid(identity)
-    assert pubid == pubid2
 
 
 def test_multiple_identities_are_unique():

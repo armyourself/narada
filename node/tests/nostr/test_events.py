@@ -7,15 +7,16 @@ import time
 import pytest
 
 from src.nostr.events import (
-    KIND_NARADA_EMAIL,
+    KIND_EMAIL,
     KIND_TEXT_NOTE,
     NostrEvent,
     NostrFilter,
     create_event,
     verify_event,
     filter_for_dm,
-    filter_for_narada_email,
+    filter_for_email,
 )
+from src.nostr.identity import generate_nostr_identity
 
 
 def test_create_event(alice_nostr_identity):
@@ -46,7 +47,6 @@ def test_verify_event_fails_with_wrong_key(bob_nostr_identity, alice_nostr_ident
         kind=KIND_TEXT_NOTE,
         content="Hello",
     )
-    # Tamper with the pubkey
     tampered = NostrEvent(
         id=event.id,
         pubkey=bob_nostr_identity.public_key_hex,
@@ -74,7 +74,6 @@ def test_verify_event_fails_with_tampered_content(alice_nostr_identity):
         content="Tampered content",
         sig=event.sig,
     )
-    # Recompute id so verification checks signature against wrong id
     tampered.id = tampered.compute_id()
     assert not verify_event(tampered)
 
@@ -119,19 +118,18 @@ def test_event_tags():
     assert event.tags[1] == ["e", "deadbeef"]
 
 
-def test_narada_email_event(alice_nostr_identity):
+def test_email_event(alice_nostr_identity):
     event = create_event(
         alice_nostr_identity,
-        kind=KIND_NARADA_EMAIL,
+        kind=KIND_EMAIL,
         content="encrypted-content-here",
         tags=[["p", "bob-pubkey-hex"]],
     )
-    assert event.kind == KIND_NARADA_EMAIL
+    assert event.kind == KIND_EMAIL
     assert verify_event(event)
 
 
 def test_event_id_is_deterministic(alice_nostr_identity):
-    """Same content + timestamp = same id."""
     ts = 1700000000
     e1 = create_event(alice_nostr_identity, content="test", created_at=ts)
     e2 = create_event(alice_nostr_identity, content="test", created_at=ts)
@@ -178,19 +176,17 @@ def test_filter_for_dm():
     assert f.authors == ["sender-hex"]
 
 
-def test_filter_for_narada_email():
-    f = filter_for_narada_email("recipient-hex", since=1700000000, limit=100)
-    assert f.kinds == [KIND_NARADA_EMAIL]
+def test_filter_for_email():
+    f = filter_for_email("recipient-hex", since=1700000000, limit=100)
+    assert f.kinds == [KIND_EMAIL]
     assert f.p_tag == ["recipient-hex"]
     assert f.since == 1700000000
     assert f.limit == 100
 
 
 def test_verify_rejects_bad_id():
-    from src.nostr.identity import generate_nostr_identity
     identity = generate_nostr_identity()
     event = create_event(identity, content="test")
-    # Tamper with id
     bad_event = NostrEvent(
         id="bad_id",
         pubkey=event.pubkey,
@@ -204,7 +200,6 @@ def test_verify_rejects_bad_id():
 
 
 def test_verify_rejects_empty_sig():
-    from src.nostr.identity import generate_nostr_identity
     identity = generate_nostr_identity()
     event = create_event(identity, content="test")
     bad_event = NostrEvent(
@@ -220,7 +215,6 @@ def test_verify_rejects_empty_sig():
 
 
 def test_verify_rejects_empty_pubkey():
-    from src.nostr.identity import generate_nostr_identity
     identity = generate_nostr_identity()
     event = create_event(identity, content="test")
     bad_event = NostrEvent(
@@ -233,7 +227,3 @@ def test_verify_rejects_empty_pubkey():
         sig=event.sig,
     )
     assert not verify_event(bad_event)
-
-
-# Needed for the test that doesn't use the fixture
-from src.nostr.identity import generate_nostr_identity

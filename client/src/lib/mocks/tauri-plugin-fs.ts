@@ -1,6 +1,6 @@
 // In-memory + localStorage filesystem mock for browser preview
 
-const STORE_PREFIX = "narada_fs:";
+const STORE_PREFIX = "openmail_fs:";
 
 function storeKey(p: string) { return STORE_PREFIX + p; }
 

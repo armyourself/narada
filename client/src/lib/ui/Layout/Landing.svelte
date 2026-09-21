@@ -41,7 +41,7 @@
 
 <section class="landing-container" bind:this={sectionContainer}>
     <div class="landing-header">
-        <h1 class="logo">Narada</h1>
+        <h1 class="logo">Openmail</h1>
         <p class="landing-subtitle">
             Decentralized email with end-to-end encryption
         </p>

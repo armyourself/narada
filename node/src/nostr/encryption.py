@@ -5,7 +5,7 @@ AES-256-CBC with PKCS7 padding. The shared secret is derived via
 X25519 ECDH.
 
 In Nostr, users have Ed25519 keys. NIP-04 requires X25519 ECDH.
-The conversion Ed25519→X25519 is done via the cryptography library's
+The conversion Ed25519->X25519 is done via the cryptography library's
 ``Ed25519PrivateKey.x25519()`` method, which derives the X25519
 private key from the Ed25519 key's scalar.
 
@@ -39,7 +39,6 @@ def _ed25519_to_x25519_private(ed25519_seed_bytes: bytes) -> X25519PrivateKey:
     3. Clamp the scalar for X25519
     4. Use as X25519 private key
     """
-    import hashlib
     raw_scalar = hashlib.sha512(ed25519_seed_bytes).digest()[:32]
     # Clamp for X25519 (Curve25519 scalar clamping)
     scalar = bytearray(raw_scalar)
@@ -159,7 +158,7 @@ def nip44_encrypt(
     """Encrypt a message using NIP-44-style ChaCha20-Poly1305.
 
     More secure than NIP-04 (AEAD vs CBC). Used for
-    Narada-to-Narada communication over Nostr relays.
+    application-to-application communication over Nostr relays.
 
     Returns the raw ciphertext bytes (nonce || encrypted_data_with_tag).
     """

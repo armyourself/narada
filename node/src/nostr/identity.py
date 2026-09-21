@@ -1,18 +1,16 @@
 """Nostr-compatible identity layer.
 
 A Nostr identity is an Ed25519 keypair. The public key is a 32-byte
-hex string (the "npub" in NIP-19 bech32 form). Narada's existing
-identity system already uses Ed25519 for signing, so the identity
-can be derived from the same seed.
+hex string (the "npub" in NIP-19 bech32 form).
 
 NIP-01: Keys are 32-byte hex strings.
 NIP-19: Human-readable bech32 encoding (npub..., nsec...).
 
 This module provides:
 
-* :class:`NostrIdentity` — a loaded identity with sign/verify
-* :func:`generate_nostr_identity` — create a new identity
-* :func:`nostr_identity_from_narada` — derive from an existing Narada identity
+* :class:`NostrIdentity` -- a loaded identity with sign/verify
+* :func:`generate_nostr_identity` -- create a new identity
+* :func:`nostr_identity_from_seed` -- derive from an existing Ed25519 seed
 """
 
 from __future__ import annotations
@@ -255,39 +253,14 @@ def generate_nostr_identity() -> NostrIdentity:
     return NostrIdentity.generate()
 
 
-def nostr_identity_from_narada_seed(seed: bytes) -> NostrIdentity:
-    """Derive a Nostr identity from a Narada Ed25519 seed.
+def nostr_identity_from_seed(seed: bytes) -> NostrIdentity:
+    """Derive a Nostr identity from an Ed25519 seed.
 
-    The Narada identity system stores a 32-byte Ed25519 seed. Since
-    Nostr also uses Ed25519, we can derive a compatible identity from
-    the same seed.
-
-    This enables migration: a user with an existing Narada identity
-    can use the same key material with Nostr relays without generating
-    a new identity.
+    Since Nostr uses Ed25519, we can derive a compatible identity from
+    the same seed material. This enables migration from other systems
+    that use Ed25519 keys.
     """
     return NostrIdentity.from_secret_key(seed)
-
-
-def nostr_identity_to_narada_pubid(identity: NostrIdentity) -> str:
-    """Convert a Nostr identity to a Narada bech32m public id.
-
-    Narada public IDs encode both Ed25519 and X25519 keys. Since
-    we only have the Ed25519 key from Nostr, we derive the X25519
-    key from the seed (matching Narada's HKDF derivation).
-    """
-    from src.narada_identity.encoding import encode_public_id
-    from src.narada_identity.keypair import _hkdf_x25519_seed
-
-    ed_pub = identity._public_key_bytes
-    # Derive X25519 key from the Ed25519 seed (Narada's convention)
-    x_seed = _hkdf_x25519_seed(identity._private_key_bytes)
-    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-    x_priv = X25519PrivateKey.from_private_bytes(x_seed)
-    x_pub = x_priv.public_key().public_bytes(
-        encoding=Encoding.Raw, format=PublicFormat.Raw
-    )
-    return encode_public_id(ed_pub, x_pub)
 
 
 __all__ = [
@@ -297,8 +270,7 @@ __all__ = [
     "generate_nostr_identity",
     "npub_decode",
     "npub_encode",
-    "nostr_identity_from_narada_seed",
-    "nostr_identity_to_narada_pubid",
+    "nostr_identity_from_seed",
     "nsec_decode",
     "nsec_encode",
 ]

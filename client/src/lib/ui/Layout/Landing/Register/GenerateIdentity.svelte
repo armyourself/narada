@@ -7,7 +7,7 @@
     import { show as showMessage } from "$lib/ui/Components/Message";
     import { showThis as showContent } from "$lib/ui/Layout/Landing/Register.svelte";
     import MnemonicDisplay from "./MnemonicDisplay.svelte";
-    import { naradaIdentity } from "$lib/narada/identity.svelte";
+    import { nostrIdentity } from "$lib/nostr/identity.svelte";
     import { SharedStore } from "$lib/stores/shared.svelte";
 
     let isGenerating = $state(false);
@@ -24,7 +24,7 @@
 
         isGenerating = true;
         try {
-            const result = await naradaIdentity.generateIdentity(accountId.trim());
+            const result = await nostrIdentity.generateIdentity(accountId.trim());
             if (result) {
                 showContent(MnemonicDisplay, {
                     publicId: result.publicId,
@@ -66,7 +66,7 @@
             required
         />
         <span class="muted">
-            Your Narada identity will be tied to this account.
+            Your Nostr identity will be tied to this account.
         </span>
     </FormGroup>
     <div class="landing-body-footer">

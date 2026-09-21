@@ -7,7 +7,7 @@
     import { show as showMessage } from "$lib/ui/Components/Message";
     import { showThis as showContent } from "$lib/ui/Layout/Landing/Register.svelte";
     import Accounts from "./Accounts.svelte";
-    import { naradaIdentity } from "$lib/narada/identity.svelte";
+    import { nostrIdentity } from "$lib/nostr/identity.svelte";
     import { SharedStore } from "$lib/stores/shared.svelte";
     import GenerateIdentity from "./GenerateIdentity.svelte";
 
@@ -31,7 +31,7 @@
 
         isRecovering = true;
         try {
-            const publicId = await naradaIdentity.recoverIdentity(
+            const publicId = await nostrIdentity.recoverIdentity(
                 accountId.trim(),
                 mnemonic.trim()
             );

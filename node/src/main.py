@@ -1,6 +1,5 @@
 """
 This module contains the main FastAPI application and its routes.
-TODO: improve docstring
 """
 
 from __future__ import annotations
@@ -16,8 +15,6 @@ from src.internal.account_manager import AccountManager
 from src.internal.file_system import FileObject, Root
 from src.routers import (
     account_tasks,
-    narada_identity_tasks,
-    narada_protocol_tasks,
     mailbox_tasks,
 )
 from src.helpers.uvicorn_logger import UvicornLogger
@@ -43,96 +40,17 @@ account_manager = AccountManager()
 uvicorn_logger = UvicornLogger()
 
 
-# Narada outbox drainer state. The drainer is a small background task
-# that runs every narada_DRAIN_INTERVAL seconds during the FastAPI
-# lifespan; it tries to deliver every due outbox entry.
-_narada_DRAIN_INTERVAL = 30.0  # seconds
-_narada_drain_task: asyncio.Task | None = None
-_narada_drain_stop = asyncio.Event() if False else None  # placeholder
-
-
-def _drain_narada_outbox_once() -> None:
-    """One pass over every Narada account with a non-empty outbox.
-
-    Imports are inside the function so the module loads even if the
-    Narada package is partially uninitialised in a future state.
-    """
-    try:
-        from src.narada.adapter import NaradaAdapter
-        from src.narada.outbox import Outbox
-        from src.narada_identity.keystore import default_keystore
-    except Exception as exc:  # noqa: BLE001
-        uvicorn_logger.error(f"Narada drain: import failed: {exc}")
-        return
-    data_dir = os.path.join(os.path.expanduser("~"), "." + APP_NAME.lower())
-    outbox = Outbox(os.path.join(data_dir, "Narada"))
-    keystore = default_keystore()
-    for account_id in outbox.list_all_accounts():
-        try:
-            adapter = NaradaAdapter(account_id, outbox=outbox, keystore=keystore)
-            adapter.drain_outbox(max_per_account=32)
-        except Exception as exc:  # noqa: BLE001
-            uvicorn_logger.error(f"Narada drain: account {account_id}: {exc}")
-
-
-async def _narada_drain_loop() -> None:
-    uvicorn_logger.info("Narada outbox drainer started")
-    while True:
-        try:
-            _drain_narada_outbox_once()
-        except Exception as exc:  # noqa: BLE001
-            uvicorn_logger.error(f"Narada drain loop error: {exc}")
-        await asyncio.sleep(_narada_DRAIN_INTERVAL)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _narada_drain_task
     try:
         client_handler.create_openmail_clients()
-        # Initialise the Narada relay store with a per-process
-        # master key. The key is derived from the node-identity
-        # seed so a fresh process cannot read another process's
-        # relay deposits even if they share a data directory.
-        try:
-            from src.routers import narada_relay_tasks
-            from src.narada_security.hmac_io import load_key
-            data_dir = Path(os.path.join(
-                os.path.expanduser("~"), "." + APP_NAME.lower()
-            ))
-            narada_relay_tasks.configure(
-                data_dir=data_dir,
-                master_key=load_key(data_dir),
-            )
-        except Exception as exc:
-            uvicorn_logger.error(f"Narada relay: init failed: {exc}")
-        # Start the Narada outbox drainer.
-        try:
-            loop = asyncio.get_running_loop()
-            _narada_drain_task = loop.create_task(_narada_drain_loop())
-        except RuntimeError:
-            # No running loop (e.g. in a test). Skip starting the task;
-            # tests can call _drain_narada_outbox_once() directly.
-            _narada_drain_task = None
         yield
     finally:
-        if _narada_drain_task is not None:
-            _narada_drain_task.cancel()
-            try:
-                await _narada_drain_task
-            except (asyncio.CancelledError, Exception):
-                pass
         client_handler.shutdown()
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(account_tasks.router)
 app.include_router(mailbox_tasks.router)
-app.include_router(narada_identity_tasks.router)
-app.include_router(narada_protocol_tasks.router)
-try:
-    from src.routers import narada_relay_tasks
-    app.include_router(narada_relay_tasks.router)
-except Exception:
-    pass
 def setup_api_middlewares(**kwargs):
     app.add_middleware(
         CORSMiddleware,

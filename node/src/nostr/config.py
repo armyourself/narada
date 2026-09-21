@@ -3,7 +3,6 @@
 Defines the configuration for the Nostr adapter, including:
 
 * Default relay URLs
-* Transport selection (nostr, legacy_narada, smtp)
 * Relay pool settings
 * Encryption preferences
 * Message retention
@@ -25,8 +24,8 @@ DEFAULT_RELAYS = [
     "wss://relay.nostr.band",
 ]
 
-# Narada-specific Nostr event kind
-NARADA_EMAIL_KIND = 1050
+# Application-specific Nostr event kind for email messages
+EMAIL_KIND = 1050
 
 
 @dataclass
@@ -35,8 +34,6 @@ class NostrConfig:
 
     Parameters
     ----------
-    transport:
-        Which transport to use: "nostr", "legacy_narada", or "smtp".
     relay_urls:
         List of Nostr relay WebSocket URLs.
     encryption:
@@ -48,7 +45,7 @@ class NostrConfig:
     message_retention_days:
         How long relays are expected to keep events (days).
     event_kind:
-        Nostr event kind for Narada email messages. Default is 1050.
+        Nostr event kind for email messages. Default is 1050.
     timeout_seconds:
         Connection and message timeout.
     auto_reconnect:
@@ -57,12 +54,11 @@ class NostrConfig:
         Maximum number of reconnection attempts before giving up.
     """
 
-    transport: str = "nostr"
     relay_urls: list[str] = field(default_factory=lambda: list(DEFAULT_RELAYS))
     encryption: str = "nip04"
     dedup_window_seconds: int = 300
     message_retention_days: int = 7
-    event_kind: int = NARADA_EMAIL_KIND
+    event_kind: int = EMAIL_KIND
     timeout_seconds: float = 30.0
     auto_reconnect: bool = True
     max_reconnect_attempts: int = 10
@@ -103,19 +99,16 @@ class NostrConfig:
 
         Environment variables:
 
-        * NARADA_TRANSPORT — transport choice (nostr/legacy_narada/smtp)
-        * NARADA_NOSTR_RELAYS — comma-separated relay URLs
-        * NARADA_NOSTR_ENCRYPTION — encryption method (nip04/nip44)
+        * NOSTR_RELAYS -- comma-separated relay URLs
+        * NOSTR_ENCRYPTION -- encryption method (nip04/nip44)
         """
-        transport = os.environ.get("NARADA_TRANSPORT", "nostr")
-        relays_str = os.environ.get("NARADA_NOSTR_RELAYS", "")
+        relays_str = os.environ.get("NOSTR_RELAYS", "")
         relays = [r.strip() for r in relays_str.split(",") if r.strip()] if relays_str else list(DEFAULT_RELAYS)
-        encryption = os.environ.get("NARADA_NOSTR_ENCRYPTION", "nip04")
+        encryption = os.environ.get("NOSTR_ENCRYPTION", "nip04")
         return cls(
-            transport=transport,
             relay_urls=relays,
             encryption=encryption,
         )
 
 
-__all__ = ["NARADA_EMAIL_KIND", "DEFAULT_RELAYS", "NostrConfig"]
+__all__ = ["EMAIL_KIND", "DEFAULT_RELAYS", "NostrConfig"]

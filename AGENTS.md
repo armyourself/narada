@@ -2,11 +2,10 @@
 
 ## Project Overview
 
-Narada is an alpha-grade decentralized email infrastructure. It's a monorepo with three packages:
+Openmail is an alpha-grade decentralized email application using Nostr transport. It's a monorepo with two packages:
 
-- `node/` - Python/FastAPI node daemon (core protocol)
+- `node/` - Python/FastAPI server (core application)
 - `client/` - SvelteKit + Tauri desktop client
-- `gateway/` - Python bridge between Narada and conventional SMTP/IMAP
 
 **Important**: This is research-grade software. Not production-ready.
 
@@ -24,14 +23,13 @@ Windows: `pwsh -File scripts/install.ps1`
 
 ### Run
 
-- **Node daemon**: `cd node && uv run python -m src.main`
+- **Server**: `cd node && uv run python -m src.main`
 - **Desktop client**: `cd client && bun run tauri dev`
 - **Windows dev**: `pwsh -File scripts/dev.ps1` (spawns both)
 
 ## Testing
 
 - **Node tests**: `cd node && uv run pytest`
-- **Gateway tests**: `cd gateway && uv run pytest` (inferred from structure)
 - **Client typecheck**: `cd client && bun run check`
 - No global test runner; each package runs independently.
 
@@ -39,25 +37,22 @@ Windows: `pwsh -File scripts/install.ps1`
 
 ### Monorepo Structure
 
-- `node/` contains the core Narada protocol, identity, P2P, relay, and routing
+- `node/` contains the server: mail abstraction, Nostr transport, IMAP/SMTP, identity, API routers
 - `client/` is a SvelteKit app wrapped with Tauri for desktop
-- `gateway/` depends on `Narada-node` (see `gateway/pyproject.toml`)
-- `protocol/` contains design docs (identity, message format)
-- `tools/` and `scripts/` contain shared dev helpers
+- `docs/` and `scripts/` contain documentation and dev helpers
 
 ### Key Technical Facts
 
-- Node daemon uses FastAPI with uvicorn
-- Identity: Ed25519 + X25519 keys, bech32m public IDs, BIP-39 mnemonics
-- Transport: QUIC with framed JSON envelopes
+- Server uses FastAPI with uvicorn
+- Identity: Ed25519 + X25519 keys, NIP-19 bech32 encoding (npub/nsec)
+- Transport: Nostr relays via WebSocket (NIP-01, NIP-04, NIP-19)
 - Storage: JSONL files in data directories
-- Protocol is not yet formalized (Phase 6 pending)
+- Email: IMAP/SMTP via Openmail module
 
 ### Version Management
 
 Version bumps via `bumpversion` (`.bumpversion.toml`). Updates files:
 - `node/pyproject.toml`
-- `gateway/pyproject.toml`
 - `client/package.json`
 - `client/src-tauri/tauri.conf.json`
 - `client/src-tauri/Cargo.toml`
@@ -68,12 +63,11 @@ Version bumps via `bumpversion` (`.bumpversion.toml`). Updates files:
 - Python code follows PEP 8; no linter config found
 - Client uses Svelte 5 with TypeScript
 - Commit messages follow conventional commits (from bumpversion config)
-- All code is Apache 2.0 licensed (fork of Openmail)
+- All code is Apache 2.0 licensed (derived from Openmail)
 
 ## Gotchas
 
-- Gateway depends on `Narada-node` package; ensure it's installed first
 - Node data directories are created at runtime (`<data_dir>/`)
-- QUIC transport uses self-signed TLS certs with TOFU pinning
-- No hot-reload for the node daemon; restart required for changes
+- No hot-reload for the server; restart required for changes
 - Client dev server requires both Bun and Rust toolchain
+- Nostr relay connectivity depends on network access to configured relays

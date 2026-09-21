@@ -1,7 +1,7 @@
-<h1 align="center">Narada</h1>
+<h1 align="center">Openmail</h1>
 
 <p align="center">
-  Decentralized email infrastructure.
+  Decentralized email with Nostr transport.
 </p>
 
 <p align="center">
@@ -9,93 +9,60 @@
 </p>
 
 > [!IMPORTANT]
-> Narada is **alpha-grade software**. The protocol, architecture, APIs, and
-> data formats are subject to change without notice. The cryptographic design,
-> threat model, and implementation have not been independently audited.
-> It is not currently recommended for production, security-critical, or
-> irreplaceable communication.
+> This is **alpha-grade software**. The architecture, APIs, and data formats
+> are subject to change without notice. The cryptographic design, threat model,
+> and implementation have not been independently audited.
+> Do not use for production, security-critical, or irreplaceable communication.
 
 ---
 
-## What is Narada?
+## What is this?
 
-Narada is an open-source project exploring a decentralized alternative to conventional email infrastructure.
-
-Traditional email depends on centralized infrastructure:
+An open-source email application that uses [Nostr](https://nostr.com) as its
+decentralized transport layer. Instead of relying on centralized email servers,
+messages are published to Nostr relays as encrypted events.
 
 ```text
-Alice
-  │
-  ▼
-Alice's Mail Provider
-  │
-  │
-  ▼
-Bob's Mail Provider
-  │
-  ▼
-Bob
+    Email Client
+          |
+     MailAdapter
+          |
+       +------+
+       |      |
+     IMAP    Nostr
+     SMTP    Transport
+              |
+         Nostr Relay Pool
 ```
 
-Narada aims to replace this model with a distributed network of independently operated nodes:
-
-```text
-              Narada Network
-
-        ┌───────────────┐
-        │     Alice     │
-        │     Node      │
-        └───────┬───────┘
-                │
-          ┌─────┴─────┐
-          │           │
-          ▼           ▼
-     ┌────────┐  ┌────────┐
-     │ Node B │  │ Node C │
-     └────┬───┘  └───┬────┘
-          │           │
-          └─────┬─────┘
-                ▼
-        ┌───────────────┐
-        │      Bob      │
-        │     Node      │
-        └───────────────┘
-```
-
-No single server should be required to operate the entire network.
+The application speaks conventional IMAP/SMTP for traditional email accounts,
+and Nostr for decentralized, encrypted messaging -- through a single unified
+interface.
 
 ---
 
-## The Idea
+## Why Nostr?
 
-Email is fundamentally a messaging protocol.
+Nostr is a simple, open protocol for decentralized communication. It provides:
 
-Yet modern email infrastructure relies heavily on centralized providers to:
-
-* store mail
-* authenticate users
-* route messages
-* maintain mailboxes
-* provide search and synchronization
-* control access to infrastructure
-
-Narada explores a different model.
-
-Users operate their own nodes. Nodes communicate with one another. Messages are authenticated and encrypted. Infrastructure can be distributed across independently operated participants.
-
-The goal is not to create another Gmail interface.
-
-The goal is to build the **infrastructure underneath the interface**.
+- **Relay network**: messages are published to multiple relays, giving
+  redundancy without depending on any single server.
+- **Ed25519 identities**: each user has a cryptographic keypair that serves
+  as their identity -- no username/password required.
+- **End-to-end encryption**: NIP-04 (AES-256-CBC) and NIP-44 (ChaCha20-
+  Poly1305) encrypt message content so relays cannot read it.
+- **Censorship resistance**: no central authority controls who can publish
+  or subscribe.
+- **Simple protocol**: JSON messages over WebSocket -- easy to implement,
+  easy to audit.
 
 ---
 
-# Architecture
-
-Narada is designed as several independent layers.
+## Architecture
 
 ```text
 ┌─────────────────────────────────────────────┐
-│                 Narada Client              │
+│              Desktop Client                 │
 │                                             │
 │  Inbox · Compose · Search · Accounts        │
 └──────────────────────┬──────────────────────┘
@@ -106,529 +73,162 @@ Narada is designed as several independent layers.
 │ send() · receive() · sync() · search()      │
 └──────────────────────┬──────────────────────┘
                        │
-             ┌─────────┼─────────┐
-             │         │         │
-             ▼         ▼         ▼
-      ┌──────────┐ ┌────────┐ ┌────────┐
-      │ IMAP /   │ │Narada  │ │ Nostr  │
-      │ SMTP     │ │Protocol│ │Adapter │
-      │ Adapter  │ └───┬────┘ └───┬────┘
-      └──────────┘     │          │
-                 ┌─────▼───┐ ┌────▼─────┐
-                 │ Narada  │ │  Nostr   │
-                 │ Network │ │  Relays  │
-                 └─────────┘ └──────────┘
+             ┌─────────┴─────────┐
+             │                   │
+             ▼                   ▼
+      ┌──────────────┐    ┌──────────────┐
+      │ IMAP / SMTP  │    │    Nostr     │
+      │ Adapter      │    │   Adapter    │
+      └──────────────┘    └──────┬───────┘
+                                 │
+                          ┌──────▼──────┐
+                          │  Nostr      │
+                          │  Relay Pool │
+                          └─────────────┘
 ```
 
-The client should not need to know whether a message arrived through conventional email infrastructure, the Narada protocol, or Nostr relays.
+The client doesn't need to know whether a message arrived through
+conventional email infrastructure or Nostr relays.
 
 ---
 
-# Core Principles
+## Identity
 
-## Decentralization
-
-No single organization should be required to operate the entire network.
-
-Anyone should be able to operate a Narada node.
-
-## User Ownership
-
-Users should control their own:
-
-* identity
-* cryptographic keys
-* mailbox
-* node
-* data
-
-## Privacy
-
-Messages should be encrypted before being transmitted through infrastructure that does not need access to their plaintext.
-
-## Minimal Trust
-
-A node should not need to blindly trust other nodes.
-
-The protocol should assume that nodes can fail, disappear, behave incorrectly, or become compromised.
-
-## Resilience
-
-Individual nodes should be allowed to disappear without bringing down the entire network.
-
-Offline users should not necessarily mean undeliverable messages.
-
-## Interoperability
-
-Narada should coexist with existing email infrastructure rather than requiring the entire world to migrate immediately.
-
----
-
-# Identity
-
-Narada is intended to use cryptographic identities rather than relying exclusively on centralized usernames and passwords.
-
-Conceptually:
+Each user has a Nostr identity -- an Ed25519 keypair:
 
 ```text
 Identity
-├── Public Key
-├── Node Identity
-├── Mailbox Information
-└── Key Metadata
+├── Public Key (npub1...)
+├── Secret Key (nsec1...)
+└── X25519 Keys (derived, for encryption)
 ```
 
-A user's private key remains under the user's control.
+- **Public key** (NIP-01 hex or NIP-19 bech32 `npub1...`) identifies the user.
+- **Secret key** (`nsec1...`) is stored locally and never transmitted.
+- **X25519 keys** are derived from the Ed25519 seed for NIP-04/NIP-44 encryption.
 
-The exact identity format and cryptographic architecture are still under development. See [`protocol/identity.md`](protocol/identity.md) for the working draft.
+Identities are generated locally. No registration, no central authority.
 
 ---
 
-# Message Delivery
+## Encryption
 
-A Narada message may eventually travel through several independently operated nodes.
+Two encryption modes are supported:
+
+### NIP-04 (default)
+
+AES-256-CBC with PKCS7 padding. Shared secret derived via X25519 ECDH.
+Broadly supported across Nostr implementations.
+
+### NIP-44 (enhanced)
+
+ChaCha20-Poly1305 AEAD. More secure than NIP-04 (authenticated encryption).
+Used for application-to-application communication when both endpoints support it.
+
+Both modes derive the shared secret from Ed25519 keys using Curve25519
+scalar clamping (SHA-512 hash, first 32 bytes, clamp bits).
+
+---
+
+## Nostr Transport
+
+### Relays
+
+Messages are published to a configurable set of Nostr relays. The relay pool
+provides:
+
+- **Multi-relay failover**: if one relay is down, others continue to work.
+- **Deduplication**: events from multiple relays are deduplicated by event id.
+- **Auto-reconnection**: exponential backoff on disconnection.
+- **Subscription management**: real-time message delivery via WebSocket.
+
+Default relays: `wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.nostr.band`.
+
+### Event Kind
+
+Email messages use Nostr event kind `1050` (application-specific, range
+10000-19999). The event content is the encrypted email body. Tags include
+the recipient's public key (`["p", "<pubkey>"]`).
+
+---
+
+## Current Status
+
+### What works
+
+- Desktop email client (SvelteKit + Tauri)
+- Self-hosted server (Python / FastAPI)
+- IMAP/SMTP support for traditional email
+- Multiple accounts
+- Unified inbox
+- Advanced search
+- Nostr transport adapter
+- Nostr identity generation (NIP-01/NIP-19)
+- NIP-04 and NIP-44 encryption
+- Multi-relay failover
+- Encrypted message send/receive via Nostr relays
+- Offline message delivery (relays as store-and-forward)
+
+### What's missing
+
+- Formal protocol specification
+- Threat model and security audit
+- Key rotation for Nostr identities
+- Delivery confirmation
+- Message expiration policies
+- Relay selection optimization
+- Metadata padding
+
+---
+
+## Security Status
+
+The cryptographic primitives (Ed25519, X25519, AES-256-CBC, ChaCha20-Poly1305)
+are well-known and widely vetted. However:
+
+- The composition and wire format are **alpha-grade**.
+- No third-party security audit has been performed.
+- Metadata (sender, recipient, subject, size) is visible to relays.
+- Relay operators can see who communicates with whom (but not the content).
+- Forward secrecy is not yet implemented.
+- The Nostr relay network relies on voluntary operation -- relays may go
+  offline or censor content.
+
+Treat this as a **research-grade reference implementation**.
+
+---
+
+## Repository Structure
 
 ```text
-Alice
-  │
-  │ encrypted message
-  ▼
-Node A
-  │
-  ▼
-Node B
-  │
-  ▼
-Node C
-  │
-  │ encrypted message
-  ▼
-Bob
-```
-
-Intermediate nodes should only need to transport or temporarily store the message.
-
-They should not require access to its plaintext.
-
----
-
-# Offline Delivery
-
-A decentralized network still needs to solve the problem that users are not always online.
-
-Narada therefore explores encrypted relay nodes.
-
-```text
-Alice
-  │
-  ▼
-Relay A
-  │
-  ▼
-Relay B
-  │
-  │
-  ▼
-Bob comes online
-  │
-  ▼
-Message delivered
-```
-
-Relay infrastructure may temporarily store encrypted messages until the recipient becomes reachable.
-
-The protocol must eventually define:
-
-* message expiration
-* delivery confirmation
-* relay selection
-* duplicate detection
-* storage limits
-* node failure
-* malicious relay behavior
-
----
-
-# Conventional Email
-
-Narada is not intended to exist in isolation.
-
-A future gateway could allow communication between Narada and conventional email:
-
-```text
-Gmail
-  │
-  │ SMTP
-  ▼
-┌─────────────────┐
-│ Narada Gateway │
-└────────┬────────┘
-         │
-         │ Narada Protocol
-         ▼
-   Narada Network
-         │
-         ▼
-   Narada User
-```
-
-Likewise, Narada users should eventually be able to communicate with conventional email addresses.
-
-The gateway lives in [`gateway/`](gateway/) and is currently a skeleton; the Narada-side delivery pipeline must land first.
-
----
-
-# Current Status
-
-Narada currently builds upon an existing self-hosted email client/server architecture.
-
-The inherited application provides functionality including:
-
-* Desktop email client
-* Self-hosted server (still speaks conventional IMAP/SMTP)
-* IMAP support
-* SMTP support
-* Multiple accounts
-* Unified inbox
-* Advanced search
-* Bulk operations
-* Undo actions
-
-Narada-specific work landed so far (under `node/` and `protocol/`):
-
-* **Mail Abstraction layer** (`node/src/mail_abstraction/`): a single
-  `MailAdapter` interface with an IMAP/SMTP adapter and a Narada
-  adapter.
-* **Cryptographic identity** (`node/src/narada_identity/`,
-  `protocol/identity.md`): per-account Ed25519 + X25519 keypair with a
-  `narada1...` bech32m public id, 12-word BIP-39 mnemonic recovery,
-  and three keystore backends (in-memory, OS keyring, passphrase
-  fallback). Exposed via a FastAPI router and a CLI.
-* **Narada protocol MVP** (`node/src/narada/`,
-  `protocol/message-format.md`): two Narada nodes on the same
-  machine can exchange end-to-end encrypted messages over loopback
-  HTTP. The envelope is X25519-ECDH-sealed and Ed25519-signed; the
-  body is ChaCha20-Poly1305. A persistent outbox with
-  exponential-backoff retry handles the recipient being offline.
-* **Per-node identity** (`node/src/narada/node_identity.py`): each
-  node daemon has its own Ed25519 keypair (`node1...` bech32m id)
-  used to attribute envelopes and sign delivery acks. Persistent by
-  default (`<data_dir>/node_identity/seed`, 0600), or `ephemeral=True`
-  for a fresh keypair per envelope (no linkability across sends).
-  Wire-format fields `sender_node_id` / `sender_node_signature` are
-  **optional and additive**: older Narada nodes that do not recognise
-  them still verify the user-key signature and accept the message.
-* **Delivery acknowledgements** (`node/src/narada/ack.py`): a
-  successful envelope accept returns a signed `NaradaAck` (Ed25519
-  over `(sender_public_id, recipient_public_id, message_id,
-  timestamp, status)`) tied to the recipient's node identity. The
-  sender's outbox transitions the entry to *acked* and removes it.
-  The ack is best-effort: a missing ack still counts as a successful
-  delivery, with the outbox entry removed for compatibility with
-  pre-R3 nodes.
-* **Replay protection** (Narada inbox): an envelope's `(sender,
-  message_id)` pair is recorded in a per-recipient dedup window
-  (`<data_dir>/etc/seen.<account>.json`, default TTL 5 min) that
-  survives process restarts. Re-submissions within the window are
-  acknowledged but not re-persisted.
-* **Peer-to-peer transport** (`node/src/narada/p2p/quic.py`): a
-  QUIC outbound transport (`aioquic`) with framed JSON envelopes
-  (`[4B BE length][JSON]`). Per-node self-signed TLS certs at
-  `<data_dir>/node_identity/tls_{cert,key}.pem`. Verification is
-  disabled at the TLS layer; TOFU pinning of peer certs lives at
-  the application layer (commit 5).
-* **Peer discovery** (`node/src/narada/p2p/discovery.py`): mDNS
-  advertise/browse under `_narada._udp.local.` (with `node_id` TXT
-  record) plus a `bootstrap_peers.txt` file under
-  `<data_dir>/node_identity/`. Peers are tracked in an in-memory
-  `PeerTable` keyed by endpoint and by node id.
-* **Mailbox discovery** (V2 user identity format): an optional
-  `node_id_hint` TLV (type `0x01`) embedded in the public id lets a
-  sender resolve a recipient's home node without consulting a
-  directory. Backward-compatible with V1 senders.
-* **Distributed routing** (`node/src/narada/routing.py`,
-  `node/src/narada/p2p/peer_lookup.py`): `CachingDirectory` (TTL
-  cache on top of any `NaradaDirectory`) and `DistributedDirectory`
-  (peer-ask fallback that honours the V2 hint first, then asks
-  every known peer via `InMemoryPeerLookupClient`).
-* **Message synchronization + watermark dedup** (Phase 3 commits
-  5/6): an HTTP `GET/POST /narada/sync` endpoint returns envelopes
-  with `received_at > since`; `WatermarkStore` persists per-sender
-  sequence numbers to `<data_dir>/watermarks.json` and rejects
-  re-deliveries with a watermark <= the stored value. Listener
-  infra (`NaradaQuicListener` + `HandlerRegistry`) lives in
-  `node/src/narada/p2p/listener.py`; the QUIC stream I/O is the
-  remaining piece (commit 9 integration smoke).
-* **Node failure handling** (`PeerBook` + `PeerState`): each peer
-  endpoint has a `last_seen`, `missed_pings`, and `down` flag.
-  `mark_missed(endpoint)` flips `down=True` after 3 missed pings;
-  `touch(endpoint)` resets the liveness clock on inbound activity.
-  `live_endpoints()` excludes down peers and is consulted by
-  `DistributedDirectory.lookup` to route around failed nodes.
-* **Relay nodes** (`node/src/narada/relay/`, Phase 4): a sender
-  whose recipient is not directly reachable hands the sealed
-  envelope to one or more peers via `relay.deposit`; the
-  recipient pulls it back with `relay.fetch` when next online.
-  Storage is per-recipient encrypted at rest (ChaCha20-Poly1305
-  keyed by a per-recipient HKDF of the relay's master secret);
-  the index is HMAC-protected with a tombstone-log recovery
-  path that survives a disk tamper. A signed `relay.stored`
-  receipt is returned to the sender. Relay selection honours
-  the V2 mailbox-discovery hint first, then falls back to the
-  local `PeerBook` with a per-endpoint cooldown. Quotas:
-  per-recipient deposit + byte caps and global caps. Same
-  frames ride on the existing QUIC listener (`relay.deposit` /
-  `relay.fetch` / `relay.drop`); equivalent HTTP routes ship
-  under `/narada/relay/{deposit,fetch,drop,sweep}` for
-  interop and tests.
-* **Narada ↔ SMTP gateway** (`gateway/gateway/`, Phase 5): the
-  trust boundary that lets a Narada user email any conventional
-  address and vice versa. Ships identity mapping
-  (`IdentityMapping`, JSON-backed), NaradaBody ↔ RFC822
-  conversion, an outbound `SmtpSender` (wraps the existing
-  Openmail `SMTPManager`), an inbound `ImapReceiver` (wraps
-  `IMAPManager`), and a `Gateway` orchestrator that wires
-  both directions. Refuses to forward without a mapping (no
-  open relay); refuses anonymous inbound (no silent ingress).
-  Live SMTP/IMAP connectivity is held to a follow-up alongside
-  the Phase 6 audit.
-* **Narada ↔ IMAP gateway** (`gateway/gateway/`, Phase 5):
-  a read-only `NaradaImapServer` that exposes the Narada
-  mailbox JSONL store over IMAP4rev1 so legacy email clients
-  can read Narada messages. An `ImapIngester` provides bulk
-  import from a remote IMAP mailbox into the Narada store.
-  A `GatewayDaemon` ties everything together: long-running
-  polling, an optional IMAP server, and a REST control API
-  (`/status`, `/poll`, `/reload`).
-* **Complete key rotation** (`node/src/narada_identity/`,
-  `node/src/narada/key_update.py`): Option A rotation
-  (`rotate_identity_preserve_x25519`) preserves the X25519
-  encryption key while rotating the Ed25519 signing key.
-  On-the-wire announcement via v=3 key-update envelopes
-  (`make_key_update_envelope`) with a 7-day overlap window.
-  Exposed via CLI (`rotate-x25519`, `key-update`) and HTTP
-  endpoints (`POST /Narada/identity/rotate-x25519`,
-  `POST /Narada/identity/key-update`).
-* The formal protocol specification is **not yet implemented**
-  (Phase 6).
-
-Narada-specific work for Nostr integration:
-
-* **Nostr transport adapter** (`node/src/nostr/`, new):
-  a `NostrAdapter` implementing the `MailAdapter` interface, enabling
-  Narada to send/receive messages through Nostr relays instead of
-  (or in addition to) the legacy Narada protocol. The adapter
-  translates between Narada email semantics and Nostr events, supports
-  multiple relay failover, and handles encryption/decryption transparently.
-* **Nostr identity** (`node/src/nostr/identity.py`): Nostr-compatible
-  identity layer using Ed25519 keys with hex encoding (NIP-01) and
-  bech32 encoding (NIP-19 npub/nsec). Supports deriving Nostr identities
-  from existing Narada Ed25519 seeds for migration.
-* **Nostr events** (`node/src/nostr/events.py`): NIP-01 event creation,
-  signing, and verification. Includes a Narada-specific event kind (1050)
-  for email messages, plus filters for subscription.
-* **NIP-04 encryption** (`node/src/nostr/encryption.py`): AES-256-CBC
-  encrypted direct messages per NIP-04, with proper Ed25519→X25519 key
-  conversion for ECDH. Also includes a ChaCha20-Poly1305 (NIP-44-like)
-  mode for Narada-to-Narada communication.
-* **Nostr relay pool** (`node/src/nostr/relay.py`): multi-relay support
-  with automatic failover, deduplication, reconnection, and subscription
-  management. Narada does not depend on a single relay.
-* **Nostr configuration** (`node/src/nostr/config.py`): transport
-  selection (`nostr`/`legacy_narada`/`smtp`), relay URLs, encryption
-  method, and other settings. Configurable via JSON file or environment
-  variables.
-
----
-
-# Repository Structure
-
-```text
-Narada/
-├── client/         # Desktop client (SvelteKit + Tauri)
-├── node/           # Narada node daemon (Python / FastAPI; Openmail-derived)
-├── gateway/        # Narada <-> SMTP/IMAP bridge (Phase 5 ships)
-├── docs/
-│   ├── architecture/   # Installation, roadmap, screenshots
-│   ├── protocol/       # Protocol-facing documentation
-│   └── security/       # Threat model, audit notes (stub)
-├── scripts/        # install.ps1, dev.ps1
-├── tools/          # shared build/dev helpers
-├── .github/        # CI workflows
-├── Makefile
-├── LICENSE
-└── README.md
+├── client/           Desktop client (SvelteKit + Tauri)
+├── node/             Server (Python / FastAPI)
+│   ├── src/
+│   │   ├── nostr/           Nostr transport implementation
+│   │   ├── mail_abstraction/  MailAdapter interface
+│   │   ├── modules/openmail/  IMAP/SMTP email module
+│   │   ├── internal/         Account management, storage
+│   │   ├── routers/          HTTP API endpoints
+│   │   └── helpers/          Logging, port scanning
+│   └── tests/
+│       ├── nostr/           Nostr-specific tests
+│       ├── mail_abstraction/  Adapter tests
+│       └── ...               Other tests
+├── docs/             Documentation
+├── scripts/          Dev/install scripts
+└── .github/          CI workflows
 ```
 
 ---
 
-# Roadmap
+## Development
 
-## Phase 0 — Client Foundation
+### Prerequisites
 
-* [x] Desktop email client
-* [x] Self-hosted server
-* [x] IMAP
-* [x] SMTP
-* [x] Multiple accounts
-* [x] Unified inbox
-* [x] Advanced search
-* [x] Bulk operations
-* [x] Undo actions
+- Python 3.13+ and [uv](https://github.com/astral-sh/uv)
+- [Bun](https://bun.sh) and [Rust toolchain](https://tauri.app/start/prerequisites/)
 
-## Phase 1 — Cryptographic Identity
-
-* [x] Generate keypairs
-* [x] Secure private-key storage
-* [x] Public-key identities
-* [x] Identity format
-* [x] Identity persistence
-* [x] Key rotation (basic rotate-API + Option A X25519-preserving rotation + on-the-wire v=3 key-update envelopes; CLI and HTTP endpoints)
-* [x] Key recovery (BIP-39 mnemonic)
-
-## Phase 2 — Narada Protocol
-
-* [x] Define protocol specification
-* [x] Define message format
-* [x] Define node identity (per-daemon Ed25519 with `node1...` bech32m id;
-      optional `sender_node_id`/`sender_node_signature` fields on envelopes)
-* [x] Secure handshake (X25519 ECDH + Ed25519 signature on the canonical header)
-* [x] Encrypted transport (ChaCha20-Poly1305 over loopback HTTP)
-* [x] Message authentication (Ed25519 signature on canonical header)
-* [x] Replay protection: persistent (sender, message_id) window stored on disk per
-      recipient (default TTL = 5 minutes); expired entries are reaped on every check
-* [x] Delivery acknowledgements (recipient node signs an ack over
-      `(sender, recipient, message_id, timestamp, status)`; sender outbox
-      transitions to *acked* on valid signature)
-
-## Phase 3 — Distributed Network
-
-* [x] Peer discovery (mDNS + bootstrap list, with TOFU peer pinning)
-* [x] Peer-to-peer communication (QUIC outbound transport + inbound listener)
-* [x] Distributed routing (TTL cache + peer-ask fallback, honours V2 hint)
-* [x] Mailbox discovery (V2 public id carri es an optional node-id hint TLV)
-* [x] Message synchronization (HTTP `/narada/sync` pull; QUIC push wired)
-* [x] Duplicate detection (`(sender, message_id)` dedup window + per-sender
-      `received_at` watermark persisted to `<data_dir>/watermarks.json`)
-* [x] Node failure handling (PeerBook tracks `last_seen`/`missed_pings`;
-      `DistributedDirectory` skips peers marked `down` after 3 missed pings)
-
-## Phase 4 — Distributed Delivery
-
-* [x] Relay nodes (`node/src/narada/relay/`)
-* [x] Encrypted temporary storage (per-recipient AEAD at rest,
-      `RelayStore._envelope_key`)
-* [x] Offline delivery (sender deposits with a relay when the
-      recipient is not directly reachable; recipient pulls on
-      reconnect)
-* [x] Message expiration (TTL per deposit, default 7 days; sweep
-      on access + on a background interval)
-* [x] Relay selection (V2 mailbox-discovery hint first, then
-      `PeerBook` fallback with cooldown)
-* [x] Delivery confirmation (signed `relay.stored` receipt from the
-      relay; recipient-signed `NaradaAck` remains the source of
-      truth)
-* [x] Storage policies (per-recipient deposit/byte caps + global
-      caps; HMAC-protected index with a tombstone-log recovery
-      path; idempotency on `(recipient, message_id)`)
-
-## Phase 5 — Interoperability
-
-* [x] SMTP gateway (`gateway/gateway/sender.py`)
-* [x] Narada → SMTP (outbound path wired in
-      `gateway/gateway/orchestrator.py::Gateway.deliver_outbound`)
-* [x] SMTP → Narada (inbound path wired in
-      `Gateway.poll_inbound`)
-* [x] Identity mapping (`gateway/gateway/mapping.py::IdentityMapping`,
-      JSON-backed; no open relay, no anonymous inbound)
-* [x] IMAP gateway (Narada→IMAP read-only server in
-      `gateway/gateway/imap_server.py`; bulk IMAP→Narada ingest in
-      `gateway/gateway/ingester.py`; long-running daemon with
-      polling and control API in `gateway/gateway/daemon.py`)
-
-## Phase 6 - Security
-* [ ] Formal protocol specification
-* [ ] Threat model
-* [ ] Security audit
-* [ ] Reference implementation
-* [ ] Versioned protocol
-* [ ] Compatibility guarantees
-
----
-
-# Security
-
-Security is a fundamental part of the protocol.
-
-The intended message flow is:
-
-```text
-Plaintext
-    │
-    ▼
-Recipient Identity
-    │
-    ▼
-Encryption
-    │
-    ▼
-Ciphertext
-    │
-    ▼
-Narada Network
-    │
-    ▼
-Ciphertext
-    │
-    ▼
-Recipient
-    │
-    ▼
-Decryption
-    │
-    ▼
-Plaintext
-```
-
-**Current security status**
-
-Narada's cryptographic primitives — X25519 for key agreement, Ed25519 for
-signatures, ChaCha20-Poly1305 for payload encryption, BIP-39 for mnemonic
-recovery, bech32m for public identifiers — are well-known and widely vetted
-algorithms. The composition and wire format, however, are **alpha-grade**:
-
-* the formal protocol specification has not been published (Phase 6)
-* the threat model has not been published (`docs/security/` is a stub)
-* no third-party security audit has been performed
-* key rotation is complete (basic rotate-API + Option A X25519-preserving
-  rotation + on-the-wire v=3 key-update envelopes with 7-day overlap
-  window; CLI and HTTP endpoints ship)
-* replay protection covers a 5-minute window with persistent (sender,
-  message_id) dedup; longer-horizon replay and forward secrecy are
-  not yet specified
-* delivery acknowledgements are best-effort: a missing ack still counts
-  as a successful delivery for backward compatibility
-* QUIC transport uses per-node self-signed certificates with TOFU pinning
-  on first contact (`<data_dir>/node_identity/peers.json`). A user who
-  blindly trusts a rotated cert on a known endpoint will silently accept
-  an attacker. See `docs/security/threat-model.md` for the full list
-  (written in commit 9).
-* metadata protection is not yet specified (sender, recipient, subject,
-  size are all visible to any node that handles the envelope)
-
-Until those items are closed, treat Narada as a **research-grade reference
-implementation**: useful for development, integration work, and protocol
-discussion, but not a substitute for an audited messaging system for any
-communication whose loss or compromise would cause harm.
-
----
-
-# Development
-
-Prerequisites:
-
-- Python 3.13+ and [uv](https://github.com/astral-sh/uv) (for the node)
-- [Bun](https://bun.sh) and the [Rust toolchain](https://tauri.app/start/prerequisites/) (for the desktop client)
+### Install
 
 Linux / macOS:
 
@@ -636,84 +236,61 @@ Linux / macOS:
 ./install.sh
 ```
 
-Windows (PowerShell):
+Windows:
 
 ```pwsh
 pwsh -File scripts/install.ps1
 ```
 
-Run the node:
+### Run
+
+Node server:
 
 ```sh
 cd node
 uv run python -m src.main
 ```
 
-Run the desktop client:
+Desktop client:
 
 ```sh
 cd client
 bun run tauri dev
 ```
 
-Or, on Windows, use the dev launcher to spawn both in separate windows:
-
-```pwsh
-pwsh -File scripts/dev.ps1
-```
-
-Convenience targets via the included `Makefile`:
+### Tests
 
 ```sh
-make install      # run install.sh (Linux/macOS)
-make run-node     # run the Narada node
-make run-client   # run the desktop client
-make test-node    # run the node's test suite
+cd node && uv run pytest
 ```
 
 ---
 
-# Contributing
-
-Narada is experimental and architectural decisions are still being made.
+## Contributing
 
 Contributions are welcome, particularly around:
 
-* distributed systems
-* networking
-* cryptography
-* protocol design
-* storage
-* synchronization
-* security
-* email standards
-* client development
-
-Before implementing major protocol changes, review the relevant design documentation and open a discussion where appropriate.
+- Nostr protocol integration
+- Encryption and key management
+- Relay behavior and selection
+- Email standards (IMAP/SMTP)
+- Client development
+- Security review
 
 ---
 
-# Origin
+## Origin
 
-Narada began as a fork of **Openmail**, an open-source self-hosted email client/server.
+This project is derived from
+[Openmail](https://github.com/burakorkmez/openmail), an open-source
+self-hosted email client/server. The original project's license and
+attribution requirements remain applicable to the code derived from it.
 
-The original project provided the foundation for the client and existing email functionality. Narada extends that foundation toward a decentralized communication protocol.
-
-The original project's license and attribution requirements remain applicable to the code derived from it.
-
-See [`LICENSE`](LICENSE) for the applicable license terms (Apache License 2.0). Upstream: <https://github.com/burakorkmez/openmail>.
-
----
-
-# License
-
-Narada is distributed under the terms of the project's license.
-
-See [`LICENSE`](LICENSE) for details.
+See [`LICENSE`](LICENSE) for details (Apache License 2.0).
 
 ---
 
 <p align="center">
-  <strong>Narada</strong><br>
-  Decentralized email infrastructure.
+  <strong>Openmail</strong><br>
+  Decentralized email with Nostr transport.
 </p>

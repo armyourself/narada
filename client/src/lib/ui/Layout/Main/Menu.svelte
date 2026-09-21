@@ -13,7 +13,7 @@
     import { show as showMessage } from "$lib/ui/Components/Message";
     import { local } from "$lib/locales";
     import { DEFAULT_LANGUAGE } from "$lib/constants";
-    import { naradaIdentity } from "$lib/narada/identity.svelte";
+    import { nostrIdentity } from "$lib/nostr/identity.svelte";
     import type { Account } from "$lib/types";
 
     interface FolderItem {
@@ -67,11 +67,11 @@
               ).length;
     });
 
-    let naradaId = $derived(
-        naradaIdentity.state.publicId
-            ? naradaIdentity.state.publicId.slice(0, 12) +
+    let nostrId = $derived(
+        nostrIdentity.state.publicId
+            ? nostrIdentity.state.publicId.slice(0, 12) +
               "…" +
-              naradaIdentity.state.publicId.slice(-4)
+              nostrIdentity.state.publicId.slice(-4)
             : "not set",
     );
 
@@ -115,7 +115,7 @@
     </button>
     <div class="menu-inner">
         <div class="menu-header">
-            <h2>Narada</h2>
+            <h2>Openmail</h2>
         </div>
         <div class="peer-pill"><span class="live"></span> node offline</div>
 
@@ -155,7 +155,7 @@
         <div class="menu-foot">
             <div class="node-id">
                 <span class="id-label">your node</span>
-                <span class="id-val">{naradaId}</span>
+                <span class="id-val">{nostrId}</span>
             </div>
         </div>
     </div>

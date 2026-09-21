@@ -1,7 +1,7 @@
 {
-    "productName": "Narada",
+    "productName": "Openmail",
     "version": "0.0.1",
-    "identifier": "com.narada.dev",
+    "identifier": "com.openmail.dev",
     "build": {
         "beforeDevCommand": "npm run dev",
         "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
         "macOSPrivateApi": true,
         "windows": [
             {
-                "title": "Narada",
+                "title": "Openmail",
                 "width": 1200,
                 "height": 700,
                 "center": true,

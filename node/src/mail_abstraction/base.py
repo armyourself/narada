@@ -1,14 +1,13 @@
-"""Base interface for Narada mail adapters.
+"""Base interface for mail adapters.
 
-A :class:`MailAdapter` is the single object a Narada node uses to talk to a
-mail source. Today the only production adapter is
-:class:`src.mail_abstraction.imap_smtp.IMAPSMTPAdapter`; future adapters will
-speak the Narada protocol or, eventually, other transports.
+A :class:`MailAdapter` is the single object the application uses to talk to a
+mail source. Concrete adapters include:
+
+* :class:`src.mail_abstraction.imap_smtp.IMAPSMTPAdapter` — wraps Openmail IMAP/SMTP.
+* :class:`src.nostr.adapter.NostrAdapter` — Nostr transport via relays.
 
 The interface is intentionally narrow: enough to send, fetch, list folders,
-and watch for new messages. The existing Openmail IMAP/SMTP surface is
-significantly wider; the wrapper in :mod:`src.mail_abstraction.imap_smtp`
-exposes both views so the existing routers keep working unchanged.
+and watch for new messages.
 """
 
 from __future__ import annotations
@@ -26,13 +25,10 @@ class MailAdapterError(Exception):
 class MessageSource(str, Enum):
     """Where a message came from.
 
-    Used by the Narada client UI to show a small indicator distinguishing
-    messages delivered over conventional email (IMAP) from those delivered
-    over the Narada protocol or Nostr transport.
+    Used by the UI to distinguish messages delivered over different transports.
     """
 
     IMAP = "imap"
-    Narada = "Narada"
     Nostr = "nostr"
 
 
@@ -54,7 +50,7 @@ class Message:
     """A minimal cross-adapter message view.
 
     Adapters may carry more information; this is the projection the rest of
-    the Narada node should rely on. ``raw`` is the adapter-specific blob
+    the application should rely on. ``raw`` is the adapter-specific blob
     (e.g. RFC822 bytes for IMAP) for callers that need it.
     """
 

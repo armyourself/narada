@@ -12,12 +12,12 @@ NIP-01 defines the relay communication protocol:
 
 This module implements:
 
-* :class:`NostrRelay` — single relay connection (WebSocket-based)
-* :class:`RelayPool` — manages multiple relays with failover
+* :class:`NostrRelay` -- single relay connection (WebSocket-based)
+* :class:`RelayPool` -- manages multiple relays with failover
 
 Design principles:
 
-* Narada should NOT depend on a single relay.
+* The application should NOT depend on a single relay.
 * If Relay A fails, Relay B and C continue to work.
 * Reconnection is handled automatically.
 * Duplicate events from multiple relays are detected.
@@ -265,7 +265,6 @@ class NostrRelay:
                         if data[0] == "EVENT":
                             event = NostrEvent.from_dict(data[2])
                             events.append(event)
-                            # Invoke callback if registered
                             sub_id = data[1] if len(data) > 1 else None
                             callback = self._event_callbacks.get(sub_id)
                             if callback:
@@ -340,7 +339,6 @@ class RelayPool:
     def _is_duplicate(self, event_id: str) -> bool:
         """Check if an event was already seen within the dedup window."""
         now = int(time.time())
-        # Clean old entries
         expired = [k for k, v in self._seen_events.items()
                    if now - v > self._dedup_window_seconds]
         for k in expired:
@@ -410,7 +408,6 @@ class RelayPool:
         subscribed = 0
         for relay in self._relays:
             if relay.is_connected:
-                # Wrap callback to add deduplication
                 def _dedup_callback(
                     evt: NostrEvent,
                     _relay: NostrRelay = relay,
