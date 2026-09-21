@@ -1,7 +1,6 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
-    import Rail from "./Main/Rail.svelte";
-    import Menu from "./Main/Menu.svelte";
+    import Sidebar from "./Main/Sidebar.svelte";
 
     interface Props {
         children: Snippet;
@@ -10,25 +9,9 @@
     let { children }: Props = $props();
 </script>
 
-<div class="dashboard">
-    <Rail />
-    <Menu />
-    {@render children()}
+<div class="flex h-full w-full">
+    <Sidebar />
+    <main class="flex-1 flex flex-col h-full bg-white dark:bg-[#121212] overflow-hidden relative">
+        {@render children()}
+    </main>
 </div>
-
-<style>
-    :global {
-        .dashboard {
-            position: relative;
-            z-index: 1;
-            background: var(--glass);
-            backdrop-filter: blur(24px) saturate(1.4);
-            -webkit-backdrop-filter: blur(24px) saturate(1.4);
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-            transition: background 0.4s ease, border-color 0.4s ease;
-        }
-    }
-</style>

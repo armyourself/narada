@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 var inTauri = !!process.env.TAURI_PLATFORM;
@@ -9,7 +10,7 @@ function resolveTauri(pkg) {
 }
 
 export default defineConfig(async () => ({
-  plugins: [sveltekit()],
+  plugins: [tailwindcss(), sveltekit()],
 
   resolve: {
     alias: {

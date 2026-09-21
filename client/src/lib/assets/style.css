@@ -1,214 +1,88 @@
-/* ============================================================
-   Narada — Global Styles
-   Warm cream/brown palette, glass morphism, Space Grotesk + Inter
-   ============================================================ */
+@import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
-
-/* ---- Light theme (default) ---- */
-:root {
-    --hue-1: #FBE6D6;
-    --hue-2: #F7DEE7;
-    --hue-3: #FBF0D9;
-    --hue-4: #E9E2EF;
-    --cream: #FFFBF7;
-    --ink: #453B35;
-    --ink-dim: #8F8177;
-    --ink-faint: #BDB0A5;
-    --accent: #C99B76;
-    --accent-soft: #E7C7A8;
-    --glass: rgba(255, 255, 255, 0.50);
-    --glass-strong: rgba(255, 255, 255, 0.72);
-    --glass-solid: rgba(255, 255, 255, 0.88);
-    --glass-border: rgba(255, 255, 255, 0.65);
-    --shadow: 0 25px 60px rgba(150, 110, 80, 0.18);
-    --radius: 24px;
-    --radius-sm: 12px;
-    --direct: #4C7A61;
-    --relay: #A97635;
-    --gateway: #7C6A5E;
-
-    /* ---- Typography ---- */
-    --ui: 'Space Grotesk', sans-serif;
-    --body: 'Inter', sans-serif;
-    --font-family-primary: 'Inter', sans-serif;
-    --font-family-secondary: 'Space Grotesk', sans-serif;
-    --font-size-xs: 0.72rem;
-    --font-size-sm: 0.84rem;
-    --font-size-md: 0.92rem;
-    --font-size-lg: 1.1rem;
-    --font-size-xl: 1.3rem;
-    --font-size-2xl: 1.6rem;
-    --font-weight-normal: 400;
-    --font-weight-medium: 500;
-    --font-weight-bold: 600;
-    --font-weight-extrabold: 700;
-    --line-height-tight: 1.2;
-    --line-height-normal: 1.6;
-    --line-height-relaxed: 1.8;
-
-    /* ---- Spacing ---- */
-    --spacing-2xs: 0.25rem;
-    --spacing-xs: 0.5rem;
-    --spacing-sm: 0.75rem;
-    --spacing-md: 1rem;
-    --spacing-lg: 1.5rem;
-    --spacing-xl: 2rem;
-    --spacing-2xl: 3rem;
-
-    /* ---- Shadows & Effects ---- */
-    --shadow-sm: 0 2px 8px rgba(200, 160, 130, 0.10);
-    --shadow-md: 0 8px 30px rgba(200, 160, 130, 0.14);
-    --shadow-lg: 0 16px 50px rgba(200, 160, 130, 0.20);
-
-    /* ---- Titlebar ---- */
-    --titlebar-radius: 18px;
-    --titlebar-height: 30px;
-    --color-bg-titlebar: transparent;
-    --color-text-titlebar: var(--ink);
-
-    /* ---- Containers ---- */
-    --container-sm: 360px;
-    --container-md: 480px;
-    --container-lg: 768px;
-    --container-xl: 1024px;
-
-    /* ---- Z-index ---- */
-    --z-index-dropdown: 100;
-    --z-index-popover: 100;
-    --z-index-toast: 200;
-    --z-index-overlay: 300;
-    --z-index-modal: 400;
-    --z-index-modal-over: 500;
-    --z-index-tooltip: 600;
-    --z-index-titlebar: 9999;
-
-    /* ---- Animations ---- */
-    --transition-fast: 150ms;
-    --transition-normal: 300ms;
-    --transition-slow: 500ms;
-    --ease-default: ease;
+@theme {
+    --font-sans: 'Inter', sans-serif;
+    --color-notion-sidebar: #f7f7f5;
+    --color-notion-sidebar-dark: #191919;
+    --color-notion-hover: #efefed;
+    --color-notion-hover-dark: #262626;
+    --color-notion-active: #e8e8e6;
+    --color-notion-active-dark: #2f2f2f;
+    --color-notion-border: #e6e6e3;
+    --color-notion-border-dark: #2a2a2a;
+    --color-notion-text: #37352f;
+    --color-notion-text-muted: #84827e;
+    --color-notion-badge-blue-bg: #e0f2fe;
+    --color-notion-badge-blue-text: #0369a1;
+    --color-notion-badge-red-bg: #ffe4e6;
+    --color-notion-badge-red-text: #be123c;
+    --color-notion-badge-pink-bg: #fce7f3;
+    --color-notion-badge-pink-text: #be185d;
+    --color-notion-badge-purple-bg: #f3e8ff;
+    --color-notion-badge-purple-text: #7e22ce;
+    --color-notion-badge-green-bg: #dcfce7;
+    --color-notion-badge-green-text: #15803d;
 }
 
-/* ---- Dark theme ---- */
-html[data-color-scheme="dark"] {
-    --hue-1: #332821;
-    --hue-2: #2E262B;
-    --hue-3: #332C21;
-    --hue-4: #26222E;
-    --cream: #1B1917;
-    --ink: #EFE7E0;
-    --ink-dim: #B0A399;
-    --ink-faint: #726558;
-    --accent: #E3B487;
-    --accent-soft: #C99B76;
-    --glass: rgba(255, 255, 255, 0.06);
-    --glass-strong: rgba(255, 255, 255, 0.09);
-    --glass-solid: rgba(30, 27, 24, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.12);
-    --shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
-    --direct: #7FB89D;
-    --relay: #D9A257;
-    --gateway: #B0A090;
+@layer base {
+    *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    html, body {
+        height: 100%;
+        overflow: hidden;
+    }
+    body {
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    button {
+        font: inherit;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: inherit;
+    }
+    input, textarea {
+        font: inherit;
+        color: inherit;
+    }
+    a { text-decoration: none; color: inherit; }
 }
 
-/* ---- Reset ---- */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; }
-body {
-    font-family: var(--body);
-    color: var(--ink);
-    overflow: hidden;
-    background: var(--cream);
-    transition: background 0.4s ease, color 0.4s ease;
-    line-height: var(--line-height-normal);
-    user-select: none;
-    -webkit-user-select: none;
-    border-radius: var(--titlebar-radius);
+/* Custom scrollbars matching Notion */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
 }
-button { font: inherit; background: none; border: none; cursor: pointer; color: inherit; }
-input { font: inherit; color: inherit; }
-::selection { background: var(--accent-soft); color: #fff; }
-
-a { color: var(--accent); text-decoration: underline; }
-
-h1, h2, h3, h4, h5 {
-    font-family: var(--ui);
-    color: var(--ink);
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
 }
 
-/* ---- Scrollbar ---- */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(180, 140, 110, 0.25); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(180, 140, 110, 0.40); }
-
-/* ---- Utility classes ---- */
-.muted {
-    margin-top: var(--spacing-2xs);
-    font-size: var(--font-size-xs);
-    color: var(--ink-faint);
+.command-modal-shadow {
+    box-shadow: rgba(15, 15, 15, 0.05) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 5px 10px, rgba(15, 15, 15, 0.2) 0px 15px 40px;
+}
+.dark .command-modal-shadow {
+    box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 0px 1px, rgba(0, 0, 0, 0.3) 0px 5px 10px, rgba(0, 0, 0, 0.5) 0px 15px 40px;
 }
 
-.hidden { display: none !important; }
-.invisible { opacity: 0 !important; visibility: hidden !important; }
-.visible { opacity: 1 !important; visibility: visible !important; }
-.disabled, [disabled] { cursor: not-allowed; pointer-events: none; filter: brightness(0.7); }
-
-/* ---- Pre / Code ---- */
-pre {
-    overflow: scroll;
-    max-height: 50vh;
-    padding: var(--spacing-sm);
-    margin: 0;
-    font-size: var(--font-size-xs);
-    font-family: monospace;
-    background-color: var(--glass-strong);
-    color: var(--ink);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--glass-border);
-    overflow-x: auto;
-}
-
-code {
-    font-family: monospace;
-    background: var(--glass-strong);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-/* ---- Alert containers (used by existing components) ---- */
-.alert-container {
-    display: flex;
-    flex-direction: column-reverse;
-    margin-bottom: var(--spacing-md);
-}
-.alert-container:empty { display: none; }
-
-/* ---- Modal container ---- */
-.modal-container {
-    position: fixed;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    top: 0;
-    left: 0;
-    background-color: rgba(0, 0, 0, 0.4);
-    z-index: var(--z-index-overlay);
-}
-body:has(.modal) .modal-container { display: flex; }
-
-/* ---- Toast container ---- */
-.toast-container {
-    position: fixed;
-    bottom: var(--spacing-lg);
-    left: var(--spacing-lg);
-    display: flex;
-    flex-direction: column-reverse;
-    gap: var(--spacing-xs);
-    z-index: var(--z-index-toast);
-}
+/* macOS traffic light style for buttons */
+.traffic-light { width: 12px; height: 12px; border-radius: 50%; border: 0.5px solid rgba(0,0,0,0.12); }

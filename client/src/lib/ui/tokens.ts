@@ -1,94 +1,66 @@
 /**
- * Design tokens — single source of truth for the UI design system.
+ * Design tokens -- single source of truth for the UI design system.
+ * Matches the Notion Mail frontend.html mockup.
  *
- * When the frontend.html mockup changes, update the values here.
  * Components import from this module instead of hardcoding CSS values.
- *
- * Usage in Svelte:
- *   import { tokens } from "$lib/ui/tokens";
- *   <div style="font-family: {tokens.font.ui}; font-size: {tokens.font.md};">
  */
 
 export const tokens = {
-    /** Color palette — maps directly to CSS custom properties. */
     colors: {
-        cream: "#FFFBF7",
-        ink: "#453B35",
-        inkDim: "#8F8177",
-        inkFaint: "#BDB0A5",
-        accent: "#C99B76",
-        accentSoft: "#E7C7A8",
-        direct: "#4C7A61",
-        relay: "#A97635",
-        gateway: "#7C6A5E",
+        sidebar: "#f7f7f5",
+        hover: "#efefed",
+        active: "#e8e8e6",
+        border: "#e6e6e3",
+        text: "#37352f",
+        textMuted: "#84827e",
     },
-
-    /** Glass morphism surface colors. */
     glass: {
-        base: "rgba(255,255,255,0.50)",
-        strong: "rgba(255,255,255,0.72)",
-        solid: "rgba(255,255,255,0.88)",
-        border: "rgba(255,255,255,0.65)",
+        base: "transparent",
+        strong: "transparent",
+        solid: "transparent",
+        border: "transparent",
     },
-
-    /** Typography. */
     font: {
-        ui: "'Space Grotesk', sans-serif",
-        body: "'Inter', sans-serif",
-        xs: "0.72rem",
-        sm: "0.84rem",
-        md: "0.92rem",
-        lg: "1.1rem",
-        xl: "1.3rem",
-        x2l: "1.6rem",
+        sans: "'Inter', sans-serif",
+        xs: "0.6875rem",
+        sm: "0.8125rem",
+        md: "0.875rem",
+        lg: "1rem",
+        xl: "1.25rem",
     },
-
-    /** Spacing scale. */
     spacing: {
-        x2s: "0.25rem",
-        xs: "0.5rem",
-        sm: "0.75rem",
-        md: "1rem",
-        lg: "1.5rem",
-        xl: "2rem",
-        x2l: "3rem",
+        xs: "0.25rem",
+        sm: "0.5rem",
+        md: "0.75rem",
+        lg: "1rem",
+        xl: "1.5rem",
+        xxl: "2rem",
     },
-
-    /** Border radius. */
     radius: {
-        base: "24px",
-        sm: "12px",
+        sm: "6px",
+        md: "8px",
+        lg: "12px",
     },
-
-    /** Layout dimensions. */
     layout: {
-        railWidth: "74px",
-        menuWidth: "250px",
-        menuWidthCollapsed: "0px",
-        listPanelWidth: "330px",
-        composeWidth: "420px",
-        titlebarHeight: "30px",
-        titlebarRadius: "18px",
+        sidebarWidth: "256px",
+        threadPaneWidth: "620px",
+        threadPaneWidthLg: "700px",
     },
 } as const;
 
-/** Dark theme overrides — applied when html[data-color-scheme="dark"]. */
 export const darkTokens = {
     colors: {
-        cream: "#1B1917",
-        ink: "#EFE7E0",
-        inkDim: "#B0A399",
-        inkFaint: "#726558",
-        accent: "#E3B487",
-        accentSoft: "#C99B76",
-        direct: "#7FB89D",
-        relay: "#D9A257",
-        gateway: "#B0A090",
+        sidebar: "#191919",
+        hover: "#262626",
+        active: "#2f2f2f",
+        border: "#2a2a2a",
+        text: "#e0e0e0",
+        textMuted: "#84827e",
     },
     glass: {
-        base: "rgba(255,255,255,0.06)",
-        strong: "rgba(255,255,255,0.09)",
-        solid: "rgba(30,27,24,0.75)",
-        border: "rgba(255,255,255,0.12)",
+        base: "transparent",
+        strong: "transparent",
+        solid: "transparent",
+        border: "transparent",
     },
 } as const;

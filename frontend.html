@@ -1,958 +1,1100 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Narada — Inbox</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-<style>
-  :root{
-    --hue-1:#FBE6D6; --hue-2:#F7DEE7; --hue-3:#FBF0D9; --hue-4:#E9E2EF;
-    --cream:#FFFBF7;
-    --ink:#453B35; --ink-dim:#8F8177; --ink-faint:#BDB0A5;
-    --accent:#C99B76; --accent-soft:#E7C7A8;
-    --glass:rgba(255,255,255,0.50);
-    --glass-strong:rgba(255,255,255,0.72);
-    --glass-solid:rgba(255,255,255,0.88);
-    --glass-border:rgba(255,255,255,0.65);
-    --shadow:0 25px 60px rgba(150,110,80,0.18);
-    --radius:24px; --radius-sm:12px;
-    --ui:'Space Grotesk', sans-serif; --body:'Inter', sans-serif;
-    --direct:#4C7A61; --relay:#A97635; --gateway:#7C6A5E;
-  }
-  html[data-theme="dark"]{
-    --hue-1:#332821; --hue-2:#2E262B; --hue-3:#332C21; --hue-4:#26222E;
-    --cream:#1B1917;
-    --ink:#EFE7E0; --ink-dim:#B0A399; --ink-faint:#726558;
-    --accent:#E3B487; --accent-soft:#C99B76;
-    --glass:rgba(255,255,255,0.06);
-    --glass-strong:rgba(255,255,255,0.09);
-    --glass-solid:rgba(30,27,24,0.75);
-    --glass-border:rgba(255,255,255,0.12);
-    --shadow:0 25px 60px rgba(0,0,0,0.45);
-    --direct:#7FB89D; --relay:#D9A257; --gateway:#B0A090;
-  }
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:inherit;}
-  html,body{height:100%;}
-  body{
-    font-family:var(--body);color:var(--ink);
-    height:100vh;width:100vw;
-    transition:background .4s ease,color .4s ease;overflow:hidden;
-  }
-
-  /* ---- ambient background ---- */
-  .bg{position:fixed;inset:0;z-index:0;overflow:hidden;
-    background:linear-gradient(160deg, var(--cream) 0%, var(--hue-1) 32%, var(--hue-2) 58%, var(--hue-3) 80%, var(--hue-4) 100%);}
-  .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:0.4;will-change:transform;}
-  .blob.b1{width:560px;height:560px;background:var(--hue-1);top:-220px;left:-160px;animation:driftA 34s ease-in-out infinite;}
-  .blob.b2{width:480px;height:480px;background:var(--hue-2);bottom:-220px;right:-140px;animation:driftB 40s ease-in-out infinite;}
-  .blob.b3{width:380px;height:380px;background:var(--hue-3);top:32%;left:42%;animation:driftC 30s ease-in-out infinite;}
-  .blob.b4{width:420px;height:420px;background:var(--hue-4);top:8%;right:12%;animation:driftD 36s ease-in-out infinite;}
-  @keyframes driftA{0%{transform:translate(0,0) scale(1);}25%{transform:translate(90px,60px) scale(1.1);}50%{transform:translate(40px,140px) scale(0.95);}75%{transform:translate(-60px,50px) scale(1.05);}100%{transform:translate(0,0) scale(1);}}
-  @keyframes driftB{0%{transform:translate(0,0) scale(1);}30%{transform:translate(-80px,-70px) scale(1.08);}60%{transform:translate(-30px,-140px) scale(0.96);}100%{transform:translate(0,0) scale(1);}}
-  @keyframes driftC{0%{transform:translate(0,0) scale(1);}33%{transform:translate(70px,-50px) scale(1.12);}66%{transform:translate(-70px,40px) scale(0.9);}100%{transform:translate(0,0) scale(1);}}
-  @keyframes driftD{0%{transform:translate(0,0) scale(1);}40%{transform:translate(-60px,80px) scale(1.06);}70%{transform:translate(50px,40px) scale(0.94);}100%{transform:translate(0,0) scale(1);}}
-  @media (prefers-reduced-motion: reduce){ .blob{animation:none;} }
-
-  /* ---- dashboard shell ---- */
-  .dashboard{
-    position:relative;z-index:1;
-    background:var(--glass);
-    backdrop-filter:blur(24px) saturate(1.4);
-    -webkit-backdrop-filter:blur(24px) saturate(1.4);
-    width:100vw;height:100vh;
-    border:none;
-    border-radius:0;
-    box-shadow:none;
-    display:flex;overflow:hidden;
-    transition:background .4s ease,border-color .4s ease;
-  }
-
-  /* ---- 1. icon rail ---- */
-  .sidebar{
-    width:74px;border-right:1px solid var(--glass-border);
-    display:flex;flex-direction:column;align-items:center;padding:26px 0;
-    background:var(--glass-strong);flex-shrink:0;
-  }
-  .logo{width:34px;height:34px;border-radius:10px;
-    background:linear-gradient(145deg,var(--accent-soft),var(--accent));
-    display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;margin-bottom:36px;}
-  .nav-icons{display:flex;flex-direction:column;gap:26px;flex-grow:1;align-items:center;}
-  .nav-icons button{
-    width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
-    color:var(--ink-faint);font-size:16px;transition:background .15s,color .15s;
-  }
-  .nav-icons button:hover{background:var(--glass-solid);color:var(--ink);}
-  .nav-icons button.active{background:var(--glass-solid);color:var(--accent);box-shadow:inset 0 0 0 1px var(--glass-border);}
-  .rail-foot{display:flex;flex-direction:column;align-items:center;gap:16px;}
-  .theme-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);font-size:14px;}
-  .theme-btn:hover{background:var(--glass-solid);color:var(--ink);}
-  .theme-btn .moon{display:none;}
-  html[data-theme="dark"] .theme-btn .sun{display:none;}
-  html[data-theme="dark"] .theme-btn .moon{display:inline-block;}
-  .profile-pic{
-    width:36px;height:36px;border-radius:50%;
-    background:linear-gradient(145deg,var(--accent-soft),var(--accent));
-    display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--ui);font-weight:600;font-size:0.75rem;
-  }
-
-  /* ---- 2. menu panel ---- */
-  .menu-panel{
-    width:250px;border-right:1px solid var(--glass-border);
-    padding:26px 18px;display:flex;flex-direction:column;background:var(--glass-strong);
-    flex-shrink:0;overflow:hidden;transition:width .25s ease,padding .25s ease;
-  }
-  .menu-panel.collapsed{width:0;padding:26px 0;border-right:none;}
-  .menu-panel.collapsed .menu-inner{opacity:0;pointer-events:none;}
-  .menu-inner{display:flex;flex-direction:column;height:100%;min-width:212px;transition:opacity .15s ease;}
-  .menu-header{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
-  .menu-header h2{font-family:var(--ui);font-size:1.05rem;font-weight:600;}
-  .peer-pill{
-    display:flex;align-items:center;gap:6px;font-family:var(--ui);font-size:0.62rem;color:var(--ink-dim);
-    background:var(--glass-solid);border:1px solid var(--glass-border);padding:4px 10px;border-radius:100px;margin-bottom:20px;width:fit-content;
-  }
-  .peer-pill .live{width:6px;height:6px;border-radius:50%;background:var(--direct);}
-  .btn-new{
-    background:var(--glass-solid);border:1px solid var(--glass-border);color:var(--ink);
-    padding:12px;border-radius:var(--radius-sm);font-weight:600;font-family:var(--ui);font-size:0.85rem;
-    display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:26px;
-    box-shadow:0 4px 14px rgba(203,154,115,0.20);transition:transform .18s ease,box-shadow .18s ease;
-  }
-  .btn-new i{color:var(--accent);}
-  .btn-new:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(203,154,115,0.28);}
-  .folder-list{list-style:none;margin-bottom:28px;}
-  .folder-list li{
-    padding:9px 11px;margin-bottom:3px;border-radius:var(--radius-sm);
-    display:flex;align-items:center;gap:13px;cursor:pointer;color:var(--ink-dim);font-size:0.85rem;font-weight:500;
-    border-left:2px solid transparent;transition:background .15s,color .15s,border-color .15s;
-  }
-  .folder-list li:hover{background:var(--glass-solid);}
-  .folder-list li i{width:16px;text-align:center;color:var(--ink-faint);}
-  .folder-list li.active{background:var(--glass-solid);color:var(--ink);border-left-color:var(--accent);}
-  .folder-list li.active i{color:var(--accent);}
-  .fbadge{background:var(--accent);color:#fff;font-size:0.6rem;padding:1px 7px;border-radius:100px;margin-left:auto;font-family:var(--ui);}
-  .routes-header{display:flex;justify-content:space-between;align-items:center;font-size:0.66rem;color:var(--ink-faint);
-    text-transform:uppercase;font-weight:600;letter-spacing:.03em;margin-bottom:12px;padding:0 11px;}
-  .route-list{list-style:none;margin-bottom:20px;}
-  .route-list li{padding:7px 11px;display:flex;align-items:center;gap:11px;font-size:0.8rem;color:var(--ink-dim);
-    cursor:pointer;border-radius:var(--radius-sm);transition:background .15s,color .15s;}
-  .route-list li:hover{background:var(--glass-solid);}
-  .route-list li.active{background:var(--glass-solid);color:var(--ink);font-weight:600;}
-  .rdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-  .rdot.direct{background:var(--direct);}
-  .rdot.relay{background:var(--relay);}
-  .rdot.gateway{background:var(--gateway);}
-  .menu-foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--glass-border);}
-  .node-id{font-family:var(--ui);font-size:0.64rem;color:var(--ink-faint);display:flex;flex-direction:column;gap:5px;}
-  .node-id .id-val{color:var(--ink-dim);word-break:break-all;}
-
-  /* ---- 3. email list panel ---- */
-  .list-panel{width:330px;border-right:1px solid var(--glass-border);background:var(--glass-solid);
-    display:flex;flex-direction:column;flex-shrink:0;}
-  .search-container{padding:20px;border-bottom:1px solid var(--glass-border);}
-  .search-box{background:var(--glass);border:1px solid var(--glass-border);border-radius:100px;padding:9px 15px;
-    display:flex;align-items:center;gap:10px;}
-  .search-box i{color:var(--ink-faint);font-size:0.85rem;}
-  .search-box input{border:none;background:transparent;outline:none;width:100%;font-size:0.85rem;color:var(--ink);font-family:var(--body);}
-  .search-box input::placeholder{color:var(--ink-faint);}
-  .list-title-row{display:flex;justify-content:space-between;align-items:center;padding:14px 20px 4px;}
-  .list-title-row span.title{font-family:var(--ui);font-weight:600;font-size:0.9rem;}
-  .list-title-row span.count{font-size:0.68rem;color:var(--ink-faint);}
-  .email-list{overflow-y:auto;flex-grow:1;padding:4px 8px 10px;}
-  .email-list::-webkit-scrollbar{width:6px;}
-  .email-list::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
-  .email-item{padding:13px 12px;display:flex;gap:12px;border-radius:var(--radius-sm);cursor:pointer;
-    transition:background .15s ease;position:relative;}
-  .email-item:hover{background:var(--glass-strong);}
-  .email-item.active{background:var(--glass-strong);box-shadow:inset 2px 0 0 var(--accent);}
-  .avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    color:#fff;font-size:0.72rem;font-family:var(--ui);font-weight:600;flex-shrink:0;}
-  .email-content{flex-grow:1;min-width:0;}
-  .email-top{display:flex;justify-content:space-between;margin-bottom:3px;gap:6px;}
-  .email-name{font-weight:600;font-size:0.85rem;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .email-item.unread .email-name{color:var(--ink);}
-  .email-time{font-size:0.66rem;color:var(--ink-faint);font-family:var(--ui);flex-shrink:0;}
-  .email-preview{font-size:0.78rem;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px;}
-  .email-meta-row{display:flex;align-items:center;gap:6px;}
-  .rbadge{display:inline-flex;align-items:center;gap:3px;font-family:var(--ui);font-size:0.58rem;
-    padding:1px 7px;border-radius:100px;border:1px solid;}
-  .rbadge.direct{color:var(--direct);border-color:color-mix(in srgb, var(--direct) 40%, transparent);background:color-mix(in srgb, var(--direct) 10%, transparent);}
-  .rbadge.relay{color:var(--relay);border-style:dashed;border-color:color-mix(in srgb, var(--relay) 45%, transparent);background:color-mix(in srgb, var(--relay) 9%, transparent);}
-  .rbadge.gateway{color:var(--gateway);border-radius:5px;border-color:color-mix(in srgb, var(--gateway) 40%, transparent);background:color-mix(in srgb, var(--gateway) 9%, transparent);}
-  .email-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;flex-shrink:0;}
-  .star-icon{color:var(--ink-faint);font-size:0.78rem;}
-  .star-icon.active{color:var(--accent);}
-  .unread-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
-
-  /* ---- 4. detail panel ---- */
-  .detail-panel{flex-grow:1;padding:28px 36px;background:var(--cream);display:flex;flex-direction:column;overflow-y:auto;min-width:0;}
-  .detail-panel::-webkit-scrollbar{width:6px;}
-  .detail-panel::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
-  .detail-header-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px;flex-wrap:wrap;gap:10px;}
-  .tag-row{display:flex;gap:8px;flex-wrap:wrap;}
-  .tag{background:var(--glass-strong);border:1px solid var(--glass-border);color:var(--ink-dim);padding:6px 12px;
-    border-radius:var(--radius-sm);font-size:0.72rem;font-weight:600;display:flex;align-items:center;gap:7px;font-family:var(--ui);}
-  .tag.encrypted i{color:var(--direct);}
-  .detail-actions{display:flex;gap:6px;}
-  .detail-actions button{width:32px;height:32px;border-radius:50%;color:var(--ink-faint);display:flex;align-items:center;justify-content:center;}
-  .detail-actions button:hover{background:var(--glass-strong);color:var(--ink);}
-  .mail-date{font-size:0.72rem;color:var(--ink-faint);margin-bottom:8px;font-family:var(--ui);}
-  .mail-subject{font-family:var(--ui);font-size:1.5rem;font-weight:600;color:var(--ink);margin-bottom:24px;}
-  .thread-history{margin-bottom:24px;}
-  .thread-item{display:flex;align-items:center;gap:13px;padding:9px 0;border-bottom:1px solid var(--glass-border);font-size:0.78rem;}
-  .thread-item .avatar{width:26px;height:26px;font-size:0.6rem;}
-  .thread-text{color:var(--ink-faint);flex-grow:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .main-message{margin-bottom:32px;}
-  .msg-header{display:flex;align-items:center;gap:13px;margin-bottom:18px;}
-  .msg-name{font-weight:600;font-size:0.85rem;}
-  .msg-addr{font-size:0.68rem;color:var(--ink-faint);font-family:var(--ui);}
-  .msg-time{color:var(--ink-faint);font-size:0.7rem;margin-left:auto;font-family:var(--ui);}
-  .msg-body{font-size:0.88rem;line-height:1.7;color:var(--ink);}
-  .msg-body p+p{margin-top:12px;}
-
-  .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    color:var(--ink-faint);gap:12px;text-align:center;}
-  .empty-state i{font-size:2.2rem;opacity:.6;}
-  .empty-state p{font-size:0.85rem;max-width:28ch;}
-
-  .reply-box{border:1px solid var(--glass-border);background:var(--glass-strong);border-radius:var(--radius);padding:18px;margin-top:auto;}
-  .reply-box textarea{width:100%;border:none;background:transparent;resize:none;outline:none;font-size:0.85rem;
-    min-height:56px;margin-bottom:12px;color:var(--ink);font-family:var(--body);}
-  .reply-box textarea::placeholder{color:var(--ink-faint);}
-  .reply-toolbar{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--glass-border);
-    padding-top:12px;flex-wrap:wrap;gap:10px;}
-  .format-tools{display:flex;gap:13px;color:var(--ink-faint);font-size:0.82rem;}
-  .format-tools i{cursor:pointer;transition:color .15s;}
-  .format-tools i:hover,.format-tools i.active{color:var(--accent);}
-  .send-actions{display:flex;align-items:center;gap:14px;}
-  .send-actions i{color:var(--ink-faint);cursor:pointer;font-size:0.85rem;transition:color .15s;}
-  .send-actions i:hover{color:var(--ink);}
-  .btn-send{background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:100px;font-weight:600;
-    font-family:var(--ui);font-size:0.8rem;cursor:pointer;display:flex;align-items:center;gap:8px;transition:transform .15s ease,background .15s ease;}
-  .btn-send:hover{transform:translateY(-1px);background:#BA855D;}
-
-  @media (max-width:1150px){ .menu-panel{width:210px;} .list-panel{width:290px;} }
-
-  /* ---- settings view ---- */
-  .list-panel.hidden,.detail-panel.hidden{display:none;}
-  .settings-panel{
-    flex-grow:1;display:none;flex-direction:column;background:var(--cream);
-    padding:32px 44px;overflow-y:auto;min-width:0;
-  }
-  .settings-panel.active{display:flex;}
-  .settings-panel::-webkit-scrollbar{width:6px;}
-  .settings-panel::-webkit-scrollbar-thumb{background:rgba(180,140,110,0.25);border-radius:10px;}
-  .settings-title{font-family:var(--ui);font-size:1.5rem;font-weight:600;margin-bottom:6px;}
-  .settings-sub{font-size:0.82rem;color:var(--ink-faint);margin-bottom:34px;}
-  .settings-section{max-width:560px;margin-bottom:34px;padding-bottom:34px;border-bottom:1px solid var(--glass-border);}
-  .settings-section:last-of-type{border-bottom:none;}
-  .settings-section h3{font-family:var(--ui);font-size:0.68rem;font-weight:600;color:var(--ink-faint);
-    text-transform:uppercase;letter-spacing:.04em;margin-bottom:16px;}
-  .settings-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;}
-  .settings-row-label{font-size:0.86rem;color:var(--ink);font-weight:500;}
-  .settings-row-desc{font-size:0.74rem;color:var(--ink-faint);margin-top:2px;}
-  .settings-node-id{
-    font-family:var(--ui);font-size:0.78rem;color:var(--ink-dim);
-    background:var(--glass-strong);border:1px solid var(--glass-border);border-radius:var(--radius-sm);
-    padding:11px 14px;word-break:break-all;display:flex;align-items:center;justify-content:space-between;gap:10px;
-  }
-  .settings-node-id button{color:var(--ink-faint);flex-shrink:0;}
-  .settings-node-id button:hover{color:var(--accent);}
-  .seg-group{display:flex;gap:8px;flex-wrap:wrap;}
-  .seg-btn{
-    font-family:var(--ui);font-size:0.78rem;color:var(--ink-dim);
-    background:var(--glass-strong);border:1px solid var(--glass-border);
-    padding:8px 16px;border-radius:100px;transition:background .15s,color .15s,border-color .15s;
-  }
-  .seg-btn:hover{background:var(--glass-solid);color:var(--ink);}
-  .seg-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-  .switch{position:relative;width:38px;height:22px;flex-shrink:0;cursor:pointer;}
-  .switch input{opacity:0;width:0;height:0;position:absolute;}
-  .switch .track{position:absolute;inset:0;background:var(--glass-border);border-radius:100px;transition:background .2s ease;}
-  .switch .thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;
-    box-shadow:0 1px 3px rgba(0,0,0,0.2);transition:transform .2s ease;}
-  .switch input:checked ~ .track{background:var(--accent);}
-  .switch input:checked ~ .thumb{transform:translateX(16px);}
-  .settings-btn{
-    font-family:var(--ui);font-size:0.8rem;font-weight:600;color:var(--ink);
-    background:var(--glass-strong);border:1px solid var(--glass-border);
-    padding:9px 18px;border-radius:100px;transition:background .15s ease,transform .15s ease;
-  }
-  .settings-btn:hover{background:var(--glass-solid);transform:translateY(-1px);}
-  .settings-btn.danger{color:#B4553E;border-color:rgba(180,85,62,0.35);background:rgba(180,85,62,0.08);}
-  .settings-btn.danger:hover{background:rgba(180,85,62,0.15);}
-
-  /* ---- node network + contacts pages (share .settings-panel shell) ---- */
-  .stat-row{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:6px;}
-  .stat{display:flex;flex-direction:column;gap:2px;}
-  .stat .stat-num{font-family:var(--ui);font-size:1.5rem;font-weight:600;color:var(--ink);}
-  .stat .stat-label{font-size:0.68rem;color:var(--ink-faint);}
-  .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-  .status-dot.up{background:var(--direct);}
-  .status-dot.degraded{background:var(--relay);}
-  .status-dot.down{background:var(--ink-faint);}
-  .peer-row,.contact-row{
-    display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--glass-border);
-  }
-  .peer-row:last-child,.contact-row:last-child{border-bottom:none;}
-  .peer-main,.contact-main{flex:1;min-width:0;}
-  .peer-name,.contact-name{font-size:0.86rem;font-weight:600;color:var(--ink);}
-  .peer-addr,.contact-addr{font-size:0.72rem;color:var(--ink-faint);font-family:var(--ui);word-break:break-all;}
-  .peer-meta{font-size:0.7rem;color:var(--ink-faint);white-space:nowrap;text-align:right;}
-  .icon-mini-btn{
-    width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    color:var(--ink-faint);flex-shrink:0;
-  }
-  .icon-mini-btn:hover{background:var(--glass-strong);color:var(--accent);}
-  .add-row{display:flex;gap:10px;margin-top:16px;}
-  .add-row input{
-    flex:1;background:var(--glass-strong);border:1px solid var(--glass-border);border-radius:100px;
-    padding:9px 16px;font-size:0.82rem;color:var(--ink);outline:none;font-family:var(--body);
-  }
-  .add-row input::placeholder{color:var(--ink-faint);}
-  .contacts-search{margin-bottom:22px;max-width:340px;}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notion Mail</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        notion: {
+                            sidebar: '#f7f7f5',
+                            sidebarDark: '#191919',
+                            hover: '#efefed',
+                            hoverDark: '#262626',
+                            active: '#e8e8e6',
+                            activeDark: '#2f2f2f',
+                            border: '#e6e6e3',
+                            borderDark: '#2a2a2a',
+                            text: '#37352f',
+                            textMuted: '#84827e',
+                            badgeBlueBg: '#e0f2fe',
+                            badgeBlueText: '#0369a1',
+                            badgeRedBg: '#ffe4e6',
+                            badgeRedText: '#be123c',
+                            badgePinkBg: '#fce7f3',
+                            badgePinkText: '#be185d',
+                            badgePurpleBg: '#f3e8ff',
+                            badgePurpleText: '#7e22ce',
+                            badgeGreenBg: '#dcfce7',
+                            badgeGreenText: '#15803d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbars matching Notion */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 9999px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.25);
+        }
+        .command-modal-shadow {
+            box-shadow: rgba(15, 15, 15, 0.05) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 5px 10px, rgba(15, 15, 15, 0.2) 0px 15px 40px;
+        }
+    </style>
 </head>
-<body>
+<body class="h-full bg-white dark:bg-[#121212] text-notion-text dark:text-gray-200 font-sans antialiased overflow-hidden select-none">
 
-<div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div></div>
+    <div class="flex h-full w-full">
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="w-64 flex-shrink-0 bg-notion-sidebar dark:bg-notion-sidebarDark border-r border-notion-border dark:border-notion-borderDark flex flex-col justify-between h-full transition-all duration-200 z-20">
+            <div>
+                <!-- Top Header / macOS Window Controls & User Switching -->
+                <div class="p-3 pb-1">
+                    <!-- Window Controls (Red, Yellow, Green dots) -->
+                    <div class="flex items-center space-x-2 mb-3 pl-1 pt-0.5">
+                        <span class="w-3 h-3 rounded-full bg-[#ff5f56] inline-block border border-black/10"></span>
+                        <span class="w-3 h-3 rounded-full bg-[#ffbd2e] inline-block border border-black/10"></span>
+                        <span class="w-3 h-3 rounded-full bg-[#27c93f] inline-block border border-black/10"></span>
+                    </div>
 
-<div class="dashboard">
+                    <!-- Profile Switcher & Compose Button -->
+                    <div class="flex items-center justify-between group">
+                        <button onclick="toggleProfileMenu()" class="flex items-center space-x-2 hover:bg-notion-hover dark:hover:bg-notion-hoverDark p-1.5 rounded-md transition-colors text-left flex-1 min-w-0 mr-1">
+                            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120" alt="Stephanie Lee" class="w-6 h-6 rounded-full object-cover flex-shrink-0 border border-gray-200 dark:border-gray-700">
+                            <span class="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">Stephanie Lee</span>
+                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-notion-textMuted flex-shrink-0"></i>
+                        </button>
+                        
+                        <button onclick="openComposeModal()" title="Compose new message (N)" class="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md transition-colors">
+                            <i data-lucide="square-pen" class="w-4 h-4"></i>
+                        </button>
+                    </div>
 
-  <!-- 1. ICON RAIL -->
-  <div class="sidebar">
-    <div class="logo"><i class="fa-solid fa-lock"></i></div>
-    <div class="nav-icons">
-      <button class="active" data-nav="inbox" title="Mail"><i class="fa-regular fa-envelope"></i></button>
-      <button data-nav="network" title="Node network"><i class="fa-solid fa-diagram-project"></i></button>
-      <button data-nav="contacts" title="Contacts"><i class="fa-regular fa-user"></i></button>
-      <button data-nav="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
-    </div>
-    <div class="rail-foot">
-      <button class="theme-btn" id="themeToggle" title="Toggle theme">
-        <i class="fa-solid fa-sun sun"></i><i class="fa-solid fa-moon moon"></i>
-      </button>
-      <div class="profile-pic">A</div>
-    </div>
-  </div>
+                    <!-- Profile Dropdown Menu -->
+                    <div id="profileMenu" class="hidden absolute left-4 top-16 w-56 bg-white dark:bg-[#202020] rounded-lg shadow-lg border border-notion-border dark:border-notion-borderDark p-1.5 z-50 text-xs text-gray-700 dark:text-gray-200">
+                        <div class="px-2 py-1.5 font-medium text-notion-textMuted border-b border-notion-border dark:border-notion-borderDark mb-1">
+                            stephanie.lee@lumi.inc
+                        </div>
+                        <button onclick="toggleProfileMenu()" class="w-full text-left px-2 py-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded flex items-center space-x-2">
+                            <i data-lucide="user" class="w-3.5 h-3.5"></i>
+                            <span>Account settings</span>
+                        </button>
+                        <button onclick="toggleDarkMode()" class="w-full text-left px-2 py-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded flex items-center space-x-2">
+                            <i data-lucide="moon" class="w-3.5 h-3.5"></i>
+                            <span>Toggle Dark Theme</span>
+                        </button>
+                        <div class="border-t border-notion-border dark:border-notion-borderDark my-1"></div>
+                        <button onclick="toggleProfileMenu()" class="w-full text-left px-2 py-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded text-red-600 dark:text-red-400 flex items-center space-x-2">
+                            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                            <span>Log out</span>
+                        </button>
+                    </div>
+                </div>
 
-  <!-- 2. MENU PANEL -->
-  <div class="menu-panel" id="menuPanel">
-    <div class="menu-inner">
-      <div class="menu-header">
-        <button class="theme-btn" id="menuCollapse" title="Hide menu"><i class="fa-solid fa-chevron-left"></i></button>
-        <h2>Narada</h2>
-      </div>
-      <div class="peer-pill"><span class="live"></span>6 peers connected</div>
+                <!-- Search Button (Triggers Command Palette Modal) -->
+                <div class="px-2 py-1">
+                    <button onclick="openCommandPalette()" class="w-full flex items-center justify-between px-2.5 py-1.5 text-sm text-notion-textMuted hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md transition-colors group">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="search" class="w-4 h-4 text-notion-textMuted"></i>
+                            <span class="text-sm font-normal text-gray-600 dark:text-gray-400">Search</span>
+                        </div>
+                        <span class="text-[11px] font-medium bg-gray-200/60 dark:bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded border border-gray-300/40 dark:border-gray-700">⌘K</span>
+                    </button>
+                </div>
 
-      <button class="btn-new" id="composeOpen"><i class="fa-solid fa-pen-to-square"></i> Compose</button>
+                <!-- Views Navigation Section -->
+                <div class="px-2 pt-3 pb-1">
+                    <div class="px-2 py-1 text-[11px] font-semibold text-notion-textMuted uppercase tracking-wider">Views</div>
+                    <nav class="space-y-0.5 mt-0.5" id="viewsNav">
+                        <!-- Inbox -->
+                        <button onclick="switchView('inbox')" id="view-inbox" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors bg-notion-active dark:bg-notion-activeDark text-gray-900 dark:text-white">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="inbox" class="w-4 h-4 text-red-500"></i>
+                                <span class="truncate">Inbox</span>
+                            </div>
+                            <span class="text-xs text-notion-textMuted font-normal" id="badge-inbox">8</span>
+                        </button>
 
-      <ul class="folder-list" id="folderList">
-        <li class="active" data-folder="inbox"><i class="fa-solid fa-inbox"></i> Inbox <span class="fbadge">4</span></li>
-        <li data-folder="starred"><i class="fa-regular fa-star"></i> Starred</li>
-        <li data-folder="sent"><i class="fa-regular fa-paper-plane"></i> Sent</li>
-        <li data-folder="drafts"><i class="fa-solid fa-pen"></i> Drafts <span class="fbadge">1</span></li>
-        <li data-folder="all"><i class="fa-regular fa-envelope-open"></i> All mail</li>
-        <li data-folder="encrypted"><i class="fa-solid fa-lock"></i> Encrypted</li>
-        <li data-folder="network"><i class="fa-solid fa-circle-nodes"></i> Node network</li>
-        <li data-folder="trash"><i class="fa-regular fa-trash-can"></i> Trash</li>
-      </ul>
+                        <!-- Project updates -->
+                        <button onclick="switchView('project-updates')" id="view-project-updates" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="target" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">Project updates</span>
+                            </div>
+                            <span class="text-xs text-notion-textMuted font-normal">1</span>
+                        </button>
 
-      <div class="routes-header"><span>Delivery route</span></div>
-      <ul class="route-list" id="routeList">
-        <li data-route="direct"><span class="rdot direct"></span> Direct</li>
-        <li data-route="relay"><span class="rdot relay"></span> Via relay</li>
-        <li data-route="gateway"><span class="rdot gateway"></span> Via gateway</li>
-      </ul>
+                        <!-- Leadership updates -->
+                        <button onclick="switchView('leadership-updates')" id="view-leadership-updates" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="accessibility" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">Leadership updates</span>
+                            </div>
+                            <span class="text-xs text-notion-textMuted font-normal">1</span>
+                        </button>
 
-      <div class="menu-foot">
-        <div class="node-id">
-          <span>your node</span>
-          <span class="id-val">narada1q9x…f83k</span>
+                        <!-- Sales leads -->
+                        <button onclick="switchView('sales-leads')" id="view-sales-leads" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="banknote" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">Sales leads</span>
+                            </div>
+                            <span class="text-xs text-notion-textMuted font-normal">8</span>
+                        </button>
+
+                        <!-- Hiring leads -->
+                        <button onclick="switchView('hiring-leads')" id="view-hiring-leads" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="user-check" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">Hiring leads</span>
+                            </div>
+                            <span class="text-xs text-notion-textMuted font-normal">2</span>
+                        </button>
+
+                        <!-- Meeting requests -->
+                        <button onclick="switchView('meeting-requests')" id="view-meeting-requests" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="calendar" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">Meeting requests</span>
+                            </div>
+                        </button>
+
+                        <!-- ... More -->
+                        <button onclick="showMoreToast()" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-notion-textMuted hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="more-horizontal" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">More</span>
+                            </div>
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Mail Section -->
+                <div class="px-2 pt-3 pb-1">
+                    <div class="px-2 py-1 text-[11px] font-semibold text-notion-textMuted uppercase tracking-wider">Mail</div>
+                    <nav class="space-y-0.5 mt-0.5">
+                        <button onclick="switchView('all-mail')" id="view-all-mail" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="archive" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">All Mail</span>
+                            </div>
+                        </button>
+                        <button onclick="switchView('sent')" id="view-sent" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="send" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">Sent</span>
+                            </div>
+                        </button>
+                        <button onclick="switchView('drafts')" id="view-drafts" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-notion-hover dark:hover:bg-notion-hoverDark transition-colors">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                <i data-lucide="file-edit" class="w-4 h-4 text-notion-textMuted"></i>
+                                <span class="truncate">Drafts</span>
+                            </div>
+                        </button>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer Keys Hint -->
+            <div class="p-3 border-t border-notion-border dark:border-notion-borderDark flex items-center justify-between text-notion-textMuted">
+                <div class="flex items-center space-x-1.5">
+                    <div class="w-5 h-5 rounded border border-gray-300 dark:border-gray-700 flex items-center justify-center text-[10px] font-semibold bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-xs">N</div>
+                    <div class="w-5 h-5 rounded border border-gray-300 dark:border-gray-700 flex items-center justify-center text-[10px] font-semibold bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-xs">6</div>
+                </div>
+                <button onclick="showHelpModal()" class="w-6 h-6 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded flex items-center justify-center text-notion-textMuted hover:text-gray-800 dark:hover:text-gray-200 transition-colors">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 flex flex-col h-full bg-white dark:bg-[#121212] overflow-hidden relative">
+            
+            <!-- Header Toolbar -->
+            <header class="h-14 border-b border-notion-border dark:border-notion-borderDark px-6 flex items-center justify-between flex-shrink-0 bg-white/80 dark:bg-[#121212]/80 backdrop-blur">
+                <div class="flex items-center space-x-3">
+                    <button onclick="toggleSidebar()" class="md:hidden p-1 text-gray-500 hover:text-gray-800">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <!-- Header Icon & Title -->
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-6 h-6 rounded flex items-center justify-center text-red-500">
+                            <i data-lucide="inbox" class="w-5 h-5"></i>
+                        </div>
+                        <h1 id="mainViewTitle" class="text-base font-semibold text-gray-900 dark:text-white">Inbox</h1>
+                    </div>
+                </div>
+
+                <!-- Header Actions -->
+                <div class="flex items-center space-x-2">
+                    <!-- Auto Label Button (with magic wand/sparkle) -->
+                    <button onclick="runAutoLabeling()" class="flex items-center space-x-1.5 px-3 py-1 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-xs font-medium text-gray-700 dark:text-gray-300 shadow-xs transition-colors">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i>
+                        <span>Auto label</span>
+                    </button>
+
+                    <!-- Filter Toggle -->
+                    <button onclick="toggleFilterMenu()" class="p-1.5 text-notion-textMuted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md transition-colors" title="Filter & Sort">
+                        <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- View Switcher -->
+                    <button onclick="toggleCompactView()" class="p-1.5 text-notion-textMuted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md transition-colors" title="Toggle Compact View">
+                        <i data-lucide="list" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- Settings Gear -->
+                    <button onclick="openSettingsModal()" class="p-1.5 text-notion-textMuted hover:text-gray-800 dark:hover:text-gray-200 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md transition-colors" title="Settings">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Email List Container -->
+            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-6" id="emailListContainer">
+                
+                <!-- UNREAD SECTION -->
+                <div id="unreadSection">
+                    <!-- Unread Header -->
+                    <div class="flex items-center space-x-2 text-xs font-medium text-notion-textMuted mb-2 cursor-pointer select-none group" onclick="toggleSection('unreadContainer', 'unreadChevron')">
+                        <i data-lucide="square" class="w-3.5 h-3.5 text-gray-400"></i>
+                        <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">Unread</span>
+                        <i data-lucide="chevron-down" id="unreadChevron" class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 transition-transform"></i>
+                    </div>
+
+                    <!-- Unread Emails List -->
+                    <div id="unreadContainer" class="space-y-0.5 divide-y divide-gray-100 dark:divide-gray-800/60">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- READ SECTION -->
+                <div id="readSection" class="pt-2">
+                    <!-- Read Header -->
+                    <div class="flex items-center space-x-2 text-xs font-medium text-notion-textMuted mb-2 cursor-pointer select-none group" onclick="toggleSection('readContainer', 'readChevron')">
+                        <i data-lucide="check-square-2" class="w-3.5 h-3.5 text-gray-400"></i>
+                        <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">Read</span>
+                        <i data-lucide="chevron-down" id="readChevron" class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 transition-transform"></i>
+                    </div>
+
+                    <!-- Read Emails List -->
+                    <div id="readContainer" class="space-y-0.5 divide-y divide-gray-100 dark:divide-gray-800/60">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- THREAD READING PANE / SLIDE-OVER -->
+        <div id="threadPane" class="hidden absolute right-0 top-0 h-full w-full md:w-[620px] lg:w-[700px] bg-white dark:bg-[#181818] border-l border-notion-border dark:border-notion-borderDark shadow-2xl z-30 flex flex-col transition-all duration-300">
+            <!-- Thread Header -->
+            <div class="h-14 border-b border-notion-border dark:border-notion-borderDark px-6 flex items-center justify-between flex-shrink-0 bg-white/90 dark:bg-[#181818]/90 backdrop-blur">
+                <div class="flex items-center space-x-2">
+                    <button onclick="closeThreadPane()" class="p-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md text-notion-textMuted hover:text-gray-800 dark:hover:text-gray-200 transition-colors" title="Close (Esc)">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                    <span class="text-xs text-notion-textMuted font-mono">Press Esc to close</span>
+                </div>
+
+                <div class="flex items-center space-x-1">
+                    <button onclick="navigateThread('prev')" class="p-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md text-notion-textMuted transition-colors" title="Previous Thread (K)">
+                        <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="navigateThread('next')" class="p-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md text-notion-textMuted transition-colors" title="Next Thread (J)">
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                    </button>
+                    <div class="h-4 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                    <button onclick="toggleCurrentReadState()" id="threadReadToggleBtn" class="p-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md text-notion-textMuted transition-colors" title="Mark as Unread (Shift+U)">
+                        <i data-lucide="mail-open" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="archiveCurrentThread()" class="p-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md text-notion-textMuted transition-colors" title="Archive">
+                        <i data-lucide="archive" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="deleteCurrentThread()" class="p-1.5 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md text-notion-textMuted hover:text-red-600 transition-colors" title="Delete">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Thread Detail Body -->
+            <div class="flex-1 overflow-y-auto p-8 space-y-6" id="threadPaneContent">
+                <!-- Content dynamically injected here -->
+            </div>
+
+            <!-- Thread Quick Reply Box -->
+            <div class="p-4 border-t border-notion-border dark:border-notion-borderDark bg-gray-50/50 dark:bg-[#151515]">
+                <div class="border border-notion-border dark:border-notion-borderDark rounded-lg bg-white dark:bg-[#202020] p-3 shadow-2xs">
+                    <textarea id="replyTextarea" placeholder="Write a reply..." class="w-full bg-transparent text-sm resize-none focus:outline-none text-gray-800 dark:text-gray-200 h-16"></textarea>
+                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
+                        <div class="flex items-center space-x-1">
+                            <button onclick="generateAIReply()" class="flex items-center space-x-1 px-2.5 py-1 text-xs rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-medium hover:bg-purple-100 transition-colors">
+                                <i data-lucide="sparkles" class="w-3 h-3 text-purple-500"></i>
+                                <span>Draft with AI</span>
+                            </button>
+                            <button class="p-1 text-gray-400 hover:text-gray-600 rounded"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i></button>
+                        </div>
+                        <button onclick="sendReply()" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors flex items-center space-x-1">
+                            <span>Send</span>
+                            <i data-lucide="send" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 3. EMAIL LIST -->
-  <div class="list-panel">
-    <div class="search-container">
-      <div class="search-box">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <input type="text" id="searchInput" placeholder="Search mail">
-      </div>
-    </div>
-    <div class="list-title-row">
-      <span class="title" id="listTitle">Inbox</span>
-      <span class="count" id="listCount">4 conversations</span>
-    </div>
-    <div class="email-list" id="emailList"></div>
-  </div>
-
-  <!-- 4. DETAIL PANEL -->
-  <div class="detail-panel" id="detailPanel"></div>
-
-  <!-- SETTINGS VIEW -->
-  <div class="settings-panel" id="settingsPanel">
-    <div class="settings-title">Settings</div>
-    <div class="settings-sub">Your node, your keys, your rules.</div>
-
-    <div class="settings-section">
-      <h3>Appearance</h3>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Theme</div>
-          <div class="settings-row-desc">Switch between light and dark.</div>
-        </div>
-        <div class="seg-group" id="settingsThemeGroup">
-          <button class="seg-btn" data-theme-choice="light">Light</button>
-          <button class="seg-btn" data-theme-choice="dark">Dark</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>Node &amp; identity</h3>
-      <div class="settings-row" style="display:block;">
-        <div class="settings-row-label" style="margin-bottom:8px;">Your node id</div>
-        <div class="settings-node-id">
-          <span>narada1q9x7m2k…v8f83k</span>
-          <button title="Copy"><i class="fa-regular fa-copy"></i></button>
-        </div>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Recovery phrase</div>
-          <div class="settings-row-desc">12-word mnemonic — write it down, don't screenshot it.</div>
-        </div>
-        <button class="settings-btn" id="revealMnemonic">Reveal</button>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Key rotation</div>
-          <div class="settings-row-desc">Rotate your signing key without changing your address.</div>
-        </div>
-        <button class="settings-btn">Rotate keys</button>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>Delivery &amp; privacy</h3>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Preferred route</div>
-          <div class="settings-row-desc">Fall back to relay or gateway only when direct delivery fails.</div>
-        </div>
-        <div class="seg-group" id="settingsRouteGroup">
-          <button class="seg-btn active" data-route-choice="direct">Direct only</button>
-          <button class="seg-btn" data-route-choice="relay">Allow relay</button>
-          <button class="seg-btn" data-route-choice="gateway">Allow gateway</button>
-        </div>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Read receipts</div>
-          <div class="settings-row-desc">Let senders see a signed delivery acknowledgement.</div>
-        </div>
-        <label class="switch"><input type="checkbox" checked><span class="track"></span><span class="thumb"></span></label>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>Notifications</h3>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Desktop notifications</div>
-          <div class="settings-row-desc">Show a banner when new mail arrives.</div>
-        </div>
-        <label class="switch"><input type="checkbox" checked><span class="track"></span><span class="thumb"></span></label>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Sound</div>
-          <div class="settings-row-desc">Play a sound on new mail.</div>
-        </div>
-        <label class="switch"><input type="checkbox"><span class="track"></span><span class="thumb"></span></label>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>Danger zone</h3>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Sign out</div>
-          <div class="settings-row-desc">You'll need your recovery phrase to sign back in.</div>
-        </div>
-        <button class="settings-btn danger">Sign out</button>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Delete node identity</div>
-          <div class="settings-row-desc">Permanently destroys your keys. Mail addressed to you becomes undeliverable.</div>
-        </div>
-        <button class="settings-btn danger">Delete identity</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- NODE NETWORK VIEW -->
-  <div class="settings-panel" id="networkPanel">
-    <div class="settings-title">Node network</div>
-    <div class="settings-sub">Who your node is talking to right now.</div>
-
-    <div class="settings-section">
-      <h3>Your node</h3>
-      <div class="settings-node-id">
-        <span>narada1q9x7m2k…v8f83k</span>
-        <button title="Copy"><i class="fa-regular fa-copy"></i></button>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Status</div>
-          <div class="settings-row-desc">Listening on QUIC, discoverable via mDNS.</div>
-        </div>
-        <div class="tag encrypted"><span class="status-dot up" style="margin-right:7px;"></span>Online</div>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>Network health</h3>
-      <div class="stat-row">
-        <div class="stat"><span class="stat-num">6</span><span class="stat-label">peers connected</span></div>
-        <div class="stat"><span class="stat-num">4</span><span class="stat-label">direct reachable</span></div>
-        <div class="stat"><span class="stat-num">1</span><span class="stat-label">relayed</span></div>
-        <div class="stat"><span class="stat-num">3</span><span class="stat-label">down (last hour)</span></div>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>Connected peers</h3>
-      <div id="peerList">
-        <div class="peer-row">
-          <span class="status-dot up"></span>
-          <div class="peer-main">
-            <div class="peer-name">node1a7f…3kd9</div>
-            <div class="peer-addr">192.168.1.42 · QUIC · TOFU pinned</div>
-          </div>
-          <div class="peer-meta">12ms · seen just now</div>
-        </div>
-        <div class="peer-row">
-          <span class="status-dot up"></span>
-          <div class="peer-main">
-            <div class="peer-name">node1m2p…7xqe</div>
-            <div class="peer-addr">10.0.0.18 · QUIC · TOFU pinned</div>
-          </div>
-          <div class="peer-meta">34ms · seen just now</div>
-        </div>
-        <div class="peer-row">
-          <span class="status-dot degraded"></span>
-          <div class="peer-main">
-            <div class="peer-name">node1r5t…9vwc</div>
-            <div class="peer-addr">relay.narada.dev · 1 missed ping</div>
-          </div>
-          <div class="peer-meta">210ms · seen 40s ago</div>
-        </div>
-        <div class="peer-row">
-          <span class="status-dot down"></span>
-          <div class="peer-main">
-            <div class="peer-name">node1z8k…2mfa</div>
-            <div class="peer-addr">bootstrap peer · 3 missed pings</div>
-          </div>
-          <div class="peer-meta">down · routed around</div>
-        </div>
-        <div class="peer-row">
-          <span class="status-dot down"></span>
-          <div class="peer-main">
-            <div class="peer-name">node1h4n…6bse</div>
-            <div class="peer-addr">bootstrap peer · 3 missed pings</div>
-          </div>
-          <div class="peer-meta">down · routed around</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <h3>Bootstrap peers</h3>
-      <div class="settings-row-desc" style="margin-bottom:4px;">Add a known peer address to help your node find the rest of the network.</div>
-      <div class="add-row">
-        <input type="text" id="bootstrapInput" placeholder="node1… or host:port">
-        <button class="settings-btn" id="addBootstrap">Add</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- CONTACTS VIEW -->
-  <div class="settings-panel" id="contactsPanel">
-    <div class="settings-title">Contacts</div>
-    <div class="settings-sub">People you've exchanged keys with.</div>
-
-    <div class="contacts-search">
-      <div class="search-box">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <input type="text" id="contactsSearch" placeholder="Search contacts">
-      </div>
-    </div>
-
-    <div class="settings-section" style="border-bottom:none;">
-      <div id="contactList"></div>
-      <div class="add-row">
-        <input type="text" placeholder="Add by node id or name…">
-        <button class="settings-btn" id="addContact">Add contact</button>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<script>
-const mails = [
-  { id:1, folder:'inbox', unread:true, starred:true,
-    sender:'Priya Shah', addr:'narada1p8y…2qxa', initial:'P', color:'#C99B76',
-    subject:'Relay quotas for the beta cohort',
-    preview:'Before we open this up wider, we should agree on per-recipient deposit caps…',
-    time:'9:41 AM', date:'Today, 12 September 2026, 9:41', route:'direct',
-    thread:[{who:'Priya Shah', text:'Hi, flagging the relay quota question before rollout…', time:'10.09.2026 14:02'}],
-    body:['Before we open this up wider, we should agree on per-recipient deposit caps and how aggressively relays sweep expired deposits.','My worry is a relay filling up with beta-tester noise and starving real traffic. Can we cap it at 200MB per recipient for now and revisit once we have real usage numbers?']
-  },
-  { id:2, folder:'inbox', unread:true, starred:false,
-    sender:'Tomás Reyes', addr:'narada1t4m…9jwv', initial:'T', color:'#A97635',
-    subject:'Gateway: inbound SMTP is flaky on port 25',
-    preview:'Seeing intermittent timeouts on the SMTP→Narada path when the sending server is Gmail…',
-    time:'8:15 AM', date:'Today, 12 September 2026, 8:15', route:'gateway',
-    thread:[],
-    body:['Seeing intermittent timeouts on the SMTP→Narada path when the sending server is Gmail specifically. Outlook and Fastmail both work fine.','My guess is a greylisting behavior on our receiving end. Going to add a retry-after handler this week.']
-  },
-  { id:3, folder:'inbox', unread:false, starred:false,
-    sender:'Node Network', addr:'system', initial:'N', color:'#7C6A5E',
-    subject:'3 peers went offline in the last hour',
-    preview:'PeerBook marked 3 endpoints as down after 3 missed pings. Routing has rerouted around them…',
-    time:'Yesterday', date:'Yesterday, 11 September 2026', route:'direct',
-    thread:[],
-    body:['PeerBook marked 3 endpoints as down after 3 missed pings automatically. Routing has already rerouted around them via the distributed directory fallback.','No action needed — this is expected behavior when a node goes offline without a clean shutdown.']
-  },
-  { id:4, folder:'inbox', unread:false, starred:true,
-    sender:'Aiko Fujimori', addr:'narada1a2i…7dpc', initial:'A', color:'#4C7A61',
-    subject:'Mnemonic recovery worked perfectly',
-    preview:'Just wanted to say the 12-word recovery flow saved me — reinstalled on a new laptop and…',
-    time:'Mon', date:'Mon, 8 September 2026', route:'relay',
-    thread:[{who:'Aiko Fujimori', text:'Quick one — does mnemonic recovery also restore mailbox hints?', time:'07.09.2026 16:40'},
-            {who:'You', text:'Yes, the V2 hint travels with the identity bundle.', time:'07.09.2026 17:05'}],
-    body:['Just wanted to say the 12-word recovery flow saved me. Reinstalled on a new laptop and had my identity, keys, and mailbox hint back in under a minute.','One small note: the mnemonic input could use word-completion so typos are caught earlier.']
-  },
-  { id:5, folder:'drafts', unread:false, starred:false,
-    sender:'Draft', addr:'', initial:'D', color:'#BDB0A5',
-    subject:'(no subject)',
-    preview:'Hey — following up on the identity format doc…',
-    time:'Sun', date:'Sun, 7 September 2026', route:'direct',
-    thread:[],
-    body:['Hey — following up on the identity format doc, do you have time this week to review the V2 hint TLV?']
-  },
-];
-
-let currentFolder = 'inbox';
-let currentRoute = null;
-let selectedId = 1;
-
-const folderMeta = { inbox:'Inbox', starred:'Starred', sent:'Sent', drafts:'Drafts', all:'All mail',
-  encrypted:'Encrypted', network:'Node network', trash:'Trash' };
-
-const routeIcon = { direct:'fa-arrow-right-long', relay:'fa-shuffle', gateway:'fa-right-left' };
-const routeLabel = { direct:'Direct', relay:'Via relay', gateway:'Via gateway' };
-
-function rbadge(route){
-  return `<span class="rbadge ${route}"><i class="fa-solid ${routeIcon[route]}"></i> ${routeLabel[route]}</span>`;
-}
-
-function getItems(){
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
-  let items = mails;
-  if(currentFolder === 'starred') items = items.filter(m => m.starred);
-  else if(currentFolder !== 'all') items = items.filter(m => m.folder === currentFolder);
-  if(currentRoute) items = items.filter(m => m.route === currentRoute);
-  if(q) items = items.filter(m => (m.sender+m.subject+m.preview).toLowerCase().includes(q));
-  return items;
-}
-
-function renderList(){
-  const items = getItems();
-  const listEl = document.getElementById('emailList');
-
-  document.getElementById('listTitle').textContent = folderMeta[currentFolder] || currentFolder;
-  document.getElementById('listCount').textContent = items.length + (items.length===1 ? ' conversation' : ' conversations');
-
-  if(items.length === 0){
-    listEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:var(--ink-faint);font-size:0.82rem;">Nothing matches here.</div>`;
-    return;
-  }
-
-  listEl.innerHTML = items.map(m => `
-    <div class="email-item ${m.unread?'unread':''} ${m.id===selectedId?'active':''}" data-id="${m.id}">
-      <div class="avatar" style="background:${m.color};">${m.initial}</div>
-      <div class="email-content">
-        <div class="email-top">
-          <span class="email-name">${m.sender}</span>
-          <span class="email-time">${m.time}</span>
-        </div>
-        <div class="email-preview">${m.preview}</div>
-        <div class="email-meta-row">${rbadge(m.route)}</div>
-      </div>
-      <div class="email-right">
-        <i class="fa-solid fa-star star-icon ${m.starred?'active':''}" data-star="${m.id}"></i>
-        ${m.unread ? '<span class="unread-dot"></span>' : ''}
-      </div>
-    </div>
-  `).join('');
-
-  listEl.querySelectorAll('.email-item').forEach(row => {
-    row.addEventListener('click', (e) => {
-      if(e.target.closest('.star-icon')) return;
-      selectedId = parseInt(row.dataset.id);
-      const mail = mails.find(m => m.id === selectedId);
-      mail.unread = false;
-      renderList();
-      renderDetail(mail);
-    });
-  });
-
-  listEl.querySelectorAll('.star-icon').forEach(icon => {
-    icon.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = parseInt(icon.dataset.star);
-      const mail = mails.find(m => m.id === id);
-      mail.starred = !mail.starred;
-      renderList();
-      if(id === selectedId) renderDetail(mail);
-    });
-  });
-}
-
-function renderDetail(mail){
-  const panel = document.getElementById('detailPanel');
-  if(!mail){
-    panel.innerHTML = `
-      <div class="empty-state">
-        <i class="fa-regular fa-envelope-open"></i>
-        <p>Select a message to read it. Nothing here ever passes through a server that can see it in plaintext.</p>
-      </div>`;
-    return;
-  }
-
-  panel.innerHTML = `
-    <div class="detail-header-top">
-      <div class="tag-row">
-        ${rbadge(mail.route).replace('rbadge', 'tag')}
-        <div class="tag encrypted"><i class="fa-solid fa-lock"></i> End-to-end encrypted</div>
-      </div>
-      <div class="detail-actions">
-        <button title="Star"><i class="fa-regular fa-star ${mail.starred?'active':''}"></i></button>
-        <button title="Print"><i class="fa-solid fa-print"></i></button>
-        <button title="More"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-      </div>
     </div>
 
-    <div class="mail-date">${mail.date}</div>
-    <h1 class="mail-subject">${mail.subject}</h1>
+    <!-- COMMAND PALETTE MODAL (IMAGE 2 RECREATION) -->
+    <div id="commandPaletteModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-start justify-center pt-20 px-4 transition-opacity">
+        <div class="bg-white dark:bg-[#1e1e1e] w-full max-w-xl rounded-xl shadow-2xl border border-notion-border dark:border-notion-borderDark overflow-hidden flex flex-col command-modal-shadow transform transition-all duration-150">
+            
+            <!-- Command Input Box -->
+            <div class="flex items-center px-4 py-3 border-b border-notion-border dark:border-notion-borderDark">
+                <i data-lucide="search" class="w-4 h-4 text-notion-textMuted mr-3 flex-shrink-0"></i>
+                <input type="text" id="commandInput" placeholder="Search commands or Notion Mail..." class="w-full bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-notion-textMuted focus:outline-none" oninput="filterCommands()">
+            </div>
 
-    ${mail.thread.length ? `
-    <div class="thread-history">
-      ${mail.thread.map(t => `
-        <div class="thread-item">
-          <div class="avatar" style="background:${t.who==='You' ? 'var(--accent)' : mail.color};font-size:0.6rem;">${t.who==='You'?'Y':mail.initial}</div>
-          <span style="font-weight:600;">${t.who}</span>
-          <span class="thread-text">— ${t.text}</span>
-          <span style="color:var(--ink-faint);font-size:0.7rem;">${t.time}</span>
-        </div>
-      `).join('')}
-    </div>` : ''}
+            <!-- Command List -->
+            <div id="commandList" class="max-h-96 overflow-y-auto p-1 space-y-1">
+                
+                <!-- Category: Thread -->
+                <div class="px-3 py-1.5 text-[11px] font-semibold text-notion-textMuted uppercase tracking-wider">Thread</div>
+                
+                <button onclick="executeCommand('close-thread')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="x-square" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Close thread</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">Escape</kbd>
+                </button>
 
-    <div class="main-message">
-      <div class="msg-header">
-        <div class="avatar" style="background:${mail.color};">${mail.initial}</div>
-        <div>
-          <div class="msg-name">${mail.sender}</div>
-          <div class="msg-addr">${mail.addr || ''}</div>
+                <button onclick="executeCommand('prev-thread')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="arrow-left-square" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Previous thread</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">K</kbd>
+                </button>
+
+                <button onclick="executeCommand('next-thread')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="arrow-right-square" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Next thread</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">J</kbd>
+                </button>
+
+                <button onclick="executeCommand('mark-unread')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="mail" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Mark as unread</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">Shift+U</kbd>
+                </button>
+
+                <button onclick="executeCommand('toggle-read')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="check-square" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Mark as read or unread</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">U</kbd>
+                </button>
+
+                <button onclick="executeCommand('forward')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="corner-up-right" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Forward</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">F</kbd>
+                </button>
+
+                <button onclick="executeCommand('reply')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="corner-up-left" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Reply</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">R</kbd>
+                </button>
+
+                <button onclick="executeCommand('reply-all')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="reply-all" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Reply all</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">A or Enter</kbd>
+                </button>
+
+                <button onclick="executeCommand('reply-all-to')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="reply-all" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Reply all, Change To</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">⌘+Shift+O</kbd>
+                </button>
+
+                <button onclick="executeCommand('reply-all-cc')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="reply-all" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Reply all, Change CC</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">⌘+Shift+C</kbd>
+                </button>
+
+                <button onclick="executeCommand('reply-all-bcc')" class="cmd-item w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover dark:hover:bg-notion-hoverDark text-left group">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="reply-all" class="w-4 h-4 text-notion-textMuted"></i>
+                        <span class="text-sm font-normal text-gray-800 dark:text-gray-200">Reply all, Change BCC</span>
+                    </div>
+                    <kbd class="text-xs text-notion-textMuted font-sans">⌘+Shift+B</kbd>
+                </button>
+
+            </div>
+
+            <!-- Command Footer -->
+            <div class="px-4 py-2 border-t border-notion-border dark:border-notion-borderDark bg-gray-50/50 dark:bg-[#1a1a1a] flex items-center justify-start space-x-4 text-xs text-notion-textMuted">
+                <span class="flex items-center"><i data-lucide="arrow-up-down" class="w-3 h-3 mr-1"></i> Select</span>
+                <span class="flex items-center"><i data-lucide="corner-down-left" class="w-3 h-3 mr-1"></i> Open</span>
+            </div>
         </div>
-        <span class="msg-time">${mail.date}</span>
-      </div>
-      <div class="msg-body">${mail.body.map(p => `<p>${p}</p>`).join('')}</div>
     </div>
 
-    <div class="reply-box">
-      <textarea placeholder="Write your message…"></textarea>
-      <div class="reply-toolbar">
-        <div class="format-tools">
-          <i class="fa-solid fa-bold"></i><i class="fa-solid fa-italic"></i><i class="fa-solid fa-underline"></i>
-          <i class="fa-solid fa-list-ul"></i><i class="fa-solid fa-list-ol"></i>
-          <i class="fa-solid fa-align-left"></i><i class="fa-solid fa-align-center"></i><i class="fa-solid fa-align-right"></i>
+    <!-- COMPOSE EMAIL MODAL -->
+    <div id="composeModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-[#1e1e1e] w-full max-w-2xl rounded-xl shadow-2xl border border-notion-border dark:border-notion-borderDark overflow-hidden flex flex-col">
+            <!-- Modal Header -->
+            <div class="px-4 py-3 border-b border-notion-border dark:border-notion-borderDark flex items-center justify-between bg-gray-50/50 dark:bg-[#181818]">
+                <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">New Message</span>
+                <button onclick="closeComposeModal()" class="text-notion-textMuted hover:text-gray-800 dark:hover:text-gray-200">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <!-- Form Inputs -->
+            <div class="p-4 space-y-3">
+                <div class="flex items-center border-b border-gray-100 dark:border-gray-800 pb-2">
+                    <span class="text-xs text-notion-textMuted w-16">To:</span>
+                    <input type="text" id="composeTo" placeholder="Recipient email address" class="w-full text-sm bg-transparent focus:outline-none text-gray-800 dark:text-gray-200">
+                </div>
+                <div class="flex items-center border-b border-gray-100 dark:border-gray-800 pb-2">
+                    <span class="text-xs text-notion-textMuted w-16">Subject:</span>
+                    <input type="text" id="composeSubject" placeholder="Email subject" class="w-full text-sm bg-transparent focus:outline-none text-gray-800 dark:text-gray-200">
+                </div>
+                <textarea id="composeBody" placeholder="Write your email here..." class="w-full h-48 bg-transparent text-sm focus:outline-none resize-none pt-2 text-gray-800 dark:text-gray-200"></textarea>
+            </div>
+            <!-- Footer Actions -->
+            <div class="px-4 py-3 border-t border-notion-border dark:border-notion-borderDark bg-gray-50/50 dark:bg-[#181818] flex items-center justify-between">
+                <button onclick="aiDraftCompose()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 text-xs font-medium hover:bg-purple-100 transition-colors">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-500"></i>
+                    <span>Draft with Notion AI</span>
+                </button>
+                <div class="flex items-center space-x-2">
+                    <button onclick="closeComposeModal()" class="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded transition-colors">Discard</button>
+                    <button onclick="sendNewEmail()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors flex items-center space-x-1">
+                        <span>Send</span>
+                        <i data-lucide="send" class="w-3 h-3"></i>
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="send-actions">
-          <i class="fa-solid fa-paperclip"></i>
-          <i class="fa-regular fa-image"></i>
-          <i class="fa-solid fa-microphone"></i>
-          <button class="btn-send">Send <i class="fa-regular fa-paper-plane"></i></button>
-        </div>
-      </div>
     </div>
-  `;
 
-  panel.querySelectorAll('.format-tools i').forEach(icon => {
-    icon.addEventListener('click', () => icon.classList.toggle('active'));
-  });
-  const sendBtn = panel.querySelector('.btn-send');
-  if(sendBtn) sendBtn.addEventListener('click', () => {
-    const ta = panel.querySelector('textarea');
-    if(ta) ta.value = '';
-  });
-}
-
-// ---- folder nav ----
-document.querySelectorAll('#folderList li').forEach(li => {
-  li.addEventListener('click', () => {
-    document.querySelectorAll('#folderList li').forEach(l => l.classList.remove('active'));
-    li.classList.add('active');
-    currentFolder = li.dataset.folder;
-    selectedId = null;
-    renderList();
-    renderDetail(null);
-  });
-});
-
-// ---- route quick filter (toggle) ----
-document.querySelectorAll('#routeList li').forEach(li => {
-  li.addEventListener('click', () => {
-    const route = li.dataset.route;
-    if(currentRoute === route){
-      currentRoute = null;
-      li.classList.remove('active');
-    } else {
-      document.querySelectorAll('#routeList li').forEach(l => l.classList.remove('active'));
-      currentRoute = route;
-      li.classList.add('active');
-    }
-    renderList();
-  });
-});
-
-// ---- top-rail nav: switches between Mail, Node network, Contacts and Settings ----
-function showView(view){
-  document.querySelector('.list-panel').classList.toggle('hidden', view !== 'inbox');
-  document.getElementById('detailPanel').classList.toggle('hidden', view !== 'inbox');
-  document.getElementById('settingsPanel').classList.toggle('active', view === 'settings');
-  document.getElementById('networkPanel').classList.toggle('active', view === 'network');
-  document.getElementById('contactsPanel').classList.toggle('active', view === 'contacts');
-}
-
-document.querySelectorAll('.nav-icons button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.nav-icons button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    showView(btn.dataset.nav);
-  });
-});
-
-// ---- contacts ----
-const contacts = [
-  { name:'Priya Shah', addr:'narada1p8y…2qxa', initial:'P', color:'#C99B76', route:'direct' },
-  { name:'Tomás Reyes', addr:'narada1t4m…9jwv', initial:'T', color:'#A97635', route:'gateway' },
-  { name:'Aiko Fujimori', addr:'narada1a2i…7dpc', initial:'A', color:'#4C7A61', route:'relay' },
-  { name:'Marcus Webb', addr:'narada1m3c…5tqz', initial:'M', color:'#8FA9C4', route:'direct' },
-  { name:'Yuki Tanaka', addr:'narada1y2t…8rvn', initial:'Y', color:'#B98CA0', route:'direct' },
-];
-
-function renderContacts(){
-  const q = document.getElementById('contactsSearch').value.trim().toLowerCase();
-  const list = document.getElementById('contactList');
-  const items = contacts.filter(c => (c.name + c.addr).toLowerCase().includes(q));
-  if(items.length === 0){
-    list.innerHTML = `<div style="padding:24px 0;color:var(--ink-faint);font-size:0.82rem;">No contacts match “${q}”.</div>`;
-    return;
-  }
-  list.innerHTML = items.map(c => `
-    <div class="contact-row">
-      <div class="avatar" style="background:${c.color};">${c.initial}</div>
-      <div class="contact-main">
-        <div class="contact-name">${c.name}</div>
-        <div class="contact-addr">${c.addr}</div>
-      </div>
-      ${rbadge(c.route)}
-      <button class="icon-mini-btn" title="Message"><i class="fa-regular fa-paper-plane"></i></button>
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast" class="hidden fixed bottom-6 right-6 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-3 rounded-lg shadow-xl text-xs font-medium z-50 flex items-center space-x-2 transition-all transform translate-y-2">
+        <i data-lucide="info" id="toastIcon" class="w-4 h-4 text-blue-400 dark:text-blue-600"></i>
+        <span id="toastMessage">Message sent successfully</span>
     </div>
-  `).join('');
-}
-document.getElementById('contactsSearch').addEventListener('input', renderContacts);
-document.getElementById('addContact').addEventListener('click', () => {
-  alert('Adding a contact isn\'t wired up in this preview.');
-});
-renderContacts();
 
-// ---- node network: add-bootstrap placeholder ----
-document.getElementById('addBootstrap').addEventListener('click', () => {
-  const val = document.getElementById('bootstrapInput').value.trim();
-  if(val) alert('Bootstrap peers aren\'t wired up in this preview — would add: ' + val);
-});
+    <!-- APPLICATION LOGIC -->
+    <script>
 
-// ---- menu collapse ----
-document.getElementById('menuCollapse').addEventListener('click', () => {
-  const panel = document.getElementById('menuPanel');
-  panel.classList.toggle('collapsed');
-  const icon = document.querySelector('#menuCollapse i');
-  icon.style.transform = panel.classList.contains('collapsed') ? 'rotate(180deg)' : 'rotate(0deg)';
-});
+        // INITIAL EMAIL DATA (Matching Image 1 EXACT DATA)
+        const initialEmails = [
+            {
+                id: '1',
+                sender: 'Luke D',
+                email: 'luke.d@lumi.inc',
+                subject: 'Interested in project Lumi, open to a coffe...',
+                preview: 'Interested in project Lumi, open to a coffee chat this week? I have been following the progress.',
+                body: "Hi Stephanie,\n\nI've been following Project Lumi closely over the past few weeks and would love to catch up over coffee. Let me know if you have any availability this Thursday afternoon!\n\nBest,\nLuke",
+                tag: 'Project',
+                tagType: 'blue',
+                time: '1:19 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '2',
+                sender: 'Luke D',
+                email: 'luke.d@lumi.inc',
+                subject: 'Urgent ! Access needed to teamspace',
+                preview: 'Urgent ! Access needed to teamspace for the upcoming design review presentation.',
+                body: "Hey Stephanie,\n\nCould you please grant me owner permissions to the main design teamspace? We are preparing for the client pitch tomorrow.\n\nThanks,\nLuke",
+                tag: 'Urgent',
+                tagType: 'red',
+                time: '1:15 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '3',
+                sender: 'Jane Kim',
+                email: 'jane.kim@lumi.inc',
+                subject: 'Status of open program manager role',
+                preview: 'Status of open program manager role - final candidate interview schedule finalized.',
+                body: "Hi Stephanie,\n\nWe have finalized the candidate shortlist for the Senior Program Manager position. Please review the attached scorecards before our sync.\n\nBest regards,\nJane",
+                tag: 'Recruiting',
+                tagType: 'pink',
+                time: '1:09 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '4',
+                sender: 'John Smith',
+                email: 'john.smith@lumi.inc',
+                subject: 'Introduction Call - Sales Role at Lumi Inc.',
+                preview: 'Introduction Call - Sales Role at Lumi Inc. - Candidate pipeline review.',
+                body: "Hello Stephanie,\n\nFollowing up on our talent discussions, I'd like to introduce candidate John who has deep enterprise SaaS sales experience.\n\nBest,\nJohn",
+                tag: 'Recruiting',
+                tagType: 'pink',
+                time: '1:05 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '5',
+                sender: 'Tangerine Investment',
+                email: 'investments@tangerine.vc',
+                subject: 'Quick Catch-Up: Lumi Inc. 2025 Financials',
+                preview: 'Quick Catch-Up: Lumi Inc. 2025 Financials - Q3 performance overview.',
+                body: "Dear Stephanie,\n\nWe're reviewing the preliminary 2025 financial figures for Lumi Inc. Could you send over the updated ARR breakdown at your earliest convenience?\n\nWarm regards,\nTangerine VC Team",
+                tag: null,
+                tagType: null,
+                time: '1:00 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '6',
+                sender: 'Emma Smith',
+                email: 'emma@horizon.vc',
+                subject: '[Scheduling a Call] Emma Smith, Horizon Ventures ...',
+                preview: '[Scheduling a Call] Emma Smith, Horizon Ventures partner discussion.',
+                body: "Hi Stephanie,\n\nGreat connecting at the summit! Let's schedule a 20 min introductory call for next Tuesday.\n\nBest,\nEmma Smith",
+                tag: null,
+                tagType: null,
+                time: '12:55 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '7',
+                sender: 'Emma Smith',
+                email: 'emma@horizon.vc',
+                subject: 'More information in Lumi Inc. - Acme Ventures',
+                preview: 'More information in Lumi Inc. - Acme Ventures pitch presentation.',
+                body: "Hi Stephanie,\n\nSending along the additional background slides regarding our recent syndicate note.\n\nBest,\nEmma",
+                tag: null,
+                tagType: null,
+                time: '12:53 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '8',
+                sender: 'Trisha Mae',
+                email: 'trisha@lumi.inc',
+                subject: 'Update on Project Lumi',
+                preview: 'Update on Project Lumi - Lead generation metrics for Q4 campaign.',
+                body: "Hi team,\n\nHere is our weekly lead pipeline summary. We have exceeded target outreach by 24% this week.\n\nCheers,\nTrisha",
+                tag: 'Leads',
+                tagType: 'purple',
+                time: '12:20 PM',
+                isUnread: true,
+                view: 'inbox'
+            },
+            {
+                id: '9',
+                sender: 'Vercel Team',
+                email: 'notifications@vercel.com',
+                subject: 'Deployment Successful: Lumi Web Portal',
+                preview: 'Deployment for lumi-web-portal preview environment succeeded in 42s.',
+                body: "Your project lumi-web-portal was deployed successfully. Click to inspect preview environment.",
+                tag: null,
+                tagType: null,
+                time: 'Yesterday',
+                isUnread: false,
+                view: 'inbox'
+            },
+            {
+                id: '10',
+                sender: 'Figma Notifications',
+                email: 'comments@figma.com',
+                subject: 'Alex commented on "Notion Mail Redesign 2025"',
+                preview: 'Alex: "Looks super crisp! Can we make sure the command palette shortcuts are clear?"',
+                body: "Alex commented on Notion Mail Redesign 2025:\n\n'Looks super crisp! Can we make sure the command palette shortcuts are clear?'",
+                tag: 'Project',
+                tagType: 'blue',
+                time: 'Oct 12',
+                isUnread: false,
+                view: 'inbox'
+            }
+        ];
 
-// ---- search ----
-document.getElementById('searchInput').addEventListener('input', renderList);
+        // STATE VARIABLES
+        let emails = [...initialEmails];
+        let activeView = 'inbox';
+        let activeThreadId = null;
 
-// ---- compose (simple inline placeholder) ----
-document.getElementById('composeOpen').addEventListener('click', () => {
-  alert('Compose isn\'t wired up in this preview.');
-});
+        // INITIALIZATION
+        window.onload = function() {
+            renderEmailList();
+            lucide.createIcons();
+            setupKeyboardShortcuts();
+        };
 
-// ---- theme toggle (rail button + settings page stay in sync) ----
-function setTheme(next){
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('narada-theme', next);
-  document.querySelectorAll('#settingsThemeGroup .seg-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.themeChoice === next);
-  });
-}
-(function(){
-  const saved = localStorage.getItem('narada-theme') || 'light';
-  setTheme(saved);
-  document.getElementById('themeToggle').addEventListener('click', () => {
-    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-  });
-  document.querySelectorAll('#settingsThemeGroup .seg-btn').forEach(btn => {
-    btn.addEventListener('click', () => setTheme(btn.dataset.themeChoice));
-  });
-})();
+        // RENDER EMAIL LIST
+        function renderEmailList() {
+            const unreadContainer = document.getElementById('unreadContainer');
+            const readContainer = document.getElementById('readContainer');
+            
+            // Filter by active view
+            let filtered = emails.filter(e => {
+                if (activeView === 'inbox') return e.view === 'inbox';
+                if (activeView === 'project-updates') return e.tag === 'Project';
+                if (activeView === 'sales-leads') return e.tag === 'Leads' || e.sender.includes('Tangerine');
+                if (activeView === 'hiring-leads') return e.tag === 'Recruiting';
+                if (activeView === 'leadership-updates') return e.tag === 'Urgent';
+                return true;
+            });
 
-// ---- settings: preferred-route segmented control ----
-document.querySelectorAll('#settingsRouteGroup .seg-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#settingsRouteGroup .seg-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
-});
+            const unreadEmails = filtered.filter(e => e.isUnread);
+            const readEmails = filtered.filter(e => !e.isUnread);
 
-// ---- settings: copy node id ----
-document.querySelectorAll('.settings-node-id button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const text = btn.previousElementSibling.textContent;
-    navigator.clipboard.writeText(text).catch(() => {});
-  });
-});
+            // Update badge count
+            document.getElementById('badge-inbox').innerText = emails.filter(e => e.isUnread).length;
 
-// ---- settings: mnemonic reveal (placeholder — never actually show real key material here) ----
-document.getElementById('revealMnemonic').addEventListener('click', () => {
-  alert('Recovery-phrase reveal isn\'t wired up in this preview.');
-});
+            // Render Unread Emails
+            if (unreadEmails.length === 0) {
+                unreadContainer.innerHTML = `<div class="py-4 text-xs text-notion-textMuted italic">No unread messages</div>`;
+            } else {
+                unreadContainer.innerHTML = unreadEmails.map(email => createEmailRowHTML(email)).join('');
+            }
 
-renderList();
-renderDetail(mails.find(m => m.id === selectedId));
-</script>
+            // Render Read Emails
+            if (readEmails.length === 0) {
+                readContainer.innerHTML = `<div class="py-4 text-xs text-notion-textMuted italic">No read messages</div>`;
+            } else {
+                readContainer.innerHTML = readEmails.map(email => createEmailRowHTML(email)).join('');
+            }
+
+            lucide.createIcons();
+        }
+
+        // GENERATE HTML FOR AN EMAIL ROW
+        function createEmailRowHTML(email) {
+            const tagBadge = email.tag ? getTagBadgeHTML(email.tag, email.tagType) : '';
+            const unreadDot = email.isUnread ? '<span class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>' : '<span class="w-2 h-2"></span>';
+
+            return `
+                <div onclick="openThreadPane('${email.id}')" class="group flex items-center justify-between py-2.5 px-2 hover:bg-notion-hover dark:hover:bg-notion-hoverDark rounded-md cursor-pointer transition-colors">
+                    <div class="flex items-center space-x-3 min-w-0 pr-4">
+                        ${unreadDot}
+                        <span class="font-semibold text-sm text-gray-900 dark:text-gray-100 w-36 truncate flex-shrink-0">${email.sender}</span>
+                        <span class="text-sm text-gray-700 dark:text-gray-300 truncate font-normal">${email.subject}</span>
+                    </div>
+                    <div class="flex items-center space-x-3 flex-shrink-0">
+                        ${tagBadge}
+                        <span class="text-xs text-notion-textMuted w-16 text-right">${email.time}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // TAG BADGE HELPER
+        function getTagBadgeHTML(tag, type) {
+            let bgClass = 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300';
+            if (type === 'blue') bgClass = 'bg-[#e0f2fe] text-[#0369a1] dark:bg-sky-950/60 dark:text-sky-300';
+            if (type === 'red') bgClass = 'bg-[#ffe4e6] text-[#be123c] dark:bg-rose-950/60 dark:text-rose-300';
+            if (type === 'pink') bgClass = 'bg-[#fce7f3] text-[#be185d] dark:bg-pink-950/60 dark:text-pink-300';
+            if (type === 'purple') bgClass = 'bg-[#f3e8ff] text-[#7e22ce] dark:bg-purple-950/60 dark:text-purple-300';
+            if (type === 'green') bgClass = 'bg-[#dcfce7] text-[#15803d] dark:bg-emerald-950/60 dark:text-emerald-300';
+
+            return `<span class="px-2 py-0.5 text-xs font-medium rounded-md ${bgClass}">${tag}</span>`;
+        }
+
+
+        // THREAD PANE LOGIC
+        function openThreadPane(id) {
+            activeThreadId = id;
+            const email = emails.find(e => e.id === id);
+            if (!email) return;
+
+            // Mark as read
+            email.isUnread = false;
+            renderEmailList();
+
+            const pane = document.getElementById('threadPane');
+            const content = document.getElementById('threadPaneContent');
+
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex items-start justify-between">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">${email.subject}</h2>
+                        ${email.tag ? getTagBadgeHTML(email.tag, email.tagType) : ''}
+                    </div>
+
+                    <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold flex items-center justify-center text-sm">
+                                ${email.sender.substring(0, 2)}
+                            </div>
+                            <div>
+                                <div class="font-semibold text-sm text-gray-900 dark:text-gray-100">${email.sender}</div>
+                                <div class="text-xs text-notion-textMuted">${email.email}</div>
+                            </div>
+                        </div>
+                        <span class="text-xs text-notion-textMuted">${email.time}</span>
+                    </div>
+
+                    <div class="pt-2 text-sm leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-line">
+                        ${email.body}
+                    </div>
+                </div>
+            `;
+
+            pane.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeThreadPane() {
+            document.getElementById('threadPane').classList.add('hidden');
+            activeThreadId = null;
+        }
+
+        function navigateThread(direction) {
+            if (!activeThreadId) return;
+            const currentIndex = emails.findIndex(e => e.id === activeThreadId);
+            if (currentIndex === -1) return;
+
+            let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+            if (nextIndex >= 0 && nextIndex < emails.length) {
+                openThreadPane(emails[nextIndex].id);
+            }
+        }
+
+        function toggleCurrentReadState() {
+            if (!activeThreadId) return;
+            const email = emails.find(e => e.id === activeThreadId);
+            if (email) {
+                email.isUnread = !email.isUnread;
+                renderEmailList();
+                showToast(email.isUnread ? 'Marked as unread' : 'Marked as read');
+            }
+        }
+
+        function archiveCurrentThread() {
+            if (!activeThreadId) return;
+            emails = emails.filter(e => e.id !== activeThreadId);
+            closeThreadPane();
+            renderEmailList();
+            showToast('Thread archived');
+        }
+
+        function deleteCurrentThread() {
+            if (!activeThreadId) return;
+            emails = emails.filter(e => e.id !== activeThreadId);
+            closeThreadPane();
+            renderEmailList();
+            showToast('Thread deleted');
+        }
+
+        // VIEW SWITCHING
+        function switchView(viewName) {
+            activeView = viewName;
+            
+            // Highlight sidebar item
+            const navButtons = document.querySelectorAll('#viewsNav button, #sidebar button[id^="view-"]');
+            navButtons.forEach(btn => {
+                btn.classList.remove('bg-notion-active', 'dark:bg-notion-activeDark', 'font-medium', 'text-gray-900', 'dark:text-white');
+                btn.classList.add('text-gray-700', 'dark:text-gray-300');
+            });
+
+            const activeBtn = document.getElementById(`view-${viewName}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-notion-active', 'dark:bg-notion-activeDark', 'font-medium', 'text-gray-900', 'dark:text-white');
+            }
+
+            // Update title
+            const titleMap = {
+                'inbox': 'Inbox',
+                'project-updates': 'Project updates',
+                'leadership-updates': 'Leadership updates',
+                'sales-leads': 'Sales leads',
+                'hiring-leads': 'Hiring leads',
+                'meeting-requests': 'Meeting requests',
+                'all-mail': 'All Mail',
+                'sent': 'Sent',
+                'drafts': 'Drafts'
+            };
+            document.getElementById('mainViewTitle').innerText = titleMap[viewName] || 'Inbox';
+
+            renderEmailList();
+        }
+
+
+        // COMMAND PALETTE MODAL LOGIC (Matching Screenshot 2)
+        function openCommandPalette() {
+            document.getElementById('commandPaletteModal').classList.remove('hidden');
+            document.getElementById('commandInput').focus();
+            document.getElementById('commandInput').value = '';
+            filterCommands();
+        }
+
+        function closeCommandPalette() {
+            document.getElementById('commandPaletteModal').classList.add('hidden');
+        }
+
+        function filterCommands() {
+            const query = document.getElementById('commandInput').value.toLowerCase();
+            const items = document.querySelectorAll('.cmd-item');
+
+            items.forEach(item => {
+                const text = item.innerText.toLowerCase();
+                if (text.includes(query)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function executeCommand(commandKey) {
+            closeCommandPalette();
+
+            switch (commandKey) {
+                case 'close-thread':
+                    closeThreadPane();
+                    break;
+                case 'prev-thread':
+                    navigateThread('prev');
+                    break;
+                case 'next-thread':
+                    navigateThread('next');
+                    break;
+                case 'mark-unread':
+                case 'toggle-read':
+                    toggleCurrentReadState();
+                    break;
+                case 'forward':
+                case 'reply':
+                case 'reply-all':
+                case 'reply-all-to':
+                case 'reply-all-cc':
+                case 'reply-all-bcc':
+                    showToast(`Executed: ${commandKey}`);
+                    break;
+            }
+        }
+
+        // COMPOSE MODAL LOGIC
+        function openComposeModal() {
+            document.getElementById('composeModal').classList.remove('hidden');
+            document.getElementById('composeTo').focus();
+        }
+
+        function closeComposeModal() {
+            document.getElementById('composeModal').classList.add('hidden');
+            document.getElementById('composeTo').value = '';
+            document.getElementById('composeSubject').value = '';
+            document.getElementById('composeBody').value = '';
+        }
+
+        function sendNewEmail() {
+            const to = document.getElementById('composeTo').value;
+            const subject = document.getElementById('composeSubject').value;
+            const body = document.getElementById('composeBody').value;
+
+            if (!to || !subject) {
+                showToast('Please specify recipient and subject');
+                return;
+            }
+
+            emails.unshift({
+                id: Date.now().toString(),
+                sender: 'Stephanie Lee',
+                email: 'stephanie.lee@lumi.inc',
+                subject: subject,
+                preview: body.substring(0, 50) + '...',
+                body: body,
+                tag: 'Sent',
+                tagType: 'green',
+                time: 'Just now',
+                isUnread: false,
+                view: 'sent'
+            });
+
+            closeComposeModal();
+            renderEmailList();
+            showToast('Email sent successfully!');
+        }
+
+        function aiDraftCompose() {
+            document.getElementById('composeSubject').value = 'Follow up: Lumi Inc. Q4 Project Milestones';
+            document.getElementById('composeBody').value = 'Hi team,\n\nI hope you are having a productive week. I am following up on our Q4 deliverables for Project Lumi. Please review the updated Notion dashboard and let me know if you have any questions.\n\nBest,\nStephanie';
+            showToast('Notion AI generated email draft!');
+        }
+
+
+        // AI AUTO-LABELING SIMULATION
+        function runAutoLabeling() {
+            showToast('Notion AI scanning & auto-labeling messages...');
+            
+            setTimeout(() => {
+                let labeledCount = 0;
+                emails.forEach(e => {
+                    if (!e.tag) {
+                        if (e.subject.toLowerCase().includes('financial') || e.subject.toLowerCase().includes('venture')) {
+                            e.tag = 'Sales';
+                            e.tagType = 'purple';
+                        } else {
+                            e.tag = 'Project';
+                            e.tagType = 'blue';
+                        }
+                        labeledCount++;
+                    }
+                });
+
+                renderEmailList();
+                showToast(`Auto labeled ${labeledCount} messages with Notion AI!`);
+            }, 800);
+        }
+
+        // KEYBOARD SHORTCUTS
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Cmd+K or Ctrl+K -> Command Palette
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    openCommandPalette();
+                }
+
+                // Escape -> Close Modals or Thread Pane
+                if (e.key === 'Escape') {
+                    closeCommandPalette();
+                    closeComposeModal();
+                    closeThreadPane();
+                }
+
+                // Keyboard shortcuts when no inputs are focused
+                const activeTag = document.activeElement.tagName;
+                if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+                    if (e.key === 'j' || e.key === 'J') navigateThread('next');
+                    if (e.key === 'k' || e.key === 'K') navigateThread('prev');
+                    if (e.key === 'u' || e.key === 'U') toggleCurrentReadState();
+                    if (e.key === 'n' || e.key === 'N' || e.key === 'c' || e.key === 'C') openComposeModal();
+                }
+            });
+        }
+
+        // UTILITY UI TOGGLES
+        function toggleSection(sectionId, chevronId) {
+            const container = document.getElementById(sectionId);
+            const chevron = document.getElementById(chevronId);
+
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                chevron.classList.remove('rotate-180');
+            } else {
+                container.classList.add('hidden');
+                chevron.classList.add('rotate-180');
+            }
+        }
+
+        function toggleProfileMenu() {
+            const menu = document.getElementById('profileMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            showToast('Theme updated');
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('-translate-x-full');
+        }
+
+        function generateAIReply() {
+            document.getElementById('replyTextarea').value = "Thanks for sending this over! I've reviewed the updates and everything looks great on my end. Let's proceed as planned.";
+            showToast('AI reply generated!');
+        }
+
+        function sendReply() {
+            const val = document.getElementById('replyTextarea').value;
+            if (val) {
+                document.getElementById('replyTextarea').value = '';
+                showToast('Reply sent!');
+            }
+        }
+
+        function showMoreToast() {
+            showToast('Additional Notion views loaded');
+        }
+
+        function openSettingsModal() {
+            showToast('Notion Mail Settings opened');
+        }
+
+        function showHelpModal() {
+            showToast('Help & Shortcuts: ⌘K (Command Palette), N (Compose), J/K (Navigate)');
+        }
+
+        // TOAST NOTIFICATION SYSTEM
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            toastMsg.innerText = message;
+
+            toast.classList.remove('hidden');
+            toast.classList.remove('translate-y-2');
+
+            setTimeout(() => {
+                toast.classList.add('hidden');
+                toast.classList.add('translate-y-2');
+            }, 2500);
+        }
+    </script>
 </body>
-</html> 
+</html>

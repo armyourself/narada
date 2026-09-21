@@ -112,9 +112,15 @@ export class PreferenceManager {
 
         const legalTheme = foundTheme.toLowerCase();
         document.documentElement.setAttribute("data-color-scheme", legalTheme);
+        if (legalTheme === "dark") {
+            document.documentElement.classList.add("dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+        }
         const onSave = () => {
             _updatePreferences({ theme: targetTheme });
             localStorage.setItem("data-color-scheme", legalTheme);
+            localStorage.setItem("theme", legalTheme);
         }
         saveOperationQueue.push(onSave);
     }

@@ -16,30 +16,18 @@
 
     onMount(() => {
         appWindow.onThemeChanged(async ({ payload: theme }) => {
-            if (PreferenceStore.theme === Theme.System) {
+            if (PreferenceStore.theme === Theme.System || !PreferenceStore.theme) {
                 const newTheme = theme.toLowerCase();
-                document.documentElement.setAttribute("data-color-scheme", newTheme);
+                if (newTheme === "dark") {
+                    document.documentElement.classList.add("dark");
+                } else {
+                    document.documentElement.classList.remove("dark");
+                }
                 localStorage.setItem("theme", newTheme);
             }
         });
     });
-
-    /* TODO: Remove this later */
-    const handleShortcuts = (e: KeyboardEvent) => {
-        if (e.ctrlKey && e.code === "Space") {
-            e.preventDefault();
-            const sharedStoreString = JSON.stringify(SharedStore, null, 4)
-            showConfirm({
-                title: "Variables",
-                onConfirmText: "Copy",
-                onConfirm: () => navigator.clipboard.writeText(sharedStoreString),
-                details: `<pre>${sharedStoreString}</pre>`
-            });
-        }
-    };
 </script>
-
-<svelte:window onkeydown={handleShortcuts} />
 
 <Layout>
     {#if !isAppLoaded}
@@ -63,16 +51,18 @@
         overflow: hidden;
         top: 0;
         left: 0;
-        background-color: #00000099;
-        z-index: var(--z-index-overlay);
+        background-color: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(2px);
+        z-index: 50;
     }
-
+    body:has(.modal) .modal-container { display: flex; }
     .toast-container {
         position: fixed;
-        bottom: var(--spacing-lg);
-        left: var(--spacing-lg);
+        bottom: 1.5rem;
+        right: 1.5rem;
         display: flex;
-        flex-direction: column-reverse;
-        gap: var(--spacing-xs);
+        flex-direction: column;
+        gap: 0.5rem;
+        z-index: 50;
     }
 </style>
