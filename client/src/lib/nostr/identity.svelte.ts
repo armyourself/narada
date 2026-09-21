@@ -4,6 +4,7 @@ import { SharedStore } from "$lib/stores/shared.svelte";
 export interface NostrIdentityState {
     accountId: string;
     publicId: string | null;
+    npub: string | null;
     loading: boolean;
     error: string | null;
 }
@@ -12,6 +13,7 @@ export class NostrIdentityManager {
     private _state: NostrIdentityState = $state({
         accountId: "",
         publicId: null,
+        npub: null,
         loading: false,
         error: null,
     });
@@ -33,10 +35,12 @@ export class NostrIdentityManager {
             const identity = await NostrIdentityService.getIdentity(accountId);
             if (identity) {
                 this._state.publicId = identity.public_id;
+                this._state.npub = identity.npub;
                 this._state.loading = false;
                 return true;
             }
             this._state.publicId = null;
+            this._state.npub = null;
             this._state.loading = false;
             return false;
         } catch (err) {
@@ -46,7 +50,7 @@ export class NostrIdentityManager {
         }
     }
 
-    async generateIdentity(accountId: string): Promise<{ publicId: string; mnemonicToken: string } | null> {
+    async generateIdentity(accountId: string): Promise<{ publicId: string; npub: string; mnemonicToken: string } | null> {
         this._state.accountId = accountId;
         this._state.loading = true;
         this._state.error = null;
@@ -55,8 +59,9 @@ export class NostrIdentityManager {
             const result = await NostrIdentityService.generateIdentity(accountId);
             if (result) {
                 this._state.publicId = result.public_id;
+                this._state.npub = result.npub;
                 this._state.loading = false;
-                return { publicId: result.public_id, mnemonicToken: result.mnemonic_claim_token };
+                return { publicId: result.public_id, npub: result.npub, mnemonicToken: result.mnemonic_claim_token };
             }
             this._state.loading = false;
             return null;
@@ -76,6 +81,7 @@ export class NostrIdentityManager {
             const identity = await NostrIdentityService.recoverIdentity(accountId, mnemonic);
             if (identity) {
                 this._state.publicId = identity.public_id;
+                this._state.npub = identity.npub;
                 this._state.loading = false;
                 return identity.public_id;
             }
@@ -96,6 +102,7 @@ export class NostrIdentityManager {
             const success = await NostrIdentityService.deleteIdentity(accountId);
             if (success) {
                 this._state.publicId = null;
+                this._state.npub = null;
                 this._state.accountId = "";
             }
             this._state.loading = false;

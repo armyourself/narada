@@ -12,8 +12,10 @@ from src.internal.secure_storage import (
     RSACipher,
 )
 from src.internal.client_handler import ClientHandler
+from src.internal.nostr_handler import NostrHandler
 
 client_handler = ClientHandler()
+nostr_handler = NostrHandler()
 secure_storage = SecureStorage()
 account_manager = AccountManager()
 
@@ -53,11 +55,21 @@ def get_accounts() -> Response[GetAccountsData]:
             connected_accounts = [
                 email_to_account[email_address]
                 for email_address in client_handler.get_clients().keys()
+                if email_address in email_to_account
             ]
             failed_accounts = [
                 email_to_account[email_address]
                 for email_address in client_handler.get_failed_clients()
+                if email_address in email_to_account
             ]
+            # Include Nostr-only accounts as connected
+            for account in all_accounts:
+                if (
+                    nostr_handler.has_adapter(account.email_address)
+                    and account not in connected_accounts
+                    and account not in failed_accounts
+                ):
+                    connected_accounts.append(account)
 
         return Response[GetAccountsData](
             success=True,

@@ -8,11 +8,13 @@ from src._types import Response
 from src.utils import err_msg, safe_json_loads
 from src.internal.account_manager import AccountManager
 from src.internal.client_handler import ClientHandler
+from src.internal.nostr_handler import NostrHandler
 from src.helpers.uvicorn_logger import UvicornLogger
 from src.modules.openmail.types import Email, Mailbox, Folder, Draft, Attachment, SearchCriteria
 from src.modules.openmail.utils import extract_email_address
 
 client_handler = ClientHandler()
+nostr_handler = NostrHandler()
 account_manager = AccountManager()
 uvicorn_logger = UvicornLogger()
 
@@ -135,6 +137,38 @@ async def get_mailbox(
 ) -> Response[OpenmailTaskResults[Mailbox]]:
     try:
         account = extract_email_address(account)
+
+        # Nostr adapter: fetch from local JSONL mailbox
+        if nostr_handler.has_adapter(account):
+            adapter = nostr_handler.get_adapter(account)
+            messages = adapter.fetch_messages(
+                folder or "nostr",
+                limit=(offset_end or 50) - (offset_start or 0),
+                offset=offset_start or 0,
+            )
+            mailbox_data = Mailbox(
+                total=len(messages),
+                emails=[
+                    Email(
+                        uid=m.uid,
+                        sender=str(m.from_address),
+                        subject=m.subject,
+                        body=m.preview or "",
+                        date=m.date or "",
+                        flags=["\\Seen"] if m.is_read else [],
+                        has_attachments=m.has_attachments,
+                    )
+                    for m in messages
+                ],
+                folder=folder or "nostr",
+            )
+            return Response(
+                success=True,
+                message="Nostr mailbox fetched successfully.",
+                data={account: mailbox_data},
+            )
+
+        # IMAP/SMTP path (existing)
         response = check_openmail_connection_availability(account)
         if isinstance(response, Response):
             return response
@@ -274,6 +308,33 @@ async def send_email(
 ) -> Response:
     try:
         account = extract_email_address(form_data.sender)
+
+        # Nostr adapter: send via Nostr relays
+        if nostr_handler.has_adapter(account):
+            adapter = nostr_handler.get_adapter(account)
+            from src.mail_abstraction.base import Address
+            from_addr = Address(address=adapter.identity.public_key_hex)
+            to_addrs = []
+            for recip in form_data.receivers.split(","):
+                recip = recip.strip()
+                if not recip:
+                    continue
+                # Resolve npub to hex if needed
+                if recip.startswith("npub1"):
+                    from src.nostr.identity import npub_decode
+                    raw = npub_decode(recip)
+                    to_addrs.append(Address(address=raw.hex()))
+                else:
+                    to_addrs.append(Address(address=recip))
+            ok, msg = adapter.send_message(
+                from_address=from_addr,
+                to_addresses=to_addrs,
+                subject=form_data.subject,
+                body=form_data.body,
+            )
+            return Response(success=ok, message=msg)
+
+        # IMAP/SMTP path (existing)
         response = check_openmail_connection_availability(account)
         if isinstance(response, Response):
             return response

@@ -11,11 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from src.internal.client_handler import ClientHandler
+from src.internal.nostr_handler import NostrHandler
 from src.internal.account_manager import AccountManager
 from src.internal.file_system import FileObject, Root
 from src.routers import (
     account_tasks,
     mailbox_tasks,
+    nostr_tasks,
 )
 from src.helpers.uvicorn_logger import UvicornLogger
 from src.helpers.port_scanner import PortScanner
@@ -36,6 +38,7 @@ from src.utils import is_address_valid, parse_err_msg
 WHITELISTED_IPS = DEFAULT_WHITELISTED_IPS
 
 client_handler = ClientHandler()
+nostr_handler = NostrHandler()
 account_manager = AccountManager()
 uvicorn_logger = UvicornLogger()
 
@@ -44,13 +47,17 @@ uvicorn_logger = UvicornLogger()
 async def lifespan(app: FastAPI):
     try:
         client_handler.create_openmail_clients()
+        nostr_handler.load_stored_identities()
+        nostr_handler.connect_all()
         yield
     finally:
+        nostr_handler.shutdown()
         client_handler.shutdown()
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(account_tasks.router)
 app.include_router(mailbox_tasks.router)
+app.include_router(nostr_tasks.router)
 def setup_api_middlewares(**kwargs):
     app.add_middleware(
         CORSMiddleware,
