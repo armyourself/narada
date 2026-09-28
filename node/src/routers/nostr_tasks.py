@@ -329,6 +329,181 @@ async def get_nostr_mailbox(
     )
 
 
+# ── directory ────────────────────────────────────────────────────────────
+
+DIRECTORY_MAX_CONTACTS = 200
+DIRECTORY_RECORD_LIMIT = 5000
+
+
+def _split_display(value: str) -> tuple[str, str]:
+    """Split ``Name <addr>`` / bare addr into ``(display_name, address)``."""
+    text = (value or "").strip()
+    if "<" in text and ">" in text:
+        display = text.split("<", 1)[0].strip().strip('"')
+        address = text.split("<", 1)[1].split(">", 1)[0].strip()
+        return display, address
+    return "", text
+
+
+def _contact_identity(address: str) -> tuple[str, str, str]:
+    """Classify an address as ``(kind, npub, email)``.
+
+    ``kind`` is ``"npub"``, ``"hex"`` or ``"email"``.
+    """
+    value = (address or "").strip()
+    if value.lower().startswith("npub1"):
+        return "npub", value, ""
+    if len(value) == 64 and all(c in "0123456789abcdefABCDEF" for c in value):
+        return "hex", value, ""
+    return "email", "", value.lower()
+
+
+def _to_npub(kind: str, value: str) -> str | None:
+    """Best-effort npub for a native Nostr id (hex or npub)."""
+    if kind == "npub":
+        return value
+    if kind == "hex":
+        from src.nostr.identity import npub_encode
+
+        try:
+            return npub_encode(bytes.fromhex(value))
+        except ValueError:
+            return None
+    return None
+
+
+@router.get("/nostr/directory")
+async def nostr_directory(
+    q: Optional[str] = None,
+    limit: int = DIRECTORY_MAX_CONTACTS,
+) -> Response:
+    """Local contact directory built from the account mailboxes.
+
+    Aggregates every sender/receiver seen in any Nostr mailbox record plus
+    the account's own identity, so the client can autocomplete recipients
+    (npub or conventional address) without hitting a relay.
+    """
+    try:
+        limit = max(1, min(limit, DIRECTORY_MAX_CONTACTS))
+        query = (q or "").strip().lower()
+
+        from src.routers.mailbox_tasks import _email_timestamp
+
+        contacts: dict[str, dict] = {}
+
+        def _touch(
+            raw: str,
+            *,
+            is_self: bool = False,
+            when: str = "",
+            own_account: str = "",
+        ) -> None:
+            display, address = _split_display(raw)
+            if not address:
+                return
+            kind, native, email = _contact_identity(address)
+            if native:
+                key = f"npub:{native.lower()}"
+            elif email:
+                key = f"email:{email}"
+            else:
+                return
+
+            entry = contacts.get(key)
+            if entry is None:
+                entry = {
+                    "id": native or email,
+                    "npub": _to_npub(kind, native),
+                    "address": email or None,
+                    "name": display,
+                    "self": is_self,
+                    "account": own_account or None,
+                    "messages": 0,
+                    "last_seen": "",
+                }
+                contacts[key] = entry
+            if display and not entry["name"]:
+                entry["name"] = display
+            if is_self:
+                entry["self"] = True
+            if own_account and not entry["account"]:
+                entry["account"] = own_account
+            if when:
+                entry["messages"] += 1
+                if _email_timestamp(when) > _email_timestamp(entry["last_seen"]):
+                    entry["last_seen"] = when
+
+        for account, adapter in nostr_handler.get_all_adapters().items():
+            own_npub = None
+            identity = adapter.identity
+            if identity is not None:
+                own_npub = identity.public_key_bech32
+                _touch(own_npub, is_self=True, own_account=account)
+            own_emails = {account.lower()}
+
+            def _is_own(address: str) -> bool:
+                lowered = address.lower()
+                if bool(own_npub) and lowered == own_npub.lower():
+                    return True
+                return lowered in own_emails
+
+            try:
+                records = adapter.fetch_records(limit=DIRECTORY_RECORD_LIMIT)
+            except Exception as exc:  # one broken mailbox must not 500
+                uvicorn_logger.error("directory read failed for %s: %s", account, exc)
+                continue
+
+            for record in records:
+                when = str(record.get("date", ""))
+                raw = str(record.get("sender", ""))
+                _touch(
+                    raw,
+                    is_self=_is_own(_split_display(raw)[1]),
+                    when=when,
+                    own_account=account,
+                )
+                for value in list(record.get("to") or []) + list(record.get("cc") or []):
+                    raw = str(value)
+                    _touch(
+                        raw,
+                        is_self=_is_own(_split_display(raw)[1]),
+                        when=when,
+                        own_account=account,
+                    )
+
+        entries = list(contacts.values())
+        if query:
+            entries = [
+                entry
+                for entry in entries
+                if query in str(entry["id"]).lower()
+                or query in str(entry.get("npub") or "").lower()
+                or query in str(entry.get("address") or "").lower()
+                or query in str(entry.get("name") or "").lower()
+                or query in str(entry.get("account") or "").lower()
+            ]
+
+        entries.sort(
+            key=lambda entry: (
+                _email_timestamp(entry["last_seen"]),
+                entry["messages"],
+            ),
+            reverse=True,
+        )
+        entries = entries[:limit]
+
+        return Response(
+            success=True,
+            message="Nostr directory fetched.",
+            data={"contacts": entries, "total": len(entries)},
+        )
+    except Exception as e:
+        return Response(
+            success=False,
+            message=f"There was an error while building the directory: {e}",
+        )
+
+
 # ── WebSocket subscription ───────────────────────────────────────────────
 
 

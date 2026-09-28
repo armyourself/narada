@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { closePalette, openCompose, openSettings } from "@/lib/stores/ui";
+import { MailboxController } from "@/lib/mailbox/MailboxController";
+import { openEmailInPane } from "@/lib/mailbox/openEmail";
+import {
+    formatListTime,
+    getSenderName,
+    getSnippet,
+    getSubject,
+} from "@/lib/mailbox/display";
+import { useSharedStore } from "@/lib/stores/shared";
+import type { SearchResult } from "@/lib/types";
 
 interface Command {
     label: string;
@@ -10,6 +20,9 @@ interface Command {
     category: string;
     action?: () => void;
 }
+
+const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_RESULT_LIMIT = 8;
 
 const ICON_PATHS: Record<string, ReactNode> = {
     "x-square": (
@@ -104,7 +117,46 @@ function buildCommands(): Command[] {
 
 export default function CommandPalette() {
     const [query, setQuery] = useState("");
+    const [results, setResults] = useState<SearchResult[]>([]);
+    const [searching, setSearching] = useState(false);
+    const searchIdRef = useRef(0);
     const commands = useMemo(() => buildCommands(), []);
+
+    // Debounced cross-account search (POST /search-all). Results are only
+    // rendered while the query is long enough, so no synchronous state
+    // reset is needed when the user clears the input.
+    useEffect(() => {
+        const trimmed = query.trim();
+        if (trimmed.length < 2) {
+            // Invalidate any in-flight request for a longer query.
+            searchIdRef.current += 1;
+            return;
+        }
+
+        const searchId = ++searchIdRef.current;
+        const timer = setTimeout(() => {
+            setSearching(true);
+            MailboxController.searchAll(trimmed, { limit: SEARCH_RESULT_LIMIT })
+                .then((response) => {
+                    if (searchId !== searchIdRef.current) return;
+                    setResults(
+                        response.success && response.data
+                            ? response.data.results
+                            : [],
+                    );
+                })
+                .catch(() => {
+                    if (searchId !== searchIdRef.current) return;
+                    setResults([]);
+                })
+                .finally(() => {
+                    if (searchId !== searchIdRef.current) return;
+                    setSearching(false);
+                });
+        }, SEARCH_DEBOUNCE_MS);
+
+        return () => clearTimeout(timer);
+    }, [query]);
 
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
@@ -134,6 +186,22 @@ export default function CommandPalette() {
         closePalette();
         command.action?.();
     };
+
+    // Cross-account hit: switch to the owning account first so the
+    // reading pane fetches content (and marks read) in the right mailbox.
+    const selectSearchResult = (result: SearchResult) => {
+        const state = useSharedStore.getState();
+        const owner = state.accounts.find(
+            (account) => account.email_address === result.account,
+        );
+        if (owner && state.currentAccount !== owner) {
+            useSharedStore.setState({ currentAccount: owner });
+        }
+        closePalette();
+        openEmailInPane(result);
+    };
+
+    const searchActive = query.trim().length >= 2;
 
     return (
         <div
@@ -168,6 +236,55 @@ export default function CommandPalette() {
 
                 {/* Command list */}
                 <div className="max-h-96 overflow-y-auto p-1 space-y-1">
+                    {searchActive && (
+                        <div>
+                            <div className="px-3 py-1.5 text-[11px] font-semibold text-notion-text-muted uppercase tracking-wider">
+                                {searching ? "Searching..." : "Messages"}
+                            </div>
+                            {results.map((result) => (
+                                <button
+                                    key={`${result.account}:${result.uid}`}
+                                    type="button"
+                                    className="w-full flex items-start gap-3 px-3 py-2 rounded-md hover:bg-notion-hover text-left"
+                                    onClick={() => selectSearchResult(result)}
+                                >
+                                    <svg
+                                        className="w-4 h-4 text-notion-text-muted mt-0.5 flex-shrink-0"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                    >
+                                        {ICON_PATHS.mail}
+                                    </svg>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="flex items-baseline justify-between gap-2">
+                                            <span className="text-sm text-notion-text truncate">
+                                                {getSenderName(result)}
+                                            </span>
+                                            <span className="text-xs text-notion-text-muted flex-shrink-0">
+                                                {formatListTime(result.date)}
+                                            </span>
+                                        </span>
+                                        <span className="block text-sm text-notion-text truncate">
+                                            {getSubject(result)}
+                                        </span>
+                                        <span className="block text-xs text-notion-text-muted truncate">
+                                            {getSnippet(result)}
+                                        </span>
+                                    </span>
+                                    <span className="text-[11px] text-notion-text-muted flex-shrink-0 mt-0.5">
+                                        {result.account}
+                                    </span>
+                                </button>
+                            ))}
+                            {!searching && results.length === 0 && (
+                                <div className="px-3 py-2 text-sm text-notion-text-muted">
+                                    No messages found
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {grouped.length > 0 ? (
                         grouped.map(([category, items]) => (
                             <div key={category}>

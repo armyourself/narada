@@ -156,3 +156,31 @@ export interface OriginalMessageContext {
     body: string;
     date: string;
 }
+
+// A hit from POST /search-all: an Email tagged with the account it came from.
+export interface SearchResult extends Email {
+    account: string;
+}
+
+export interface SearchAllData {
+    results: SearchResult[];
+    total: number;
+    accounts: string[];
+}
+
+// Contact entry from GET /nostr/directory (recipient autocomplete source).
+export interface DirectoryContact {
+    id: string;
+    npub: string | null;
+    address: string | null;
+    name: string;
+    self: boolean;
+    account: string | null;
+    messages: number;
+    last_seen: string;
+}
+
+export interface DirectoryData {
+    contacts: DirectoryContact[];
+    total: number;
+}

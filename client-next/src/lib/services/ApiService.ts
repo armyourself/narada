@@ -8,6 +8,9 @@ import type {
     OpenmailTaskResults,
     Gravatar,
     LocalAvatar,
+    SearchCriteria,
+    SearchAllData,
+    DirectoryData,
 } from "@/lib/types";
 import { removeFalsyParamsAndEmptyLists } from "@/lib/utils";
 
@@ -22,6 +25,7 @@ export enum GetRoutes {
     GET_EMAIL_CONTENT = "/get-email-content",
     DOWNLOAD_ATTACHMENT = "/download-attachment",
     GET_PUBLIC_KEY = "/get-public-key",
+    NOSTR_DIRECTORY = "/nostr/directory",
 }
 
 export enum PostRoutes {
@@ -42,7 +46,8 @@ export enum PostRoutes {
     RENAME_FOLDER = "/rename-folder",
     MOVE_FOLDER = "/move-folder",
     DELETE_FOLDER = "/delete-folder",
-    UNSUBSCRIBE_EMAIL = "/unsubscribe-email"
+    UNSUBSCRIBE_EMAIL = "/unsubscribe-email",
+    SEARCH_ALL = "/search-all",
 }
 
 interface GetQueryParams {
@@ -104,6 +109,12 @@ interface GetQueryParams {
         };
     };
     [GetRoutes.GET_PUBLIC_KEY]: {};
+    [GetRoutes.NOSTR_DIRECTORY]: {
+        queryParams?: {
+            q?: string;
+            limit?: number;
+        };
+    };
 }
 
 interface PostQueryParams {
@@ -133,6 +144,7 @@ interface PostQueryParams {
     [PostRoutes.MOVE_FOLDER]: {},
     [PostRoutes.DELETE_FOLDER]: {},
     [PostRoutes.UNSUBSCRIBE_EMAIL]: {},
+    [PostRoutes.SEARCH_ALL]: {},
 }
 
 interface PostBody {
@@ -213,6 +225,13 @@ interface PostBody {
         list_unsubscribe: string;
         list_unsubscribe_post?: string;
     };
+    [PostRoutes.SEARCH_ALL]: {
+        query?: string;
+        criteria?: Partial<SearchCriteria>;
+        accounts?: string[];
+        folder?: string;
+        limit?: number;
+    };
 }
 
 export interface BaseResponse {
@@ -234,10 +253,12 @@ export interface GetQueryResponse {
     [GetRoutes.GET_EMAIL_CONTENT]: Email;
     [GetRoutes.DOWNLOAD_ATTACHMENT]: Attachment;
     [GetRoutes.GET_PUBLIC_KEY]: { public_key: string };
+    [GetRoutes.NOSTR_DIRECTORY]: DirectoryData;
 }
 
 export interface PostQueryResponse {
     [PostRoutes.SAVE_EMAIL_AS_DRAFT]: string; // appenduid
+    [PostRoutes.SEARCH_ALL]: SearchAllData;
 }
 
 export interface GetResponse<T extends GetRoutes> extends BaseResponse {

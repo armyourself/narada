@@ -261,6 +261,119 @@ def _nostr_record_to_email(record: dict) -> Email:
     )
 
 
+SEARCH_ALL_MAX_RESULTS = 200
+
+
+class SearchAllRequest(BaseModel):
+    query: str = ""
+    criteria: Optional[dict] = None
+    accounts: Optional[list[str]] = None
+    folder: Optional[str] = None
+    limit: int = SEARCH_ALL_MAX_RESULTS
+
+
+def _search_all_accounts(requested: Optional[list[str]]) -> list[str]:
+    """Union of every known account, or the caller's subset (order kept)."""
+    if requested:
+        seen: dict[str, None] = {}
+        for account in requested:
+            seen.setdefault(extract_email_address(account), None)
+        return list(seen)
+    known = set(client_handler.get_clients().keys()) | set(
+        nostr_handler.get_all_adapters().keys()
+    )
+    return sorted(known)
+
+
+@router.post("/search-all")
+async def search_all(request: SearchAllRequest) -> Response[dict]:
+    """Search every account across every transport in one call.
+
+    IMAP accounts are queried server-side with ``SearchCriteria``; Nostr
+    accounts are filtered against their local mailbox records.  A failing
+    account (offline IMAP, no adapter) is skipped so one dead account
+    never breaks the global search.  Results are newest-first and capped
+    at ``limit`` (max 200).
+    """
+    try:
+        limit = max(1, min(request.limit, SEARCH_ALL_MAX_RESULTS))
+
+        criteria: SearchCriteria | str = ""
+        if request.criteria:
+            criteria = SearchCriteria(**request.criteria)
+        if request.query:
+            if isinstance(criteria, SearchCriteria) and not criteria.include:
+                criteria.include = request.query
+            elif not isinstance(criteria, SearchCriteria):
+                criteria = SearchCriteria(include=request.query)
+
+        accounts = _search_all_accounts(request.accounts)
+        results: list[dict] = []
+        searched: list[str] = []
+
+        for account in accounts:
+            # --- IMAP side ------------------------------------------
+            if client_handler.is_client_exists(account):
+                try:
+                    connection = check_openmail_connection_availability(account)
+                    if isinstance(connection, Response):
+                        uvicorn_logger.error(connection.message)
+                    else:
+                        client = client_handler.get_client(account)
+                        client.imap.search_emails(request.folder, criteria)
+                        mailbox = client.imap.get_emails(1, limit)
+                        for email in mailbox.emails:
+                            email.route = _email_route(email.source, email.sender)
+                            entry = {key: email[key] for key in email.keys()}
+                            entry["account"] = account
+                            results.append(entry)
+                        searched.append(account)
+                except Exception as e:
+                    uvicorn_logger.error(
+                        "search-all IMAP stage failed for %s: %s", account, e
+                    )
+
+            # --- Nostr side -----------------------------------------
+            adapter = nostr_handler.get_adapter(account)
+            if adapter is not None:
+                try:
+                    for record in adapter.fetch_records(
+                        limit=NOSTR_RECORD_PAGE_LIMIT
+                    ):
+                        if isinstance(criteria, SearchCriteria) and not (
+                            _nostr_record_matches(record, criteria)
+                        ):
+                            continue
+                        email = _nostr_record_to_email(record)
+                        entry = {key: email[key] for key in email.keys()}
+                        entry["account"] = account
+                        results.append(entry)
+                    if account not in searched:
+                        searched.append(account)
+                except Exception as e:
+                    uvicorn_logger.error(
+                        "search-all Nostr stage failed for %s: %s", account, e
+                    )
+
+        results.sort(key=lambda item: _email_timestamp(item.get("date")), reverse=True)
+        results = results[:limit]
+
+        return Response(
+            success=True,
+            message="Search across accounts completed.",
+            data={
+                "results": results,
+                "total": len(results),
+                "accounts": searched,
+            },
+        )
+    except Exception as e:
+        return Response(
+            success=False,
+            message=err_msg("There was an error while searching across accounts.", str(e)),
+        )
+
+
 @router.get("/get-mailbox/{account}")
 async def get_mailbox(
     account: str,

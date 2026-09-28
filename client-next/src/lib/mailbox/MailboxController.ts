@@ -31,6 +31,12 @@ import {
     roundUpToMultiple,
 } from "@/lib/utils";
 import { PreferenceStore } from "@/lib/preferences";
+import { useSharedStore } from "@/lib/stores/shared";
+import {
+    mailboxCacheKey,
+    readMailboxCache,
+    writeMailboxCache,
+} from "@/lib/mailbox/mailboxCache";
 
 export class MailboxController {
     public static async init(
@@ -229,6 +235,31 @@ export class MailboxController {
         });
     }
 
+    public static async searchAll(
+        query: string,
+        options?: {
+            accounts?: string[];
+            criteria?: Partial<SearchCriteria>;
+            limit?: number;
+        },
+    ): Promise<PostResponse<PostRoutes.SEARCH_ALL>> {
+        return await ApiService.post(PostRoutes.SEARCH_ALL, {
+            query,
+            accounts: options?.accounts,
+            criteria: options?.criteria,
+            limit: options?.limit,
+        });
+    }
+
+    public static async getDirectory(
+        q?: string,
+        limit?: number,
+    ): Promise<GetResponse<GetRoutes.NOSTR_DIRECTORY>> {
+        return await ApiService.get(GetRoutes.NOSTR_DIRECTORY, {
+            queryParams: { q, limit },
+        });
+    }
+
     public static async getMailbox(
         account: Account,
         folder?: Folder | string,
@@ -249,6 +280,28 @@ export class MailboxController {
 
         if (offsetStart > offsetEnd) {
             throw Error("`offsetStart` can not be larger than `offsetEnd`");
+        }
+
+        // Stale-while-revalidate: paint the cached list immediately so
+        // folder/account switches don't flash empty, then revalidate with
+        // the request below.
+        const cacheKey = mailboxCacheKey(
+            account.email_address,
+            folder,
+            typeof searchCriteria === "string"
+                ? searchCriteria
+                : searchCriteria
+                  ? JSON.stringify(searchCriteria)
+                  : "",
+        );
+        const cached = readMailboxCache(cacheKey);
+        if (cached) {
+            useSharedStore.setState({
+                mailboxes: {
+                    ...useSharedStore.getState().mailboxes,
+                    [account.email_address]: cached,
+                },
+            });
         }
 
         const response = await ApiService.get(GetRoutes.GET_MAILBOX, {
@@ -276,6 +329,7 @@ export class MailboxController {
                 },
                 folder: response.data[account.email_address].folder,
             };
+            writeMailboxCache(cacheKey, mailbox);
             SharedStore.mailboxes = {
                 ...SharedStore.mailboxes,
                 [account.email_address]: mailbox,
