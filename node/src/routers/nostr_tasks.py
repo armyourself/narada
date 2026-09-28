@@ -56,6 +56,10 @@ class NostrMailboxEntry(BaseModel):
     source: str = "nostr"
 
 
+class RelayManageRequest(BaseModel):
+    url: str
+
+
 # ── routes ────────────────────────────────────────────────────────────────
 
 
@@ -71,6 +75,7 @@ async def register_identity(request: RegisterIdentityRequest) -> Response:
             account_id=request.account,
             npub=request.npub,
             nsec_hex=request.nsec_hex,
+            config=nostr_handler.get_config(),
         )
         ok, msg = adapter.connect()
         return Response(
@@ -100,6 +105,7 @@ async def generate_identity(request: GenerateIdentityRequest) -> Response:
             account_id=request.account,
             npub=identity.public_key_bech32,
             nsec_hex=identity.secret_key_hex,
+            config=nostr_handler.get_config(),
         )
         ok, msg = adapter.connect()
         return Response(
@@ -161,6 +167,22 @@ async def get_relays() -> Response:
         message="Relay status",
         data=statuses,
     )
+
+
+@router.post("/nostr/relays")
+async def add_relay(request: RelayManageRequest) -> Response:
+    """Add a relay URL: validates (ws/wss), persists to config, and
+    connects + subscribes it on every existing adapter immediately."""
+    ok, msg = nostr_handler.add_relay(request.url)
+    return Response(success=ok, message=msg)
+
+
+@router.delete("/nostr/relays")
+async def remove_relay(url: str) -> Response:
+    """Remove a relay URL: disconnects it everywhere, drops it from the
+    pools, and persists the change (the last relay cannot be removed)."""
+    ok, msg = nostr_handler.remove_relay(url)
+    return Response(success=ok, message=msg)
 
 
 @router.post("/nostr/send-email")

@@ -52,7 +52,7 @@ uvicorn_logger = UvicornLogger()
 async def lifespan(app: FastAPI):
     try:
         client_handler.create_openmail_clients()
-        nostr_handler.load_stored_identities()
+        nostr_handler.load_stored_identities(nostr_handler.get_config())
         nostr_handler.connect_all()
         yield
     finally:

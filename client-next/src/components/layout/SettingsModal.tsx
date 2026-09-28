@@ -178,6 +178,8 @@ export default function SettingsModal() {
     );
     const [relays, setRelays] = useState<RelayStatus[] | null>(null);
     const [relayTick, setRelayTick] = useState(0);
+    const [newRelay, setNewRelay] = useState("");
+    const [relayBusy, setRelayBusy] = useState(false);
     const [signature, setSignature] = useState<string>(() =>
         typeof window === "undefined"
             ? ""
@@ -238,6 +240,50 @@ export default function SettingsModal() {
             showToast({ content: announce });
         } catch {
             /* clipboard unavailable — ignore */
+        }
+    }
+
+    async function addRelay() {
+        const url = newRelay.trim();
+        if (!url || relayBusy) return;
+        setRelayBusy(true);
+        try {
+            const res = await fetch(`${server}/nostr/relays`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url }),
+            });
+            const json = await res.json();
+            if (json.success) {
+                showToast({ content: json.message || "relay added" });
+                setNewRelay("");
+            } else {
+                showMessage({ title: json.message || "failed to add relay" });
+            }
+        } catch {
+            showMessage({ title: "failed to add relay" });
+        } finally {
+            setRelayBusy(false);
+            setRelayTick((n) => n + 1);
+        }
+    }
+
+    async function removeRelay(url: string) {
+        try {
+            const res = await fetch(
+                `${server}/nostr/relays?url=${encodeURIComponent(url)}`,
+                { method: "DELETE" },
+            );
+            const json = await res.json();
+            if (json.success) {
+                showToast({ content: json.message || "relay removed" });
+            } else {
+                showMessage({ title: json.message || "failed to remove relay" });
+            }
+        } catch {
+            showMessage({ title: "failed to remove relay" });
+        } finally {
+            setRelayTick((n) => n + 1);
         }
     }
 
@@ -517,6 +563,29 @@ export default function SettingsModal() {
                                         Refresh
                                     </SettingsButton>
                                 </Row>
+                                <Row
+                                    label="Add relay"
+                                    desc="ws:// or wss:// endpoint — applied to every identity immediately."
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={newRelay}
+                                            placeholder="wss://relay.example.com"
+                                            className="h-8 w-56 px-2 rounded-md border border-notion-border bg-notion-surface text-sm text-notion-text placeholder:text-notion-text-muted focus:outline-none focus:ring-1 focus:ring-notion-accent"
+                                            onChange={(event) => setNewRelay(event.target.value)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === "Enter") void addRelay();
+                                            }}
+                                        />
+                                        <SettingsButton
+                                            disabled={relayBusy || !newRelay.trim()}
+                                            onClick={() => void addRelay()}
+                                        >
+                                            {relayBusy ? "Adding…" : "Add"}
+                                        </SettingsButton>
+                                    </div>
+                                </Row>
                                 {(relays ?? []).map((relay) => (
                                     <div
                                         key={relay.url}
@@ -536,6 +605,17 @@ export default function SettingsModal() {
                                         <span className="text-xs text-notion-text-muted shrink-0">
                                             {relay.connected ? "connected" : relay.last_error || "offline"}
                                         </span>
+                                        <button
+                                            type="button"
+                                            aria-label={`Remove relay ${relay.url}`}
+                                            className="w-6 h-6 rounded flex items-center justify-center text-notion-text-muted hover:text-notion-danger hover:bg-notion-hover transition-colors shrink-0"
+                                            onClick={() => void removeRelay(relay.url)}
+                                        >
+                                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M18 6 6 18" />
+                                                <path d="m6 6 12 12" />
+                                            </svg>
+                                        </button>
                                     </div>
                                 ))}
                                 {relays !== null && relays.length === 0 && (

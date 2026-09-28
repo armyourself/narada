@@ -28,6 +28,12 @@ Convention: [Semantic Versioning](https://semver.org/) via `bumpversion`.
 - **Settings modal** (mockup F3): centered modal with a w-248 dark left nav and four tabs — **Inbox** (theme, notifications, read receipts), **Account** (node id + copy, recovery phrase, key rotation, sign out, delete identity), **Nostr** (npub + copy, live relay status list with connect counts via `/nostr/relays`, transport summary), **Signature** (plain-text signature saved locally). Opened from the sidebar gear, the profile menu, and the command palette ("Go to settings") instead of the old full-page view.
 - **Reading-pane label chips** (mockup F2): dimmed "Add label" button opens an inline input; chips render as `#373737` pills with a 14px × remove button. Labels are session-local, keyed per message uid, so reopening keeps them.
 - **Search palette** (mockup F14): the sidebar Search row now opens a 450px popover (input + live results over the current folder: unread dot, sender/subject/snippet, time; empty-state hints) instead of swapping into an inline input; picking a result opens the reading pane and clears the query. Selection moved into the nav store (`selectedEmail`/`selectEmail`) with a shared `openEmailInPane()` helper so list rows and the palette share open+mark-read behavior; row-display helpers moved to `lib/mailbox/display.ts`.
+- **Relay management**:
+  - `POST /nostr/relays` (`{url}`) validates the endpoint (`normalize_relay_url` — ws/wss only, trailing slash stripped), rejects duplicates case-insensitively, persists the list to `~/.narada/etc/config.json` (first real use of `NostrConfig.save`/`from_file`), and rolls the relay out to every adapter immediately — pool add + connect + inbox re-subscription on the adapter's own loop (same subscription id, so NIP-01 REQ replacement keeps existing relays untouched).
+  - `DELETE /nostr/relays?url=…` disconnects each adapter's socket **before** unlisting (otherwise the listener auto-reconnects forever), persists the removal, and refuses to remove the last configured relay.
+  - `GET /nostr/relays` now also reports configured-but-not-yet-connected relays and includes `last_connected_at` / `reconnect_count`, so the UI list always matches config.
+  - Settings → Nostr → Relays: "Add relay" input (Enter or Add button) and a per-relay remove (×) control, with refresh wired to the live status.
+  - Tests: `tests/nostr/test_relay_management.py` (URL validation matrix, handler persistence round-trip incl. duplicate/unknown/last-relay guards, status merge, adapter pool add/remove without network) — Nostr suite +23.
 
 ### Changed
 
@@ -58,6 +64,7 @@ Convention: [Semantic Versioning](https://semver.org/) via `bumpversion`.
 
 ### Changed
 
+- **Relay configuration is now loaded at boot**: `main.py` passes `nostr_handler.get_config()` (read once from `~/.narada/etc/config.json`, falling back to the defaults) into `load_stored_identities`, and identity registration/generation builds adapters with the persisted config instead of always using the hardcoded `DEFAULT_RELAYS` — the previously unwired `NostrConfig.from_file`/`save`/`NOSTR_RELAYS` paths finally have a production caller.
 - **README rewritten**: `client/` → `client-next/` (Next.js + Tauri), real run/test commands (`uv run` or plain `python`; `bun run tauri dev`; `bunx tsc --noEmit` / `bun run lint`), repository structure (legacy client marked deprecated), and an honest Current Status (unified inbox, advanced search, route filters, Nostr round-trip under "What works"; ported-features and sidecar packaging gaps under "What's missing").
 - **Narada naming**: backend `APP_NAME` is now `Narada`, so the data directory moved from `~/.openmail` to `~/.narada` (matches the client); log strings, SMTP `User-Agent` (`Narada/0.0.1`), client localStorage prefix, capability fs scopes, and the discovery-file path all follow. Forked `Openmail` library class/module names are unchanged (internal).
 - ESLint config for the new client relaxes `no-explicit-any`, unused-vars (`^_` ignored), and type-only rules to accommodate ported legacy code; lint, typecheck, and build all pass.

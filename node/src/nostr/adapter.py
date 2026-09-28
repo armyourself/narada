@@ -490,6 +490,95 @@ class NostrAdapter(MailAdapter):
         except Exception:
             return False
 
+    # --- Runtime relay management ----------------------------------------
+
+    def add_relay(self, url: str) -> tuple[bool, str]:
+        """Add *url* to this adapter's pool, connect it, and extend the
+        inbox subscription so a runtime-added relay starts delivering
+        without an app restart.
+
+        Thread-safe: every relay operation is marshalled onto the
+        adapter's persistent background loop.
+        """
+        try:
+            return self._run(
+                self._add_relay_async(url),
+                timeout=self._operation_timeout(),
+            )
+        except Exception as exc:
+            return False, f"Failed to add relay: {exc}"
+
+    async def _add_relay_async(self, url: str) -> tuple[bool, str]:
+        normalized = url.rstrip("/")
+        if any(
+            relay.url.lower() == normalized.lower()
+            for relay in self._relay_pool.relays
+        ):
+            return False, f"Relay already in pool: {normalized}"
+
+        self._relay_pool.add_relay(normalized)
+        relay = self._relay_pool.relays[-1]
+        connected_ok = await relay.connect()
+        if not connected_ok:
+            # Keep it listed — the persisted config owns it and the
+            # listener will keep retrying; status surfaces the error.
+            return False, (
+                f"Relay added but connection failed: "
+                f"{relay.status.last_error or 'unknown error'}"
+            )
+
+        identity = self._ensure_identity()
+        filters = [
+            filter_for_email(identity.public_key_hex, limit=100)
+        ]
+
+        def _on_event(event: NostrEvent) -> None:
+            self._handle_incoming_event(event, identity)
+
+        if self._subscription_id is None:
+            # No live inbox session yet (first relay, or the boot-time
+            # connect failed): establish receiving now.
+            sub_id = f"nostr_{self._account_id}_{int(time.time())}"
+            await self._relay_pool.subscribe(sub_id, filters, on_event=_on_event)
+            self._subscription_id = sub_id
+            self._connected = True
+        else:
+            # Existing session: re-issue the same subscription id — NIP-01
+            # treats REQ as a replacement, so already-subscribed relays are
+            # unaffected and the new relay starts delivering.
+            await self._relay_pool.subscribe(
+                self._subscription_id, filters, on_event=_on_event
+            )
+        return True, f"Connected to {normalized}"
+
+    def remove_relay(self, url: str) -> tuple[bool, str]:
+        """Disconnect and drop *url* from this adapter's pool.
+
+        The socket is closed BEFORE the pool entry is removed — the pool's
+        ``remove_relay`` only unlists, while the listener task would keep
+        auto-reconnecting forever otherwise.
+        """
+        try:
+            return self._run(self._remove_relay_async(url), timeout=30.0)
+        except Exception as exc:
+            return False, f"Failed to remove relay: {exc}"
+
+    async def _remove_relay_async(self, url: str) -> tuple[bool, str]:
+        normalized = url.rstrip("/")
+        target = next(
+            (
+                relay
+                for relay in self._relay_pool.relays
+                if relay.url.lower() == normalized.lower()
+            ),
+            None,
+        )
+        if target is None:
+            return False, f"Relay not in pool: {normalized}"
+        await target.disconnect()
+        self._relay_pool.remove_relay(target.url)
+        return True, f"Removed {target.url}"
+
     def _handle_incoming_event(self, event: NostrEvent, identity: NostrIdentity) -> None:
         """Handle an incoming Nostr event: verify, decrypt, persist."""
         if not verify_event(event):

@@ -28,6 +28,26 @@ DEFAULT_RELAYS = [
 EMAIL_KIND = 1050
 
 
+def normalize_relay_url(url: str) -> str:
+    """Validate and normalize a relay URL for storage.
+
+    NIP-01 relays are WebSocket endpoints, so only ``ws://`` / ``wss://``
+    URLs with a host are accepted.  Trailing slashes are stripped to match
+    :meth:`NostrRelay.__init__`, which is what runtime pool matching uses.
+
+    Raises ``ValueError`` with a human-readable reason on bad input.
+    """
+    value = (url or "").strip().rstrip("/")
+    if not value:
+        raise ValueError("Relay URL is empty")
+    scheme, sep, rest = value.partition("://")
+    if scheme.lower() not in ("ws", "wss") or not sep or not rest or " " in value:
+        raise ValueError(
+            f"Invalid relay URL {url!r} — expected a ws:// or wss:// endpoint"
+        )
+    return value
+
+
 @dataclass
 class NostrConfig:
     """Configuration for the Nostr transport.
@@ -111,4 +131,4 @@ class NostrConfig:
         )
 
 
-__all__ = ["EMAIL_KIND", "DEFAULT_RELAYS", "NostrConfig"]
+__all__ = ["EMAIL_KIND", "DEFAULT_RELAYS", "NostrConfig", "normalize_relay_url"]

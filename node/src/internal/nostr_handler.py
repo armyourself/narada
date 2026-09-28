@@ -33,6 +33,7 @@ class NostrHandler:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._adapters: NostrAdapters = {}
+            cls._instance._config: Optional[NostrConfig] = None
         return cls._instance
 
     # -- lifecycle ----------------------------------------------------------
@@ -90,19 +91,117 @@ class NostrHandler:
         return dict(self._adapters)
 
     def get_relay_status(self) -> list[dict]:
-        """Aggregate relay status across all adapters."""
+        """Aggregate relay status across all adapters.
+
+        Configured relays that are not (yet) in any adapter pool — e.g.
+        added while no identity exists, or a just-added URL that failed
+        to connect — are reported too, so the UI list matches config.
+        """
         seen_urls: set[str] = set()
         statuses: list[dict] = []
         for adapter in self._adapters.values():
             for relay in adapter.relay_pool.relays:
-                if relay.url not in seen_urls:
-                    seen_urls.add(relay.url)
+                if relay.url.lower() not in seen_urls:
+                    seen_urls.add(relay.url.lower())
                     statuses.append({
                         "url": relay.url,
                         "connected": relay.is_connected,
                         "last_error": relay.status.last_error,
+                        "last_connected_at": relay.status.last_connected_at,
+                        "reconnect_count": relay.status.reconnect_count,
                     })
+        for url in self.get_config().relay_urls:
+            if url.lower() not in seen_urls:
+                seen_urls.add(url.lower())
+                statuses.append({
+                    "url": url,
+                    "connected": False,
+                    "last_error": None,
+                    "last_connected_at": None,
+                    "reconnect_count": 0,
+                })
         return statuses
+
+    # -- relay configuration -----------------------------------------------
+
+    def _config_path(self) -> Path:
+        from src.consts import APP_NAME
+        data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
+        return data_dir / "etc" / "config.json"
+
+    def get_config(self) -> NostrConfig:
+        """Relay/transport config, loaded once from ``~/.…/etc/config.json``."""
+        if self._config is None:
+            self._config = NostrConfig.from_file(self._config_path())
+        return self._config
+
+    def add_relay(self, url: str) -> tuple[bool, str]:
+        """Persist a new relay URL and roll it out to every adapter."""
+        from src.nostr.config import normalize_relay_url
+        try:
+            normalized = normalize_relay_url(url)
+        except ValueError as exc:
+            return False, str(exc)
+
+        config = self.get_config()
+        known = {entry.rstrip("/").lower() for entry in config.relay_urls}
+        if normalized.lower() in known:
+            return False, f"Relay already configured: {normalized}"
+
+        config.relay_urls.append(normalized)
+        config.save(self._config_path())
+
+        results: list[str] = []
+        for account_id, adapter in self._adapters.items():
+            try:
+                ok, msg = adapter.add_relay(normalized)
+                if not ok:
+                    results.append(f"{account_id}: {msg}")
+                    uvicorn_logger.warning(
+                        f"Runtime relay add for {account_id} reported: {msg}"
+                    )
+            except Exception as exc:
+                results.append(f"{account_id}: {exc}")
+                uvicorn_logger.error(
+                    f"Failed to add relay {normalized} for {account_id}: {exc}"
+                )
+        if results:
+            return True, (
+                f"Relay configured but not fully live — "
+                f"{'; '.join(results)}"
+            )
+        return True, f"Relay added: {normalized}"
+
+    def remove_relay(self, url: str) -> tuple[bool, str]:
+        """Drop a relay from config and disconnect it everywhere."""
+        from src.nostr.config import normalize_relay_url
+        try:
+            normalized = normalize_relay_url(url)
+        except ValueError as exc:
+            return False, str(exc)
+
+        config = self.get_config()
+        remaining = [
+            entry
+            for entry in config.relay_urls
+            if entry.rstrip("/").lower() != normalized.lower()
+        ]
+        if len(remaining) == len(config.relay_urls):
+            return False, f"Relay not configured: {normalized}"
+        if not remaining:
+            return False, "Cannot remove the last configured relay"
+
+        config.relay_urls = remaining
+        config.save(self._config_path())
+
+        for account_id, adapter in self._adapters.items():
+            try:
+                adapter.remove_relay(normalized)
+            except Exception as exc:
+                uvicorn_logger.error(
+                    f"Failed to remove relay {normalized} for {account_id}: {exc}"
+                )
+        return True, f"Relay removed: {normalized}"
 
     # -- identity storage ---------------------------------------------------
 
