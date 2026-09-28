@@ -17,7 +17,9 @@ Author: <berkaykayaforbusiness@outlook.com>
 """
 
 from email.message import EmailMessage
+import base64
 import imaplib
+import quopri
 import re
 import threading
 import time
@@ -105,6 +107,8 @@ IDLE_TIMEOUT = 29 * 60
 JOIN_TIMEOUT = 1
 WAIT_RESPONSE_TIMEOUT = 30
 IDLE_ACTIVATION_INTERVAL = 60
+FOLDER_LIST_CACHE_TTL = 60  # seconds
+NOOP_CHECK_CACHE_TTL = 5  # seconds
 
 
 class IMAPManager(imaplib.IMAP4_SSL):
@@ -149,6 +153,8 @@ class IMAPManager(imaplib.IMAP4_SSL):
         count: int
         folder: str
         search_query: str
+        uidnext: int | None = None
+        messages: int | None = None
 
     def __init__(
         self,
@@ -188,6 +194,10 @@ class IMAPManager(imaplib.IMAP4_SSL):
         self._release_idle_loops_event = threading.Event()
         self._idle_command_in_process_event = threading.Event()
         self._idle_command_in_process_event.set()
+        # One socket, many FastAPI threads: every command (and the raw
+        # IDLE/DONE transitions) must run strictly one at a time, or
+        # interleaved reads corrupt the connection permanently.
+        self._command_lock = threading.RLock()
 
         super().__init__(
             self._host,
@@ -198,6 +208,10 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
         self._is_idle_supported = self.is_supported("IDLE")
         self._searched_emails: IMAPManager.SearchedEmails | None = None
+        self._folder_list_cache: tuple[float, tuple] | None = None
+        self._selected_folder: bytes | None = None
+        self._selected_readonly = False
+        self._last_noop_ok_at: float | None = None
         self._hierarchy_delimiter = ""
 
         self.login(email_address, password)
@@ -357,68 +371,85 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
             if not self._idle_command_in_process_event.is_set():
                 print("Command: ", imap4_cmd.__name__, "Already in idle waiting...")
-                """
-                For `_idle_command_in_process_event` to be set,
-                `_wait_response` must be equal to `WaitResponse.IDLE`,
-                Since a TimeoutError will be raised if it is not set
-                within WAIT_RESPONSE_TIMEOUT, there is no need to
-                provide any timeout to this wait or to consider anything
-                further.
-                """
-                self._idle_command_in_process_event.wait()
+                # Bounded wait: if the IDLE handshake died on a poisoned
+                # socket the event never gets set again, and an unbounded
+                # wait here would block every future request forever.
+                self._idle_command_in_process_event.wait(timeout=30)
 
-            was_idle_before_call = (
-                self.is_idle() or self.is_idle_activation_countdown_continue()
-            )
-            # print("Was Idle Before Call: ", was_idle_before_call, "Command: ", imap4_cmd.__name__)
-            try:
-                if was_idle_before_call:
-                    self.done()
-                else:
-                    self._release_readline_for_imap4()
-            except Exception as e:
-                if is_logout_error(str(e).lower()):
-                    raise IMAPManagerLoggedOutException(
-                        f"To perform this command `{imap4_cmd.__name__}`, the IMAPManager must be logged in: {str(e)}"
-                    ) from None
-                else:
-                    print(f"Unexpected error while leaving IDLE mode: {str(e)}")
-                    # Even if leaving IDLE has failed, terminate current idle session.
-                    self._handle_done_response()
-                    print(
-                        "Active IDLE session set to None and threads stopped forcefully."
-                    )
-
-            try:
-                result = imap4_cmd(self, *args, **kwargs)
-            except Exception as e:
-                if is_logout_error(str(e).lower()):
-                    raise IMAPManagerLoggedOutException(
-                        f"To perform this command `{imap4_cmd.__name__}`, the IMAPManager must be logged in: {str(e)}"
-                    ) from None
-                else:
-                    raise IMAPManagerException(
-                        f"Error while running command `{imap4_cmd.__name__}`: {str(e)}`"
-                    ) from e
-
-            # Restore IDLE mode.
-            try:
-                # print("Restore - ", "Was Idle Before Call: ", was_idle_before_call, "Command: ", imap4_cmd.__name__)
-                if was_idle_before_call and imap4_cmd.__name__.lower() != "logout":
-                    self.idle()
-                # else:
-                #    self._resume_readline_for_imapmanager()
-            except Exception as e:
-                print(f"Unexpected error while restoring IDLE mode: {str(e)}")
-                was_idle_before_call = False
-                print(
-                    "IDLE mode could not be restored. IDLE mode completely disabled. Run `idle()` to re-enable IDLE mode if needed."
+            with self._command_lock:
+                was_idle_before_call = (
+                    self.is_idle() or self.is_idle_activation_countdown_continue()
                 )
-                raise IMAPManagerException(str(e))
+                # print("Was Idle Before Call: ", was_idle_before_call, "Command: ", imap4_cmd.__name__)
+                try:
+                    if was_idle_before_call:
+                        self.done()
+                    else:
+                        self._release_readline_for_imap4()
+                except Exception as e:
+                    if is_logout_error(str(e).lower()):
+                        self._last_noop_ok_at = None
+                        raise IMAPManagerLoggedOutException(
+                            f"To perform this command `{imap4_cmd.__name__}`, the IMAPManager must be logged in: {str(e)}"
+                        ) from None
+                    else:
+                        print(f"Unexpected error while leaving IDLE mode: {str(e)}")
+                        # Even if leaving IDLE has failed, terminate current idle session.
+                        self._handle_done_response()
+                        print(
+                            "Active IDLE session set to None and threads stopped forcefully."
+                        )
 
-            return result
+                try:
+                    result = imap4_cmd(self, *args, **kwargs)
+                except Exception as e:
+                    self._note_connection_error(e)
+                    if is_logout_error(str(e).lower()):
+                        self._last_noop_ok_at = None
+                        raise IMAPManagerLoggedOutException(
+                            f"To perform this command `{imap4_cmd.__name__}`, the IMAPManager must be logged in: {str(e)}"
+                        ) from None
+                    else:
+                        raise IMAPManagerException(
+                            f"Error while running command `{imap4_cmd.__name__}`: {str(e)}`"
+                        ) from e
+
+                # Restore IDLE mode.
+                try:
+                    # print("Restore - ", "Was Idle Before Call: ", was_idle_before_call, "Command: ", imap4_cmd.__name__)
+                    if was_idle_before_call and imap4_cmd.__name__.lower() != "logout":
+                        self.idle()
+                    # else:
+                    #    self._resume_readline_for_imapmanager()
+                except Exception as e:
+                    print(f"Unexpected error while restoring IDLE mode: {str(e)}")
+                    was_idle_before_call = False
+                    print(
+                        "IDLE mode could not be restored. IDLE mode completely disabled. Run `idle()` to re-enable IDLE mode if needed."
+                    )
+                    raise IMAPManagerException(str(e))
+
+                return result
 
         return wrapper
+
+    def _note_connection_error(self, error: Exception) -> None:
+        """
+        Invalidate the NOOP health cache when a command fails in a way that
+        leaves the socket unusable (read timeout poisons the buffered
+        reader: every later read raises "cannot read from timed out
+        object"). The next availability check then runs a real NOOP,
+        detects the dead connection and reconnects.
+        """
+        if isinstance(error, (TimeoutError, ConnectionError, OSError)):
+            self._last_noop_ok_at = None
+            return
+        message = str(error).lower()
+        if any(
+            token in message
+            for token in ("timed out", "timeout", "cannot read", "broken pipe", "connection reset", "abort")
+        ):
+            self._last_noop_ok_at = None
 
     @override
     @handle_idle
@@ -438,7 +469,10 @@ class IMAPManager(imaplib.IMAP4_SSL):
     @override
     @handle_idle
     def close(self):
-        return super().close()
+        try:
+            return super().close()
+        finally:
+            self._selected_folder = None
 
     @override
     @handle_idle
@@ -498,7 +532,20 @@ class IMAPManager(imaplib.IMAP4_SSL):
     @override
     @handle_idle
     def list(self, directory: str = '""', pattern: str = "*"):
-        return super().list(directory, pattern)
+        default_scope = directory == '""' and pattern == "*"
+        if default_scope and self._folder_list_cache is not None:
+            cached_at, cached_result = self._folder_list_cache
+            if time.monotonic() - cached_at < FOLDER_LIST_CACHE_TTL:
+                return cached_result
+
+        result = super().list(directory, pattern)
+        if default_scope and result[0] == "OK":
+            self._folder_list_cache = (time.monotonic(), result)
+        return result
+
+    def _invalidate_folder_list(self) -> None:
+        """Drop the cached LIST response after a folder mutation."""
+        self._folder_list_cache = None
 
     @override
     def login(self, user: str, password: str) -> IMAPCommandResult:
@@ -537,6 +584,12 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
         self._enable_utf8()
         self._set_hierarchy_delimiter()
+
+        self._searched_emails = None
+        self._folder_list_cache = None
+        self._selected_folder = None
+        self._selected_readonly = False
+        self._last_noop_ok_at = None
 
         return (True, "Succesfully logged in to the target IMAP server")
 
@@ -620,6 +673,13 @@ class IMAPManager(imaplib.IMAP4_SSL):
             self._encode_folder(folder) if isinstance(folder, str) else folder
         )  # type: ignore
 
+        if (
+            self.state == "SELECTED"
+            and self._selected_folder == folder
+            and self._selected_readonly == readonly
+        ):
+            return (True, f"Folder `{folder}` is already selected.")
+
         result = self._parse_command_result(
             super().select(folder, readonly),
             success_message=f"Successfully selected {folder}",
@@ -627,8 +687,11 @@ class IMAPManager(imaplib.IMAP4_SSL):
         )
 
         if not result[0]:
+            self._selected_folder = None
             raise IMAPManagerException(result[1])
 
+        self._selected_folder = folder  # type: ignore
+        self._selected_readonly = readonly
         return result
 
     @override
@@ -724,18 +787,32 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
     def is_logged_out(self) -> bool:
         """Check if imap connection is terminated"""
+        if self.is_idle() or self.is_idle_activation_countdown_continue():
+            return False
+        if (
+            self._last_noop_ok_at is not None
+            and time.monotonic() - self._last_noop_ok_at < NOOP_CHECK_CACHE_TTL
+        ):
+            return False
+        start_time = time.time()
+        print("calling noop at ", start_time)
         try:
-            if self.is_idle() or self.is_idle_activation_countdown_continue():
-                return False
-            start_time = time.time()
-            print("calling noop at ", start_time)
-            noop_response = super().noop()[0] != "OK"
-            end_time = time.time()
-            print("noop response at ", end_time)
-            print("total time: ", end_time - start_time)
-            return noop_response
+            # Serialized with running commands: a NOOP interleaved into
+            # another thread's command would corrupt the response stream.
+            with self._command_lock:
+                noop_failed = super().noop()[0] != "OK"
         except Exception:
+            self._last_noop_ok_at = None
             return True
+        end_time = time.time()
+        print("noop response at ", end_time)
+        print("total time: ", end_time - start_time)
+        if noop_failed:
+            self._last_noop_ok_at = None
+        else:
+            self._last_noop_ok_at = time.monotonic()
+        return noop_failed
+
 
     def is_idle_supported(self) -> bool:
         """Check if idle is supported"""
@@ -770,40 +847,42 @@ class IMAPManager(imaplib.IMAP4_SSL):
         """
         if not self.is_idle_supported():
             raise Exception(f"IDLE is not supported on {self._host}")
-        if self.is_idle():
-            return
-        if not self._idle_command_in_process_event.is_set():
-            return
 
-        if self._idle_optimization:
-            # Stop current activation countdown
-            self._idling_event.set()
-            self._idle_activation_countdown = IDLE_ACTIVATION_INTERVAL
-            self._is_idle_activation_countdown_continue = True
-        else:
-            self._is_idle_activation_countdown_continue = False
-            # Check out select INBOX in optimized_idle_lifecycle
-            # function for description of this selection.
-            self.select(Folder.Inbox, readonly=True)
+        with self._command_lock:
+            if self.is_idle():
+                return
+            if not self._idle_command_in_process_event.is_set():
+                return
 
-        self._readline_event.clear()
-        if not self._readline_thread.is_alive():
-            self._readline_thread.start()
+            if self._idle_optimization:
+                # Stop current activation countdown
+                self._idling_event.set()
+                self._idle_activation_countdown = IDLE_ACTIVATION_INTERVAL
+                self._is_idle_activation_countdown_continue = True
+            else:
+                self._is_idle_activation_countdown_continue = False
+                # Check out select INBOX in optimized_idle_lifecycle
+                # function for description of this selection.
+                self.select(Folder.Inbox, readonly=True)
 
-        if not self._idle_optimization:
-            self._current_idle = IMAPManager.IdleSession(
-                tag=self._new_tag(), start_time=time.time()
-            )
-            self.send(b"%s IDLE\r\n" % self._current_idle.tag)
-            print(
-                f"'IDLE' command sent with tag: {self._current_idle.tag} at {datetime.now()}."
-            )
+            self._readline_event.clear()
+            if not self._readline_thread.is_alive():
+                self._readline_thread.start()
 
-            self._wait_for_response(IMAPManager.WaitResponse.IDLE)
+            if not self._idle_optimization:
+                self._current_idle = IMAPManager.IdleSession(
+                    tag=self._new_tag(), start_time=time.time()
+                )
+                self.send(b"%s IDLE\r\n" % self._current_idle.tag)
+                print(
+                    f"'IDLE' command sent with tag: {self._current_idle.tag} at {datetime.now()}."
+                )
 
-        self._idling_event.clear()
-        if not self._idling_thread.is_alive():
-            self._idling_thread.start()
+                self._wait_for_response(IMAPManager.WaitResponse.IDLE)
+
+            self._idling_event.clear()
+            if not self._idling_thread.is_alive():
+                self._idling_thread.start()
 
     def _start_reading_lines(self) -> None:
         """
@@ -891,25 +970,34 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
             print(f"IDLE activation countdown finished at {datetime.now()}...")
 
-            # Before starting idle mode, select inbox to receive exists
-            # messages: https://datatracker.ietf.org/doc/html/rfc2177.html#autoid-3
-            self.select(Folder.Inbox, readonly=True)
-            idle_tag = self._new_tag()
-            self.send(b"%s IDLE\r\n" % idle_tag)
-            print(f"'IDLE' command sent with tag: {idle_tag} at {datetime.now()}.")
-            self._idle_command_in_process_event.clear()
+            # Serialized with regular commands: interleaving a raw IDLE
+            # activation into another thread's command corrupts the socket.
+            with self._command_lock:
+                # Before starting idle mode, select inbox to receive exists
+                # messages: https://datatracker.ietf.org/doc/html/rfc2177.html#autoid-3
+                self.select(Folder.Inbox, readonly=True)
+                idle_tag = self._new_tag()
+                self.send(b"%s IDLE\r\n" % idle_tag)
+                print(f"'IDLE' command sent with tag: {idle_tag} at {datetime.now()}.")
+                self._idle_command_in_process_event.clear()
 
-            self._wait_for_response(IMAPManager.WaitResponse.IDLE)
-            if self._release_idle_loops_event.is_set():
+                try:
+                    self._wait_for_response(IMAPManager.WaitResponse.IDLE)
+                except BaseException:
+                    # Dead handshake: unblock waiting commands immediately.
+                    self._idle_command_in_process_event.set()
+                    raise
+                if self._release_idle_loops_event.is_set():
+                    self._is_idle_activation_countdown_continue = False
+                    print("Idle Manager is desctructed while waiting for IDLE response.")
+                    self._idle_command_in_process_event.set()
+                    break
+
+                self._current_idle = IMAPManager.IdleSession(
+                    tag=idle_tag, start_time=time.time()
+                )
                 self._is_idle_activation_countdown_continue = False
-                print("Idle Manager is desctructed while waiting for IDLE response.")
-                break
-
-            self._current_idle = IMAPManager.IdleSession(
-                tag=idle_tag, start_time=time.time()
-            )
-            self._is_idle_activation_countdown_continue = False
-            self._idle_command_in_process_event.set()
+                self._idle_command_in_process_event.set()
 
             print(
                 f"Optimized 'IDLE' lifecycle creating for {self._current_idle.tag} ..."
@@ -932,17 +1020,18 @@ class IMAPManager(imaplib.IMAP4_SSL):
             self._is_idle_activation_countdown_continue = False
             return
 
-        self._idling_event.set()
-        self.send(b"DONE\r\n")
-        print(f"DONE command sent for {self._current_idle.tag} at {datetime.now()}.")
-        self._wait_for_response(IMAPManager.WaitResponse.DONE)
+        with self._command_lock:
+            self._idling_event.set()
+            self.send(b"DONE\r\n")
+            print(f"DONE command sent for {self._current_idle.tag} at {datetime.now()}.")
+            self._wait_for_response(IMAPManager.WaitResponse.DONE)
 
-        self._readline_event.set()
-        temp_tag = self._current_idle.tag
-        self._current_idle = None
-        self._is_idle_activation_countdown_continue = False
-        self._release_readline_for_imap4(True)
-        print(f"DONE for {temp_tag} handled. IDLE terminated.")
+            self._readline_event.set()
+            temp_tag = self._current_idle.tag
+            self._current_idle = None
+            self._is_idle_activation_countdown_continue = False
+            self._release_readline_for_imap4(True)
+            print(f"DONE for {temp_tag} handled. IDLE terminated.")
 
     def _release_readline_for_imap4(self, force: bool = False):
         """
@@ -1574,14 +1663,32 @@ class IMAPManager(imaplib.IMAP4_SSL):
         if not folder:
             folder = Folder.All if search else Folder.Inbox
 
-        self.select(folder, readonly=True)
-
         if search:
             search_criteria_query = self.build_search_criteria_query(search).encode(
                 "utf-8"
             )
         else:
             search_criteria_query = "ALL"
+
+        resolved_folder = self._extract_folder_name(
+            self.find_matching_folder(str(folder), encoded=False) or folder
+        )
+
+        cached = self._searched_emails
+        if (
+            cached is not None
+            and cached.folder == resolved_folder
+            and cached.search_query == search_criteria_query
+        ):
+            folder_ref = self._folder_ref(folder)
+            if (
+                self.state == "SELECTED"
+                and self._selected_folder == folder_ref
+                and self._validate_search_cache(folder_ref)
+            ):
+                return cached.uids
+
+        self.select(folder, readonly=True)
 
         # Searching emails
         try:
@@ -1593,15 +1700,69 @@ class IMAPManager(imaplib.IMAP4_SSL):
                 )
 
             if not uids or not uids[0]:
-                return uids
+                uids = []
+            else:
+                uids = uids[0].decode().split()[::-1]
 
-            uids = uids[0].decode().split()[::-1]
-            save_search_result(uids, folder, search_criteria_query)
+            if search_criteria_query == "ALL":
+                # Only the plain ALL listing is cached: overwriting the single
+                # slot from a criteria search would force a full UID SEARCH ALL
+                # on the next plain page (slow, and it times out on large
+                # folders). Criteria searches just run fresh each time.
+                save_search_result(uids, folder, search_criteria_query)
+                self._record_search_baseline(self._folder_ref(folder))
             return uids
         except Exception as e:
             raise IMAPManagerException(
                 f"Error while getting email uids, search query was `{search_criteria_query}` and error is `{str(e)}.`"
             )
+
+    def _folder_ref(self, folder: str | Folder) -> bytes:
+        """Resolve a folder argument to the encoded reference used on the wire."""
+        return self.find_matching_folder(folder) or (
+            self._encode_folder(folder) if isinstance(folder, str) else folder
+        )  # type: ignore
+
+    @staticmethod
+    def _parse_status_counts(raw: bytes | str) -> tuple[int | None, int | None]:
+        """Extract UIDNEXT and MESSAGES counts from a STATUS response."""
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", errors="ignore")
+        uidnext_match = re.search(r"UIDNEXT (\d+)", raw)
+        messages_match = re.search(r"MESSAGES (\d+)", raw)
+        return (
+            int(uidnext_match.group(1)) if uidnext_match else None,
+            int(messages_match.group(1)) if messages_match else None,
+        )
+
+    def _record_search_baseline(self, folder_ref: bytes) -> None:
+        """Snapshot UIDNEXT/MESSAGES so later calls can validate the cached uids."""
+        if self._searched_emails is None:
+            return
+        try:
+            status, data = self.status(folder_ref, "(UIDNEXT MESSAGES)")
+            if status == "OK" and data and data[0]:
+                uidnext, messages = self._parse_status_counts(data[0])
+                self._searched_emails.uidnext = uidnext
+                self._searched_emails.messages = messages
+        except Exception:
+            # Without a baseline the cache is always considered stale and the
+            # next call falls back to a full search (safe, just slower).
+            pass
+
+    def _validate_search_cache(self, folder_ref: bytes) -> bool:
+        """True when UIDNEXT/MESSAGES still match the cached search snapshot."""
+        cached = self._searched_emails
+        if cached is None or cached.uidnext is None or cached.messages is None:
+            return False
+        try:
+            status, data = self.status(folder_ref, "(UIDNEXT MESSAGES)")
+        except Exception:
+            return False
+        if status != "OK" or not data or not data[0]:
+            return False
+        uidnext, messages = self._parse_status_counts(data[0])
+        return (uidnext, messages) == (cached.uidnext, cached.messages)
 
     @handle_idle
     def is_email_exists(self, folder: str, sequence_set: str) -> bool:
@@ -1802,24 +1963,39 @@ class IMAPManager(imaplib.IMAP4_SSL):
             messages.clear()
             for body_part, uids in fetchs.items():
                 uids = sorted(uids, key=int)
-                status, bodies = self.uid(
-                    "FETCH",
-                    ",".join(uids),
+                uid_key = ",".join(uids)
+                # First request only the first 4KB of each body (enough for
+                # list previews); fall back to full bodies when that fails.
+                commands = (
+                    f"(BODY.PEEK[{body_part}]<0.{SHORT_BODY_TEXT_CHUNK_SIZE}> "
+                    f"BODY.PEEK[{body_part}.MIME])",
                     f"(BODY.PEEK[{body_part}] BODY.PEEK[{body_part}.MIME])",
                 )
-                if status != "OK":
-                    print(f"Could not found bodies in emails {uids}")
-                    continue
-
-                body_group_messages = MessageParser.group_messages(bodies)
-                for index, body_grouped_message in enumerate(body_group_messages):
-                    content_type, encoding = MessageParser.get_content_type_and_encoding(body_grouped_message)
-                    emails[email_uid_map[uids[index]]].body = MessageDecoder.body(
-                        MessageParser.get_body(body_grouped_message),
-                        encoding=encoding,
-                        sanitize="html" not in content_type,
-                        parse="html" in content_type
-                    )
+                for attempt, command in enumerate(commands):
+                    status, bodies = self.uid("FETCH", uid_key, command)
+                    if status != "OK" or not bodies:
+                        if attempt == len(commands) - 1:
+                            print(f"Could not found bodies in emails {uids}")
+                        continue
+                    try:
+                        body_group_messages = MessageParser.group_messages(bodies)
+                        decoded_count = 0
+                        for index, body_grouped_message in enumerate(body_group_messages):
+                            content_type, encoding = MessageParser.get_content_type_and_encoding(body_grouped_message)
+                            emails[email_uid_map[uids[index]]].body = MessageDecoder.body(
+                                MessageParser.get_body(body_grouped_message),
+                                encoding=encoding,
+                                sanitize="html" not in content_type,
+                                parse="html" in content_type
+                            )
+                            decoded_count += 1
+                    except Exception:
+                        if attempt == len(commands) - 1:
+                            raise
+                        continue
+                    if decoded_count >= len(uids) or attempt == len(commands) - 1:
+                        break
+                    # Partial attempt returned too little - retry full fetch.
         except Exception as e:
             fetched_email_count = len(emails)
             raise IMAPManagerException(
@@ -1910,6 +2086,7 @@ class IMAPManager(imaplib.IMAP4_SSL):
             occurs while marking the email, the mark operation will be skipped
             without raising an error but it will be logged as a warning.
         """
+        started_at = time.time()
         self.select(folder, readonly=True)
 
         # Get body and attachments
@@ -1988,6 +2165,10 @@ class IMAPManager(imaplib.IMAP4_SSL):
                 f"There was a problem with getting email `{uid}`'s content in folder `{folder}`: `{str(e)}`"
             ) from e
 
+        print(
+            f"DEBUG - get_email_content took {(time.time() - started_at) * 1000:.0f} ms "
+            f"for uid {uid} in `{folder}`"
+        )
         return Email(
             **headers,
             uid=uid,
@@ -2148,7 +2329,7 @@ class IMAPManager(imaplib.IMAP4_SSL):
                     "Error, target attachment could not found in the email body."
                 )
 
-            status, message = self.uid("FETCH", uid, f"(BODY[{target_part}])")
+            status, message = self.uid("FETCH", uid, f"(BODY.PEEK[{target_part}])")
             if status != "OK":
                 raise IMAPManagerException(
                     f"Error while fetching attachment part of the `{uid}` email in folder `{folder}`: `{status}`"
@@ -2156,10 +2337,17 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
             body_grouped_message = MessageParser.group_messages(message)[0]
             content_type, encoding = MessageParser.get_content_type_and_encoding(body_grouped_message)
-            target_attachment.data = MessageDecoder.body(
-                MessageParser.get_body(body_grouped_message),
-                encoding=encoding,
-            )
+            payload = MessageParser.get_body(body_grouped_message)
+            if isinstance(payload, str):
+                payload = payload.encode("utf-8", errors="ignore")
+            # Decode to raw bytes, then re-encode as base64 so binary
+            # attachments survive the JSON round-trip intact.
+            encoding = (encoding or "").lower()
+            if encoding == "base64":
+                payload = base64.b64decode(payload + b"=" * (-len(payload) % 4))
+            elif encoding == "quoted-printable":
+                payload = quopri.decodestring(payload)
+            target_attachment.data = base64.b64encode(payload).decode("ascii")
         except:
             raise IMAPManagerException(
                 f"Error while fetching attachment part of the `{uid}` email in folder `{folder}`: `{status}`"
@@ -2508,11 +2696,14 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
             folder_name = f"{parent_folder}{self._hierarchy_delimiter}{folder_name}"
 
-        return self._parse_command_result(
+        result = self._parse_command_result(
             self.create(self._encode_folder(folder_name)),
             f"Folder `{folder_name}` created successfully.",
             f"There was an error while creating folder `{folder_name}`.",
         )
+        if result[0]:
+            self._invalidate_folder_list()
+        return result
 
     @handle_idle
     def delete_folder(
@@ -2543,11 +2734,14 @@ class IMAPManager(imaplib.IMAP4_SSL):
             for subfolder in self.get_folders(folder_name):
                 self.delete_folder(subfolder, True)
 
-        return self._parse_command_result(
+        result = self._parse_command_result(
             self.delete(self._encode_folder(folder_name)),
             f"Folder `{folder_name}` deleted successfully.",
             f"There was an error while deleting folder `{folder_name}`.",
         )
+        if result[0]:
+            self._invalidate_folder_list()
+        return result
 
     @handle_idle
     def move_folder(
@@ -2592,7 +2786,7 @@ class IMAPManager(imaplib.IMAP4_SSL):
 
         destination_folder = destination_folder.strip()
 
-        return self._parse_command_result(
+        result = self._parse_command_result(
             self.rename(
                 self._encode_folder(folder_name),
                 self._encode_folder(destination_folder),
@@ -2600,6 +2794,9 @@ class IMAPManager(imaplib.IMAP4_SSL):
             f"Folder `{folder_name}` moved to `{destination_folder}` successfully.",
             f"There was an error while moving folder `{folder_name}` to `{destination_folder}`.",
         )
+        if result[0]:
+            self._invalidate_folder_list()
+        return result
 
     @handle_idle
     def rename_folder(
@@ -2632,13 +2829,16 @@ class IMAPManager(imaplib.IMAP4_SSL):
                 f"{folder_name_parent}{self._hierarchy_delimiter}{new_folder_name}"
             )
 
-        return self._parse_command_result(
+        result = self._parse_command_result(
             self.rename(
                 self._encode_folder(folder_name), self._encode_folder(new_folder_name)
             ),
             f"Folder `{folder_name}` renamed to `{new_folder_name}` successfully.",
             f"There was an error while renaming folder `{folder_name}` to `{new_folder_name}`.",
         )
+        if result[0]:
+            self._invalidate_folder_list()
+        return result
 
 
 __all__ = [

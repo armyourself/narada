@@ -1,4 +1,4 @@
-"""
+﻿"""
 SMTPManager
 This module extends the functionality of the
 `smtplib.SMTP` class to simplify its usage and
@@ -102,6 +102,11 @@ class SMTPManager(smtplib.SMTP):
             timeout=choose_positive(timeout, DEFAULT_CONN_TIMEOUT),
             source_address=source_address
         )
+
+        # Credentials are kept so a dropped session can be re-established
+        # without recreating the whole Openmail client.
+        self._email_address = email_address
+        self._password = password
 
         self.login(email_address, password)
 
@@ -326,6 +331,15 @@ class SMTPManager(smtplib.SMTP):
 
         return msg
 
+    def _reconnect(self) -> None:
+        """
+        Re-establish the SMTP session after the server closed it (e.g. after
+        a send timeout) so sending works again without an app restart.
+        """
+        self.close()
+        self.connect(self.host, self.port)
+        self.login(self._email_address, self._password)
+
     def send_message(
         self,
         msg: Message,
@@ -334,15 +348,41 @@ class SMTPManager(smtplib.SMTP):
         mail_options: Sequence[str] = (),
         rcpt_options: Sequence[str] = ()
     ) -> SMTPCommandResult:
-        try:
+        # Session already dropped (server timeout/quit): restore it first.
+        if self.sock is None:
+            self._reconnect()
+
+        def _send() -> SMTPCommandResult:
             # `send_message` func returns empty dict on success.
-            return super().send_message(
+            return super(SMTPManager, self).send_message(  # type: ignore[misc]
                 msg,
                 from_addr,
                 to_addrs,
                 mail_options,
                 rcpt_options
-            ) or (True, "Email sent successfully") # type: ignore
+            ) or (True, "Email sent successfully")  # type: ignore
+
+        try:
+            return _send()
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPResponseException) as e:
+            is_transient = isinstance(e, smtplib.SMTPServerDisconnected) or (
+                isinstance(e, smtplib.SMTPResponseException)
+                and 400 <= e.smtp_code < 500
+            )
+            if not is_transient:
+                raise SMTPManagerException(
+                    f"Error, email prepared but could not be sent: {str(e)}"
+                ) from e
+            # Dead session or transient (4xx) server error: reconnect and
+            # retry once. A 4xx response means the message was not accepted,
+            # so retrying cannot duplicate the email.
+            try:
+                self._reconnect()
+                return _send()
+            except Exception as retry_error:
+                raise SMTPManagerException(
+                    f"Error, email prepared but could not be sent: {str(retry_error)}"
+                ) from retry_error
         except Exception as e:
             raise SMTPManagerException(f"Error, email prepared but could not be sent: {str(e)}") from e
 
@@ -541,7 +581,7 @@ class SMTPManager(smtplib.SMTP):
                         headers={
                             "Content-Type": "application/x-www-form-urlencoded",
                             "List-Unsubscribe": "One-Click",
-                            "User-Agent": "Openmail/1.0" # TODO: change this later
+                            "User-Agent": "Narada/0.0.1"
                         }
                     )
                 with urllib.request.urlopen(req_or_url) as response:

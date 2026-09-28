@@ -76,7 +76,10 @@ async def register_identity(request: RegisterIdentityRequest) -> Response:
         return Response(
             success=ok,
             message=msg,
-            data={"npub": request.npub, "connected": ok},
+            data={
+                "npub": adapter.identity.public_key_bech32,
+                "connected": ok,
+            },
         )
     except Exception as exc:
         from src.utils import err_msg
@@ -289,7 +292,7 @@ async def nostr_subscribe(websocket: WebSocket, account: str):
         uvicorn_logger.websocket(websocket, f"Nostr subscription error: {exc}")
     finally:
         try:
-            adapter.relay_pool.unsubscribe_all(sub_id)
+            adapter.unsubscribe(sub_id)
         except Exception:
             pass
 

@@ -1,0 +1,443 @@
+@import "tailwindcss";
+
+/* The app toggles the `dark` class on <html>; do not follow OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/**
+ * Design tokens — single source of truth, extracted from frontend.html
+ * (the Notion Mail mockup).
+ *
+ * - `@theme` declares the light palette (derived by inverting the mockup's
+ *   dark values) and emits Tailwind utilities (`bg-notion-canvas`, ...).
+ * - `html.dark` re-declares the same names with the mockup's exact dark
+ *   values, so every `notion-*` utility switches with the theme.
+ * - The static `notion-*-dark` aliases remain for existing `dark:*` classes.
+ * - The legacy `--ink` / `--glass-*` / `--spacing-*` variables used by
+ *   component <style> blocks are mapped onto these tokens below.
+ */
+@theme {
+    --font-sans: "Segoe UI", system-ui, -apple-system, "Inter", sans-serif;
+
+    /* Surfaces */
+    --color-notion-canvas: #ffffff;
+    --color-notion-sidebar: #f7f7f5;
+    --color-notion-hover: #37352f0f;
+    --color-notion-active: #37352f14;
+    --color-notion-border: #37352f17;
+    --color-notion-surface: #ffffff;
+    --color-notion-surface-sunken: #f7f7f5;
+    --color-notion-surface-high: #37352f14;
+
+    /* Text */
+    --color-notion-text: #37352f;
+    --color-notion-text-secondary: #6b6966;
+    --color-notion-text-muted: #7f7f7f;
+    --color-notion-text-faint: #37352f66;
+
+    /* Accent & semantics */
+    --color-notion-accent: #2383e2;
+    --color-notion-accent-tint: #2383e212;
+    --color-notion-danger: #b93f38;
+    --color-notion-warning: #946200;
+    --color-notion-success: #2e7d55;
+
+    /* Static dark aliases (mockup values) for existing `dark:*` utilities */
+    --color-notion-sidebar-dark: #202020;
+    --color-notion-hover-dark: #ffffff0e;
+    --color-notion-active-dark: #ffffff21;
+    --color-notion-border-dark: #ffffff0e;
+
+    /* Badge pairs */
+    --color-notion-badge-blue-bg: #e0f2fe;
+    --color-notion-badge-blue-text: #0369a1;
+    --color-notion-badge-red-bg: #ffe4e6;
+    --color-notion-badge-red-text: #be123c;
+    --color-notion-badge-pink-bg: #fce7f3;
+    --color-notion-badge-pink-text: #be185d;
+    --color-notion-badge-purple-bg: #f3e8ff;
+    --color-notion-badge-purple-text: #7e22ce;
+    --color-notion-badge-green-bg: #dcfce7;
+    --color-notion-badge-green-text: #15803d;
+
+    /* Radii (mockup uses 4 / 6 / 8px; modals keep Tailwind's 12px xl) */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark palette — the mockup's exact values (frontend.html, dark theme)
+ * ------------------------------------------------------------------------ */
+html {
+    color-scheme: light;
+}
+
+html.dark {
+    color-scheme: dark;
+
+    --color-notion-canvas: #191919;
+    --color-notion-sidebar: #202020;
+    --color-notion-hover: #ffffff0e;
+    --color-notion-active: #ffffff21;
+    --color-notion-border: #ffffff0e;
+    --color-notion-surface: #252525;
+    --color-notion-surface-sunken: #1e1e1e;
+    --color-notion-surface-high: #373737;
+
+    --color-notion-text: #d3d3d3;
+    --color-notion-text-secondary: #9b9b9b;
+    --color-notion-text-muted: #7f7f7f;
+    --color-notion-text-faint: #ffffff71;
+
+    --color-notion-accent: #2383e2;
+    --color-notion-accent-tint: #2383e212;
+    --color-notion-danger: #de5550;
+    --color-notion-warning: #ca8e1b;
+    --color-notion-success: #3c9d6a;
+
+    --color-notion-badge-blue-bg: #2383e224;
+    --color-notion-badge-blue-text: #4fa7ff;
+    --color-notion-badge-red-bg: #de555024;
+    --color-notion-badge-red-text: #de5550;
+    --color-notion-badge-pink-bg: #d6679a24;
+    --color-notion-badge-pink-text: #d6679a;
+    --color-notion-badge-purple-bg: #9d67d224;
+    --color-notion-badge-purple-text: #9d67d2;
+    --color-notion-badge-green-bg: #3c9d6a24;
+    --color-notion-badge-green-text: #3c9d6a;
+}
+
+/* ---------------------------------------------------------------------------
+ * Mockup shadows
+ * ------------------------------------------------------------------------ */
+:root {
+    --shadow-notion-btn: 0 0 1px rgba(15, 15, 15, 0.06), 0 1px 2px rgba(15, 15, 15, 0.05);
+    --shadow-notion-float: 0 0 1px rgba(15, 15, 15, 0.08), 0 6px 16px rgba(15, 15, 15, 0.1);
+    --shadow-notion-popover: 0 0 1px rgba(15, 15, 15, 0.06), 0 3px 6px rgba(15, 15, 15, 0.06),
+        0 9px 24px rgba(15, 15, 15, 0.1);
+}
+
+html.dark {
+    --shadow-notion-btn: 0 0 1px #313131, 0 2px 4px #00000014;
+    --shadow-notion-float: 0 0 1px #313131, 0 12px 30px #00000066;
+    --shadow-notion-popover: 0 0 1px #0f0f0f0d, 0 3px 6px #0f0f0f1a, 0 9px 24px #0f0f0f33;
+}
+
+.shadow-notion-btn {
+    box-shadow: var(--shadow-notion-btn);
+}
+.shadow-notion-float {
+    box-shadow: var(--shadow-notion-float);
+}
+.shadow-notion-popover {
+    box-shadow: var(--shadow-notion-popover);
+}
+
+/* ---------------------------------------------------------------------------
+ * Legacy variables used by component <style> blocks, mapped onto the tokens.
+ * (They were previously undefined, so those styles silently did nothing.)
+ * ------------------------------------------------------------------------ */
+:root {
+    /* Text */
+    --ink: var(--color-notion-text);
+    --ink-dim: var(--color-notion-text-secondary);
+    --ink-faint: var(--color-notion-text-muted);
+    --ui: "Segoe UI", system-ui, -apple-system, "Inter", sans-serif;
+    --body: "Segoe UI", system-ui, -apple-system, "Inter", sans-serif;
+
+    /* Surfaces & borders */
+    --glass: var(--color-notion-hover);
+    --glass-base: var(--color-notion-canvas);
+    --glass-strong: var(--color-notion-hover);
+    --glass-solid: var(--color-notion-surface);
+    --glass-border: var(--color-notion-border);
+
+    /* Accent & route semantics */
+    --accent: var(--color-notion-accent);
+    --accent-soft: var(--color-notion-accent-tint);
+    --direct: #2383e2;
+    --relay: #9d67d2;
+    --gateway: #e48538;
+
+    /* Landing background gradient */
+    --cream: #f7f6f4;
+    --hue-1: #2383e2;
+    --hue-2: #9d67d2;
+    --hue-3: #e48538;
+    --hue-4: #3c9d6a;
+
+    /* Typography scale */
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-md: 1rem;
+    --font-size-lg: 1.25rem;
+    --font-size-xl: 1.5rem;
+    --font-size-2xl: 2rem;
+
+    /* Spacing scale */
+    --spacing-2xs: 0.25rem;
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 0.75rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+
+    /* Radii (kept in sync with @theme above) */
+    --radius: 6px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    /* Motion */
+    --transition-fast: 150ms;
+    --transition-normal: 300ms;
+    --transition-slow: 500ms;
+    --transform-fast: 150ms;
+    --ease-default: ease;
+
+    /* Shadows */
+    --shadow: var(--shadow-notion-float);
+    --shadow-sm: var(--shadow-notion-btn);
+    --shadow-md: var(--shadow-notion-popover);
+    --shadow-lg: var(--shadow-notion-popover);
+
+    /* Layout constants */
+    --container-sm: 360px;
+    --container-md: 500px;
+    --container-lg: 768px;
+    --container-xl: 1024px;
+
+    /* Z-index */
+    --z-index-dropdown: 100;
+    --z-index-popover: 100;
+    --z-index-toast: 200;
+    --z-index-overlay: 300;
+    --z-index-modal: 400;
+    --z-index-modal-over: 500;
+    --z-index-tooltip: 600;
+    --z-index-titlebar: 40;
+
+    /* Legacy color names */
+    --color-bg-primary: var(--color-notion-canvas);
+    --color-bg-secondary: var(--color-notion-sidebar);
+    --color-text-primary: var(--color-notion-text);
+    --color-text-secondary: var(--color-notion-text-secondary);
+    --color-border: var(--color-notion-border);
+    --color-border-subtle: var(--color-notion-border);
+    --color-hover: var(--color-notion-hover);
+    --color-link: #2383e2;
+    --color-checked: var(--color-notion-accent);
+    --color-important: var(--color-notion-warning);
+    --color-error: var(--color-notion-danger);
+    --color-error-text: var(--color-notion-danger);
+    --color-gray: #7f7f7f;
+    --color-lightgray: #9b9b9b;
+    --color-white: #ffffff;
+    --color-black: #000000;
+    --color-bg-drop-area: #2383e214;
+    --color-border-drop-area: #2383e2;
+}
+
+html.dark {
+    --cream: #1f1e1d;
+}
+
+@layer base {
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    html,
+    body {
+        height: 100%;
+        overflow: hidden;
+    }
+    body {
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    button {
+        font: inherit;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: inherit;
+    }
+    input,
+    textarea {
+        font: inherit;
+        color: inherit;
+    }
+    a {
+        text-decoration: none;
+        color: inherit;
+    }
+}
+
+/* Custom scrollbars matching the mockup */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.command-modal-shadow {
+    box-shadow: var(--shadow-notion-popover);
+}
+
+/* macOS traffic light style for buttons */
+.traffic-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0, 0, 0, 0.12);
+}
+
+/* ---- Layout containers (ported from Layout.svelte / +layout.svelte) ---- */
+.window-frame { display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden; }
+.layout-container { position: relative; height: 100%; width: 100%; overflow: hidden; }
+
+/* ---- Window bar (frameless desktop chrome: drag region + traffic lights) ---- */
+.window-bar {
+    position: relative;
+    z-index: var(--z-index-titlebar);
+    flex-shrink: 0;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    background: var(--color-notion-canvas);
+    user-select: none;
+    cursor: default;
+}
+.window-bar-brand {
+    font-family: var(--ui);
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--ink);
+    white-space: nowrap;
+}
+.window-bar-lights { display: flex; align-items: center; gap: 8px; }
+.window-light {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: 0.5px solid rgba(0, 0, 0, 0.12);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.window-light svg {
+    width: 8px;
+    height: 8px;
+    stroke: rgba(0, 0, 0, 0.65);
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.window-bar-lights:hover .window-light svg { opacity: 1; }
+.window-light-close { background: #ff5f57; }
+.window-light-minimize { background: #febc2e; }
+.window-light-maximize { background: #28c840; }
+.window-light-close:hover { background: #f2433c; }
+.window-light-minimize:hover { background: #f5b525; }
+.window-light-maximize:hover { background: #22b63c; }
+.modal-container { position: fixed; display: none; align-items: center; justify-content: center; width: 100%; height: 100%; overflow: hidden; top: 0; left: 0; background-color: #0000008f; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); z-index: 50; }
+body:has(.modal) .modal-container { display: flex; }
+.toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 50; }
+.register-container { margin-top: var(--spacing-2xl); }
+
+/* ---- Spinner ---- */
+.spinner { border: 2px solid var(--color-border); border-radius: 50%; border-top: 2px solid transparent; animation: spin 2s linear infinite; display: inline-block; }
+.spinner.small { width: var(--font-size-xs); height: var(--font-size-xs); border-width: 2px; animation-duration: 1s; }
+.spinner.medium { width: var(--font-size-lg); height: var(--font-size-lg); border-width: 4px; animation-duration: 1.25s; }
+.spinner.large { width: var(--font-size-2xl); height: var(--font-size-2xl); border-width: 6px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ---- Message modal ---- */
+.modal.message { opacity: 1; position: relative; z-index: 1; }
+.message-card { background: var(--glass-solid); backdrop-filter: blur(22px) saturate(1.5); -webkit-backdrop-filter: blur(22px) saturate(1.5); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: var(--spacing-lg); max-width: 420px; width: 100%; }
+.message-card h3 { font-family: var(--ui); font-size: 1rem; font-weight: 600; margin-bottom: var(--spacing-sm); }
+.message-card p { font-size: var(--font-size-sm); color: var(--ink-dim); margin-bottom: var(--spacing-lg); }
+
+/* ---- Confirm dialog ---- */
+.modal.confirm { opacity: 1; position: relative; z-index: 1; }
+.confirm-card { background: var(--glass-solid); backdrop-filter: blur(22px) saturate(1.5); -webkit-backdrop-filter: blur(22px) saturate(1.5); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: var(--spacing-lg); max-width: 420px; width: 100%; }
+.confirm-card h3 { font-family: var(--ui); font-size: 1rem; font-weight: 600; margin-bottom: var(--spacing-sm); }
+.confirm-card p { font-size: var(--font-size-sm); color: var(--ink-dim); margin-bottom: var(--spacing-lg); }
+.confirm-actions { display: flex; gap: var(--spacing-sm); justify-content: flex-end; }
+.confirm-actions .btn { width: auto; }
+
+/* ---- Toast ---- */
+.toast { width: 400px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 48px; background: var(--glass-solid); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-border); padding: var(--spacing-2xs) var(--spacing-md); border-radius: var(--radius); box-shadow: var(--shadow); z-index: var(--z-index-toast); }
+.toast .toast-body { color: var(--ink-dim); font-size: var(--font-size-sm); }
+.toast .toast-body .toast-title { color: var(--ink); }
+.toast .toast-footer { display: flex; flex-direction: row; gap: var(--spacing-2xs); align-items: center; justify-content: center; }
+.toast .toast-footer button { padding: var(--spacing-xs) var(--spacing-sm); width: auto; }
+
+/* ---- Form primitives (ported from Form/FormGroup/Label/BasicInput/BasicButton :global blocks) ---- */
+.form { display: flex; flex-direction: column; gap: var(--spacing-2xs); }
+.form-group { display: flex; }
+.form-group:not(:has(.form-group)):not(:first-of-type) { margin-top: var(--spacing-lg); }
+.form-group .form-group { margin-top: var(--spacing-2xs); }
+.form-group.form-group-vertical { flex-direction: column; text-align: left; }
+.form-group.form-group-horizontal { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--spacing-xl); }
+.form-group.form-group-horizontal .form-group { width: 100%; }
+.form-group.form-group-horizontal:has(input[type="checkbox"] + label) { justify-content: left; gap: var(--spacing-xs); }
+.label { text-align: left; font-size: var(--font-size-sm); color: var(--color-text-primary); margin-left: calc(var(--spacing-2xs) / 2); }
+
+.input { width: 100%; padding: 9px 14px; background: var(--glass-strong); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); color: var(--ink); font-size: var(--font-size-sm); transition: all var(--transition-fast) var(--ease-default); }
+.input::placeholder { color: var(--ink-faint); }
+.input:focus { outline: none; border-color: var(--accent); background: var(--glass); }
+.input[type="email"] { will-change: transform; }
+.input[type="checkbox"] { padding: 0; appearance: none; -webkit-appearance: none; width: 16px; height: 16px; border-radius: 6px; background: var(--glass-strong); border: 1px solid var(--glass-border); cursor: pointer; position: relative; }
+.input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+.input[type="checkbox"]:checked::after { content: ""; position: absolute; top: 2px; left: 5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+.btn { padding: var(--spacing-xs) var(--spacing-sm); border: none; border-radius: 100px; cursor: pointer; transition: all var(--transition-fast) var(--ease-default); font-size: var(--font-size-sm); font-family: var(--ui); font-weight: 500; display: flex; align-items: center; justify-content: center; }
+.btn:hover, .btn.hover { transform: translateY(-1px); }
+.btn:active, .btn.active { transform: translateY(0); }
+.btn.btn-cta { width: 100%; font-weight: 600; background: var(--accent); color: #fff; padding: 10px 20px; box-shadow: var(--shadow-notion-btn); }
+.btn.btn-cta:hover { background: #1b6fc4; box-shadow: var(--shadow-notion-float); }
+.btn.btn-inline { padding: var(--spacing-2xs) var(--spacing-sm); margin: 0; background-color: transparent; color: var(--ink-dim); border-radius: 100px; }
+.btn.btn-inline:hover, .btn.btn-inline.hover { background: var(--glass-strong); color: var(--ink); }
+.btn.btn-outline { background: var(--glass-strong); color: var(--ink-dim); border: 1px solid var(--glass-border); padding: 8px 14px; border-radius: 100px; }
+.btn.btn-outline:hover, .btn.btn-outline.hover { background: var(--color-notion-surface-high); color: var(--ink); }
+.btn:has(svg) { justify-content: space-between; }
+.btn:has(svg) svg { margin-right: var(--spacing-xs); margin-left: calc(-0.5 * var(--spacing-xs)); }
+.btn:has(svg):not(:has(span)) svg { margin-right: calc(-0.5 * var(--spacing-xs)); }
+.btn.btn-md { font-size: var(--font-size-xs); }
+.btn.btn-sm { padding: var(--spacing-2xs) var(--spacing-sm) !important; font-size: var(--font-size-xs); }
+.btn.btn-sm svg { width: var(--font-size-md); height: var(--font-size-md); }
+
+/* ---- Landing ---- */
+.landing-body-footer { display: flex; flex-direction: column; gap: var(--spacing-xs); margin-top: var(--spacing-lg); }
+.alert-container:not(:empty) { margin-bottom: var(--spacing-md); }

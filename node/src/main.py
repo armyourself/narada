@@ -3,10 +3,15 @@ This module contains the main FastAPI application and its routes.
 """
 
 from __future__ import annotations
+import argparse
 import asyncio
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+import uvicorn
+from fastapi import FastAPI, Request, Response as FastAPIResponse, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
@@ -107,25 +112,57 @@ async def catch_request_for_logging(request: Request, call_next):
 async def hello() -> Response:
     return Response(success=True, message="Hello, Server is ready for you!")
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Narada node server (FastAPI + Nostr transport)")
+    parser.add_argument("--host", default=None, help="Bind host (implies --non-interactive)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Preferred port; scans upward if busy (implies --non-interactive)",
+    )
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Skip all interactive prompts (for spawning from the desktop client)",
+    )
+    return parser.parse_args()
+
+
 def main():
     global WHITELISTED_IPS
 
-    # Config Host
-    host = str(input(f"Give an HOST to app run on (e.g. {DEFAULT_HOST}): ") or DEFAULT_HOST)
+    args = _parse_args()
+    non_interactive = args.non_interactive or args.host is not None or args.port is not None
 
-    # Config Port
-    while True:
+    if non_interactive:
+        # Config Host + Port without prompts (used by the client's "start local server")
+        host = args.host or DEFAULT_HOST
+        preferred_port = args.port if args.port is not None else DEFAULT_PORT_RANGE[0]
+        scan_end = preferred_port + 100
+        print(f"Finding free port at {host} starting from {preferred_port}...", flush=True)
         try:
-            port_start_range = int(input(f"Port start range (e.g. {DEFAULT_PORT_RANGE[0]}): ") or DEFAULT_PORT_RANGE[0])
-            port_end_range = int(input(f"Port end range (e.g. {DEFAULT_PORT_RANGE[1]}): ") or DEFAULT_PORT_RANGE[1])
-            print(f"Finding free port between {port_start_range}-{port_end_range}...")
-            port = PortScanner.find_free_port(host, port_start_range, port_end_range)
-            break
+            port = PortScanner.find_free_port(host, preferred_port, scan_end)
         except RuntimeError:
-            pass
+            print(f"error: no free port available in {preferred_port}-{scan_end} on {host}", file=sys.stderr)
+            raise SystemExit(1)
+    else:
+        # Config Host
+        host = str(input(f"Give an HOST to app run on (e.g. {DEFAULT_HOST}): ") or DEFAULT_HOST)
 
-    # Config Allowed IPs
-    while True:
+        # Config Port
+        while True:
+            try:
+                port_start_range = int(input(f"Port start range (e.g. {DEFAULT_PORT_RANGE[0]}): ") or DEFAULT_PORT_RANGE[0])
+                port_end_range = int(input(f"Port end range (e.g. {DEFAULT_PORT_RANGE[1]}): ") or DEFAULT_PORT_RANGE[1])
+                print(f"Finding free port between {port_start_range}-{port_end_range}...")
+                port = PortScanner.find_free_port(host, port_start_range, port_end_range)
+                break
+            except RuntimeError:
+                pass
+
+    # Config Allowed IPs (interactive only; non-interactive keeps the default "*")
+    while not non_interactive:
         YES_ANSWER_KEY = "y"
         NO_ANSWER_KEY = "n"
         CANCEL_ADDRESS_KEY = "c"
@@ -167,7 +204,7 @@ def main():
     etc = Root("etc")
     uvicorn_info = FileObject("uvicorn.info")
     etc.append(uvicorn_info)
-    uvicorn_info.write(f"URL=http://{host}:{str(port)}\nPID={pid}\n")
+    uvicorn_info.write(f"URL=http://{host}:{str(port)}\nPID={pid}\n", overwrite=True)
 
     # Start server
     uvicorn_logger.info("Starting server at http://%s:%d | PID: %s", host, port, pid)

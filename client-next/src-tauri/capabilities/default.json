@@ -1,0 +1,137 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:path:default",
+    "core:event:default",
+    "core:window:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:app:default",
+    "core:image:default",
+    "core:resources:default",
+    "core:menu:default",
+    "core:tray:default",
+    "shell:allow-open",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "uv",
+          "cmd": "uv",
+          "args": ["run", "python", "-m", "src.main", "--port", "8000"]
+        },
+        {
+          "name": "python",
+          "cmd": "python",
+          "args": ["-m", "src.main", "--port", "8000"]
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "uv",
+          "cmd": "uv",
+          "args": ["run", "python", "-m", "src.main", "--port", "8000"]
+        },
+        {
+          "name": "python",
+          "cmd": "python",
+          "args": ["-m", "src.main", "--port", "8000"]
+        }
+      ]
+    },
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
+    "store:allow-load",
+    "fs:default",
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-create",
+      "allow": [
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read",
+      "allow": [
+        {
+          "path": "$HOME/.narada/client/**"
+        },
+        {
+          "path": "$HOME/.narada/etc/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "$HOME/.narada/client/**"
+        },
+        {
+          "path": "$HOME/.narada/etc/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write",
+      "allow": [
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$HOME/.narada/client/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$HOME/.narada/client/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-truncate",
+      "allow": [
+        {
+          "path": "$HOME/.narada/client/**"
+        }
+      ]
+    },
+    "notification:default",
+    "process:default",
+    "os:default"
+  ]
+}

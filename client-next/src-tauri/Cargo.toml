@@ -1,0 +1,27 @@
+[package]
+name = "Openmail"
+version = "0.0.1-alpha0"
+description = "Self hosted email client"
+authors = ["berkaykayaforbusiness@gmail.com"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "~2.12.0", features = ["macos-private-api", "devtools"] }
+tauri-plugin-shell = "~2.4.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+tauri-plugin-store = "2"
+tauri-plugin-fs = "~2.6.0"
+tauri-plugin-notification = "~2.5.0"
+tauri-plugin-process = "~2.4.0"
+tauri-plugin-os = "~2.4.0"
+
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-autostart = "~2.6.0"
+tauri-plugin-single-instance = "2"

@@ -1,0 +1,50 @@
+{
+    "productName": "Narada",
+    "version": "0.0.1",
+    "identifier": "com.narada.dev",
+    "build": {
+        "beforeDevCommand": "bun run dev",
+        "devUrl": "http://localhost:3000",
+        "beforeBuildCommand": "bun run build",
+        "frontendDist": "../out"
+    },
+    "app": {
+        "macOSPrivateApi": true,
+        "windows": [
+            {
+                "title": "Narada",
+                "width": 1200,
+                "height": 700,
+                "center": true,
+                "decorations": false,
+                "transparent": true
+            }
+        ],
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "windows": {
+            "nsis": {
+                "headerImage": "icons/header450x171@installer-img.bmp",
+                "sidebarImage": "icons/sidebar443x848@installer-img.bmp",
+                "installerIcon": "icons/installer256x256@installer-icon.ico"
+            }
+        }
+    },
+    "plugins": {
+        "fs": {
+            "requireLiteralLeadingDot": false
+        }
+    }
+}

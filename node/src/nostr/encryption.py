@@ -49,12 +49,44 @@ def _ed25519_to_x25519_private(ed25519_seed_bytes: bytes) -> X25519PrivateKey:
 
 
 def _x25519_public_from_ed25519(ed25519_seed_bytes: bytes) -> bytes:
-    """Get the X25519 public key bytes from an Ed25519 seed."""
+    """Get the X25519 public key bytes from an Ed25519 *seed*.
+
+    Only valid for keys you hold (you need the seed to derive the
+    X25519 keypair).  For a peer's key use
+    :func:`_x25519_public_from_ed25519_public`.
+    """
     x25519_priv = _ed25519_to_x25519_private(ed25519_seed_bytes)
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     return x25519_priv.public_key().public_bytes(
         encoding=Encoding.Raw, format=PublicFormat.Raw
     )
+
+
+def _x25519_public_from_ed25519_public(ed25519_public_bytes: bytes) -> bytes:
+    """Convert an Ed25519 *public* key to its X25519 public key.
+
+    NIP-04 needs the peer's X25519 public key, but all the wire
+    carries is their Ed25519 public key (event.pubkey).  The
+    Edwards -> Montgomery birational map only requires the y
+    coordinate of the compressed point::
+
+        u = (1 + y) / (1 - y)   (mod 2^255 - 19)
+
+    Deriving this by hashing the public key as if it were a seed
+    (the old behaviour) produced a key that agreed with nothing,
+    so every NIP-04 decrypt failed with "Invalid padding bytes".
+    """
+    if len(ed25519_public_bytes) != 32:
+        raise ValueError("Ed25519 public key must be 32 bytes")
+    p = 2**255 - 19
+    y = int.from_bytes(ed25519_public_bytes, "little") & ((1 << 255) - 1)
+    if y >= p:
+        raise ValueError("Invalid Ed25519 public key")
+    denominator = (1 - y) % p
+    if denominator == 0:
+        raise ValueError("Invalid Ed25519 public key")
+    u = ((1 + y) * pow(denominator, -1, p)) % p
+    return u.to_bytes(32, "little")
 
 
 def _nip04_shared_secret(
@@ -209,4 +241,5 @@ __all__ = [
     "nip44_decrypt",
     "nip44_encrypt",
     "_x25519_public_from_ed25519",
+    "_x25519_public_from_ed25519_public",
 ]

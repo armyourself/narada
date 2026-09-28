@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 from typing import cast
 from concurrent.futures import ThreadPoolExecutor
 
@@ -40,7 +40,7 @@ class ClientHandler:
 
     def create_openmail_clients(self):
         try:
-            uvicorn_logger.info("Openmail clients are creating...")
+            uvicorn_logger.info("Narada clients are creating...")
             accounts: list[AccountWithPassword] = cast(
                 list[AccountWithPassword], account_manager.get_all()
             )
@@ -51,7 +51,7 @@ class ClientHandler:
             with ThreadPoolExecutor(max_workers=MAX_TASK_WORKER) as executor:
                 executor.map(self.connect_to_account, accounts)
         except Exception as e:
-            uvicorn_logger.error(f"Error while creating openmail clients: {e}")
+            uvicorn_logger.error(f"Error while creating Narada clients: {e}")
             raise e
 
         """
@@ -61,7 +61,7 @@ class ClientHandler:
             global monitor_logged_out_clients_task
             monitor_logged_out_clients_task = asyncio.create_task(monitor_logged_out_openmail_clients())
         except Exception as e:
-            uvicorn_logger.error(f"Error while creating monitors to logged out openmail clients: {e}")
+            uvicorn_logger.error(f"Error while creating monitors to logged out Narada clients: {e}")
             pass"""
 
     def is_connection_available(
@@ -177,7 +177,7 @@ class ClientHandler:
 
     def reconnect_logged_out_openmail_clients(self):
         print(
-            "Reconnecting to Openmail clients...",
+            "Reconnecting to Narada clients...",
         )
         with ThreadPoolExecutor(max_workers=MAX_TASK_WORKER) as executor:
             for email_address, client in openmail_clients.items():
@@ -189,7 +189,7 @@ class ClientHandler:
         try:
             while True:
                 await asyncio.sleep(IMAP_LOGGED_OUT_INTERVAL)
-                print("Checking logged out Openmail clients...")
+                print("Checking logged out Narada clients...")
                 self.reconnect_logged_out_openmail_clients()
         except asyncio.CancelledError:
             uvicorn_logger.info(
@@ -199,7 +199,7 @@ class ClientHandler:
 
     def _shutdown_openmail_clients(self):
         try:
-            uvicorn_logger.info("Shutting down openmail clients...")
+            uvicorn_logger.info("Shutting down Narada clients...")
             if not openmail_clients and not openmail_clients_for_new_messages:
                 uvicorn_logger.info("No email client found to shutting down.")
                 return
@@ -208,7 +208,7 @@ class ClientHandler:
                 for clients in [openmail_clients, openmail_clients_for_new_messages]:
                     executor.map(lambda client: client[1].disconnect(), clients.items())
         except Exception as e:
-            uvicorn_logger.error(f"Openmail clients could not properly terminated: {e}")
+            uvicorn_logger.error(f"Narada clients could not properly terminated: {e}")
 
     def _shutdown_monitors(self):
         if self.__class__._monitor_logged_out_clients_task:

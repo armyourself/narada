@@ -66,6 +66,10 @@ class Email():
     list_unsubscribe: Optional[str] = ""
     list_unsubscribe_post: Optional[str] = ""
     source: Optional[str] = "imap"  # "imap" for IMAP/SMTP; "nostr" for Nostr transport
+    # Delivery route: "gateway" (conventional email), "direct" (native
+    # Nostr identity to native Nostr identity), "relay" (Nostr transport
+    # carrying a conventional address). Set by the mailbox endpoint.
+    route: Optional[str] = None
 
     def __getitem__(self, item):
         """Allows dictionary-like access to dataclass attributes."""

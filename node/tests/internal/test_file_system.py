@@ -62,7 +62,7 @@ class TestFileSystem(unittest.TestCase):
         print("test_create_simple_dir_under_root...")
         dir_name = "hello"
         self._test_root.append(DirObject(dir_name))
-        self.assertTrue(os.path.exists(dir_name))
+        self.assertTrue(os.path.exists(os.path.join(self._test_root_fullpath, dir_name)))
 
     def test_create_simple_file_under_root(self):
         print("test_create_simple_file_under_root...")
@@ -164,7 +164,7 @@ class TestFileSystem(unittest.TestCase):
         self._test_root.append(file)
 
         writed_content = "Hello, world!"
-        file.write(writed_content)
+        file.write(writed_content, newline=False)
 
         fullpath = os.path.join(self._test_root_fullpath, file.name)
         with open(fullpath, "r") as f:
@@ -178,7 +178,7 @@ class TestFileSystem(unittest.TestCase):
         self._test_root.append(file)
 
         writed_content = "Hello, world!"
-        file.write(writed_content)
+        file.write(writed_content, newline=False)
 
         fullpath = os.path.join(self._test_root_fullpath, file.name)
         with open(fullpath, "r") as f:

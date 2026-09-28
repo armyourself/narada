@@ -1,0 +1,204 @@
+.settings-panel {
+    flex-grow: 1;
+    display: none;
+    flex-direction: column;
+    background: var(--cream);
+    padding: 32px 44px;
+    overflow-y: auto;
+    min-width: 0;
+}
+
+.settings-panel.active {
+    display: flex;
+}
+
+.settings-panel .settings-title {
+    font-family: var(--ui);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.settings-panel .settings-sub {
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+    margin-bottom: 34px;
+}
+
+.settings-panel .settings-section {
+    max-width: 560px;
+    margin-bottom: 34px;
+    padding-bottom: 34px;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.settings-panel .settings-section:last-of-type {
+    border-bottom: none;
+}
+
+.settings-panel .settings-section h3 {
+    font-family: var(--ui);
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 16px;
+}
+
+.settings-panel .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+}
+
+.settings-panel .settings-row-label {
+    font-size: 0.86rem;
+    color: var(--ink);
+    font-weight: 500;
+}
+
+.settings-panel .settings-row-desc {
+    font-size: 0.74rem;
+    color: var(--ink-faint);
+    margin-top: 2px;
+}
+
+.settings-panel .settings-node-id {
+    font-family: var(--ui);
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    word-break: break-all;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.settings-panel .settings-node-id button {
+    color: var(--ink-faint);
+    flex-shrink: 0;
+}
+
+.settings-panel .settings-node-id button:hover {
+    color: var(--accent);
+}
+
+.settings-panel .settings-node-id button svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.settings-panel .seg-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.settings-panel .seg-btn {
+    font-family: var(--ui);
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    padding: 8px 16px;
+    border-radius: 100px;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.settings-panel .seg-btn:hover {
+    background: var(--glass-solid);
+    color: var(--ink);
+}
+
+.settings-panel .seg-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.settings-panel .switch {
+    position: relative;
+    width: 38px;
+    height: 22px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.settings-panel .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.settings-panel .switch .track {
+    position: absolute;
+    inset: 0;
+    background: var(--glass-border);
+    border-radius: 100px;
+    transition: background 0.2s ease;
+}
+
+.settings-panel .switch .thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+}
+
+.settings-panel .switch input:checked ~ .track {
+    background: var(--accent);
+}
+
+.settings-panel .switch input:checked ~ .thumb {
+    transform: translateX(16px);
+}
+
+.settings-panel .settings-btn {
+    font-family: var(--ui);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    padding: 9px 18px;
+    border-radius: 100px;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.settings-panel .settings-btn:hover {
+    background: var(--glass-solid);
+    transform: translateY(-1px);
+}
+
+.settings-panel .settings-btn.danger {
+    color: var(--color-notion-danger);
+    border-color: color-mix(in srgb, var(--color-notion-danger) 35%, transparent);
+    background: color-mix(in srgb, var(--color-notion-danger) 8%, transparent);
+}
+
+.settings-panel .settings-btn.danger:hover {
+    background: color-mix(in srgb, var(--color-notion-danger) 15%, transparent);
+}
+
+.settings-panel .settings-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

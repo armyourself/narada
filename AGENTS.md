@@ -33,6 +33,18 @@ Windows: `pwsh -File scripts/install.ps1`
 - **Client typecheck**: `cd client && bun run check`
 - No global test runner; each package runs independently.
 
+## Verification & Privacy Rules
+
+- **Never launch the user's browsers** (msedge.exe, chrome, firefox, etc.) — no headless
+  screenshots, no `--dump-dom`, no automation against the default profile. Browser vendors
+  (Microsoft/Google) sync and telemetry are off-limits on this machine.
+- Verify with: `bunx tsc --noEmit`, `node node_modules\eslint\bin\eslint.js <files>`
+  (never `bunx eslint` — it hangs), backend `python -c "import ast; ast.parse(...)"`
+  / `python -m pytest`, and live API checks via `Invoke-RestMethod` against 127.0.0.1:8000.
+- Visual checks: the user runs `bun run tauri dev` themselves (one launch per round —
+  never restart-loop it). If a screenshot is ever truly required, ask first and use only
+  an isolated `--user-data-dir` under `%TEMP%`, or the Pencil app browser if running.
+
 ## Architecture Notes
 
 ### Monorepo Structure

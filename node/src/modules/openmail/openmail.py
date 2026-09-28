@@ -13,6 +13,42 @@ Author: <berkaykayaforbusiness@outlook.com>
 import threading
 from .imap import IMAPManager, IMAPManagerException
 from .smtp import SMTPManager, SMTPManagerException
+from src.helpers.uvicorn_logger import UvicornLogger
+
+uvicorn_logger = UvicornLogger()
+
+_AUTH_ERROR_MARKERS = (
+    "authenticationfailed",
+    "invalid credentials",
+    "username and password not accepted",
+    "authentication failed",
+    "invalid login",
+    "login failed",
+    "invalid password",
+    "(535",
+    "(534",
+    "(530",
+    "lookup failed",
+)
+
+
+def _friendly_connection_error(technical: str) -> str:
+    """Translate raw IMAP/SMTP failures into a message a non-technical user understands.
+
+    Technical details are logged server-side; the caller only ever sees this text.
+    """
+    lowered = technical.lower()
+    if any(marker in lowered for marker in _AUTH_ERROR_MARKERS):
+        return (
+            "Wrong email address or password. Please check them and try again. "
+            "Note: Gmail and some other providers do not accept your normal password here - "
+            "create an app password (Google Account > Security > 2-Step Verification > "
+            "App Passwords) and use that instead."
+        )
+    return (
+        "Could not reach the email server. Please check your internet connection "
+        "and try again."
+    )
 
 class Openmail:
     """
@@ -84,21 +120,31 @@ class Openmail:
                                and a status message
         """
         def setup_imap():
-            self._imap = IMAPManager(
-                email_address,
-                password,
-                imap_host,
-                imap_port,
-                ssl_context=imap_ssl_context,
-                timeout=timeout,
-                enable_idle_optimization=imap_enable_idle_optimization,
-                listen_new_messages=imap_listen_new_messages,
-            )
+            try:
+                self._imap = IMAPManager(
+                    email_address,
+                    password,
+                    imap_host,
+                    imap_port,
+                    ssl_context=imap_ssl_context,
+                    timeout=timeout,
+                    enable_idle_optimization=imap_enable_idle_optimization,
+                    listen_new_messages=imap_listen_new_messages,
+                )
+            except Exception as e:
+                self._imap = None
+                setup_errors.append(f"IMAP connection failed: {e}")
 
         def setup_smtp():
-            self._smtp = SMTPManager(
-                email_address, password, smtp_host, smtp_port, smtp_local_hostname, timeout
-            )
+            try:
+                self._smtp = SMTPManager(
+                    email_address, password, smtp_host, smtp_port, smtp_local_hostname, timeout
+                )
+            except Exception as e:
+                self._smtp = None
+                setup_errors.append(f"SMTP connection failed: {e}")
+
+        setup_errors: list[str] = []
 
         imap_thread = threading.Thread(target=setup_imap)
         smtp_thread = threading.Thread(target=setup_smtp)
@@ -108,6 +154,11 @@ class Openmail:
 
         imap_thread.join()
         smtp_thread.join()
+
+        if setup_errors:
+            technical = "; ".join(setup_errors)
+            uvicorn_logger.error(f"Email connection failed for {email_address}: {technical}")
+            return False, _friendly_connection_error(technical)
 
         return True, "Connected successfully"
 

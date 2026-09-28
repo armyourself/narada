@@ -174,7 +174,11 @@ class SecureStorage:
             except InvalidSecureStorageKeyError:
                 pass
 
-        return self._parse_key_value_dict(complete_value) or None
+        parsed = self._parse_key_value_dict(complete_value) or None
+        if parsed is not None and not isinstance(parsed, dict):
+            print(f"Warning: stored value for `{key}` is corrupted (e.g. stale chunks). Ignoring it.")
+            return None
+        return parsed
 
     def _set_password(self, key: SecureStorageKey, value: SecureStorageKeyValue) -> None:
         self._is_key_valid(key)
@@ -183,6 +187,15 @@ class SecureStorage:
         for index, chunk in enumerate(chunks, start=1):
             curr_key = self._create_key(key, index)
             keyring.set_password(APP_NAME, curr_key, chunk)
+        # Remove stale chunks left over from a previously longer value,
+        # otherwise reassembly of the stored value becomes corrupted.
+        stale_index = len(chunks) + 1
+        while stale_index < MAX_KEYRING_CHUNK_LIMIT:
+            try:
+                keyring.delete_password(APP_NAME, self._create_key(key, stale_index))
+            except keyring.errors.PasswordDeleteError:
+                break
+            stale_index += 1
         serialized_value = ""
 
     def _delete_password(self, key: SecureStorageKey) -> None:

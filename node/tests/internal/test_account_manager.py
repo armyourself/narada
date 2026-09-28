@@ -81,6 +81,7 @@ class TestAccountManager(unittest.TestCase):
 
     def test_add_account(self):
         print("test_add_account...")
+        self.__class__._account_manager.remove_all()
         test_account = self.__class__._TEST_ACCOUNTS[0]
         self.__class__._account_manager.add(test_account)
 
@@ -97,6 +98,7 @@ class TestAccountManager(unittest.TestCase):
 
     def test_edit_account(self):
         print("test_edit_account...")
+        self.__class__._account_manager.remove_all()
         test_account = self.__class__._TEST_ACCOUNTS[0]
         self.__class__._account_manager.add(test_account)
 

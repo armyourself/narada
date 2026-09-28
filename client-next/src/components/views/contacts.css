@@ -1,0 +1,144 @@
+.contacts-panel {
+    flex-grow: 1;
+    display: none;
+    flex-direction: column;
+    background: var(--cream);
+    padding: 32px 44px;
+    overflow-y: auto;
+    min-width: 0;
+}
+
+.contacts-panel.active {
+    display: flex;
+}
+
+.contacts-panel .settings-title {
+    font-family: var(--ui);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.contacts-panel .settings-sub {
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+    margin-bottom: 34px;
+}
+
+.contacts-panel .contacts-search {
+    margin-bottom: 22px;
+    max-width: 340px;
+}
+
+.contacts-panel .search-box {
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    padding: 9px 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.contacts-panel .search-box svg {
+    width: 15px;
+    height: 15px;
+    stroke: var(--ink-faint);
+    fill: none;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
+
+.contacts-panel .search-box input {
+    border: none;
+    background: transparent;
+    outline: none;
+    width: 100%;
+    font-size: 0.85rem;
+    color: var(--ink);
+    font-family: var(--body);
+}
+
+.contacts-panel .search-box input::placeholder {
+    color: var(--ink-faint);
+}
+
+.contacts-panel .settings-section {
+    max-width: 560px;
+}
+
+.contacts-panel .contact-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.contacts-panel .contact-row:last-child {
+    border-bottom: none;
+}
+
+.contacts-panel .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.72rem;
+    font-family: var(--ui);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.contacts-panel .contact-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.contacts-panel .contact-name {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.contacts-panel .contact-addr {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    font-family: var(--ui);
+    word-break: break-all;
+}
+
+.contacts-panel .icon-mini-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-faint);
+    flex-shrink: 0;
+}
+
+.contacts-panel .icon-mini-btn:hover {
+    background: var(--glass-strong);
+    color: var(--accent);
+}
+
+.contacts-panel .icon-mini-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.contacts-panel .empty-note {
+    padding: 24px 0;
+    color: var(--ink-faint);
+    font-size: 0.82rem;
+}

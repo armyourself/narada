@@ -155,17 +155,20 @@ the recipient's public key (`["p", "<pubkey>"]`).
 
 ### What works
 
-- Desktop email client (SvelteKit + Tauri)
+- Desktop email client (Next.js + Tauri) — `client-next/`
 - Self-hosted server (Python / FastAPI)
 - IMAP/SMTP support for traditional email
-- Multiple accounts
-- Unified inbox
-- Advanced search
+- Multiple accounts, including visibility of failed-to-connect accounts
+- Unified inbox: IMAP and Nostr mail merged into one list, sorted newest first
+- Delivery-route badges and filters (Direct / Via relay / Via gateway)
+- Advanced search: one SearchCriteria applied to IMAP SEARCH and to the
+  local Nostr mailbox
 - Nostr transport adapter
 - Nostr identity generation (NIP-01/NIP-19)
 - NIP-04 and NIP-44 encryption
-- Multi-relay failover
-- Encrypted message send/receive via Nostr relays
+- Multi-relay failover with auto-reconnect and event deduplication
+- Encrypted message send/receive via Nostr relays (round-trip tested
+  against an in-process relay)
 - Offline message delivery (relays as store-and-forward)
 
 ### What's missing
@@ -177,6 +180,10 @@ the recipient's public key (`["p", "<pubkey>"]`).
 - Message expiration policies
 - Relay selection optimization
 - Metadata padding
+- Some features of the legacy client are still being ported
+  (labels, categories, sort, offline send queue)
+- The server is spawned as a dev process; PyInstaller sidecar packaging
+  for production builds is not wired up yet
 
 ---
 
@@ -200,7 +207,8 @@ Treat this as a **research-grade reference implementation**.
 ## Repository Structure
 
 ```text
-├── client/           Desktop client (SvelteKit + Tauri)
+├── client-next/      Desktop client (Next.js + Tauri)  ← active
+├── client/           Legacy desktop client (SvelteKit) — deprecated, pending removal
 ├── node/             Server (Python / FastAPI)
 │   ├── src/
 │   │   ├── nostr/           Nostr transport implementation
@@ -210,7 +218,7 @@ Treat this as a **research-grade reference implementation**.
 │   │   ├── routers/          HTTP API endpoints
 │   │   └── helpers/          Logging, port scanning
 │   └── tests/
-│       ├── nostr/           Nostr-specific tests
+│       ├── nostr/           Nostr tests (incl. relay round-trip)
 │       ├── mail_abstraction/  Adapter tests
 │       └── ...               Other tests
 ├── docs/             Documentation
@@ -224,7 +232,8 @@ Treat this as a **research-grade reference implementation**.
 
 ### Prerequisites
 
-- Python 3.13+ and [uv](https://github.com/astral-sh/uv)
+- Python 3.13+ — [uv](https://github.com/astral-sh/uv) recommended
+  (a regular Python with the dependencies installed also works)
 - [Bun](https://bun.sh) and [Rust toolchain](https://tauri.app/start/prerequisites/)
 
 ### Install
@@ -243,24 +252,37 @@ pwsh -File scripts/install.ps1
 
 ### Run
 
-Node server:
+Node server (either form works):
 
 ```sh
 cd node
-uv run python -m src.main
+uv run python -m src.main     # with uv
+python -m src.main            # with a ready-made Python environment
 ```
 
-Desktop client:
+Desktop client (one instance at a time — it uses port 3000):
 
 ```sh
-cd client
+cd client-next
+bun install
 bun run tauri dev
 ```
+
+The client starts, and can start, the local backend itself: the
+"Start local server" button (and the automatic respawn on reload) launches
+the server on `127.0.0.1` with a port in the 8000–9000 range.
 
 ### Tests
 
 ```sh
-cd node && uv run pytest
+# Backend — tests/modules/openmail send tests need a ./credentials.json
+cd node
+uv run pytest            # or: python -m pytest
+
+# Frontend
+cd client-next
+bunx tsc --noEmit        # typecheck
+bun run lint             # eslint
 ```
 
 ---

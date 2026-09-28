@@ -1,4 +1,7 @@
 import asyncio
+import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import unquote
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Form, UploadFile
 from pydantic import BaseModel
@@ -127,6 +130,137 @@ async def search_emails(
     except Exception as e:
         return Response(success=False, message=err_msg("There was an error while searching emails.", str(e)))
 
+NOSTR_RECORD_PAGE_LIMIT = 5000
+
+
+def _is_native_nostr_address(value: str) -> bool:
+    """True for a raw Nostr id (hex pubkey or npub), not an email address."""
+    candidate = (value or "").strip()
+    if "<" in candidate and ">" in candidate:
+        candidate = candidate.split("<", 1)[1].split(">", 1)[0].strip()
+    if candidate.lower().startswith("npub1"):
+        return True
+    return len(candidate) == 64 and all(
+        c in "0123456789abcdefABCDEF" for c in candidate
+    )
+
+
+def _email_route(source: str | None, sender: str) -> str:
+    """Classify how an email travelled.
+
+    - gateway: conventional email over IMAP/SMTP
+    - direct:  native Nostr identity -> native Nostr identity
+    - relay:   Nostr transport carrying a conventional address
+    """
+    if source != "nostr":
+        return "gateway"
+    return "direct" if _is_native_nostr_address(sender) else "relay"
+
+
+def _email_timestamp(value: str | None) -> float:
+    """Best-effort unix timestamp for sorting mixed date formats."""
+    text = (value or "").strip()
+    if not text:
+        return 0.0
+    if text.isdigit():
+        return float(text)
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    try:
+        return parsedate_to_datetime(text).timestamp()
+    except Exception:
+        pass
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except Exception:
+        return 0.0
+
+
+def _parse_search_criteria(search: str | None) -> SearchCriteria | str:
+    """Parse the optional ``search`` query parameter."""
+    if not search:
+        return ""
+    loaded = safe_json_loads(search)
+    if isinstance(loaded, dict):
+        return SearchCriteria(**loaded)
+    return search
+
+
+def _nostr_record_matches(record: dict, criteria: SearchCriteria) -> bool:
+    """Apply SearchCriteria to a local Nostr mailbox record.
+
+    Size bounds (smaller_than/larger_than) are skipped: the JSONL
+    records carry no size metadata.
+    """
+    sender = str(record.get("sender", "")).lower()
+    subject = str(record.get("subject", "")).lower()
+    body = str(record.get("body", "")).lower()
+    receivers = ", ".join(record.get("to") or []).lower()
+    cc = ", ".join(record.get("cc") or []).lower()
+    flags = [str(f).lower() for f in (record.get("flags") or [])]
+    text = f"{subject} {body}"
+
+    if criteria.senders and not any(s.lower() in sender for s in criteria.senders):
+        return False
+    if criteria.receivers and not any(
+        r.lower() in receivers for r in criteria.receivers
+    ):
+        return False
+    if criteria.cc and not any(c.lower() in cc for c in criteria.cc):
+        return False
+    if criteria.subject and criteria.subject.lower() not in subject:
+        return False
+    if criteria.include and criteria.include.lower() not in text:
+        return False
+    if criteria.exclude and criteria.exclude.lower() in text:
+        return False
+    if criteria.has_attachments and not record.get("attachments"):
+        return False
+    if criteria.included_flags and not all(
+        flag in flags for flag in (f.lower() for f in criteria.included_flags)
+    ):
+        return False
+    if criteria.excluded_flags and any(
+        flag in flags for flag in (f.lower() for f in criteria.excluded_flags)
+    ):
+        return False
+
+    sent_at = _email_timestamp(str(record.get("date", "")))
+    if criteria.since:
+        since = _email_timestamp(criteria.since)
+        if since and sent_at and sent_at < since:
+            return False
+    if criteria.before:
+        before = _email_timestamp(criteria.before)
+        if before and sent_at and sent_at >= before:
+            return False
+    return True
+
+
+def _nostr_record_to_email(record: dict) -> Email:
+    """Project a Nostr mailbox record onto the shared Email model."""
+    sender = str(record.get("sender", ""))
+    return Email(
+        message_id=str(
+            record.get("message_id") or f"<{record.get('uid', '')}@nostr>"
+        ),
+        uid=str(record.get("uid", "")),
+        sender=sender,
+        receivers=str(record.get("receivers", "")),
+        date=str(record.get("date", "")),
+        subject=str(record.get("subject", "")),
+        body=str(record.get("body", "")),
+        flags=list(record.get("flags") or []),
+        source="nostr",
+        route=_email_route("nostr", sender),
+    )
+
+
 @router.get("/get-mailbox/{account}")
 async def get_mailbox(
     account: str,
@@ -135,59 +269,111 @@ async def get_mailbox(
     offset_start: Optional[int] = None,
     offset_end: Optional[int] = None,
 ) -> Response[OpenmailTaskResults[Mailbox]]:
+    """Fetch a mailbox, merging every transport the account has.
+
+    An account may hold IMAP mail, Nostr mail, or both.  Previously the
+    Nostr branch returned early, so an account with a Nostr identity
+    never saw its IMAP mail.  Both sides are now fetched, tagged with
+    their delivery route, and sorted newest-first.
+    """
     try:
         account = extract_email_address(account)
+        started_at = time.perf_counter()
 
-        # Nostr adapter: fetch from local JSONL mailbox
-        if nostr_handler.has_adapter(account):
-            adapter = nostr_handler.get_adapter(account)
-            messages = adapter.fetch_messages(
-                folder or "nostr",
-                limit=(offset_end or 50) - (offset_start or 0),
-                offset=offset_start or 0,
-            )
-            mailbox_data = Mailbox(
-                total=len(messages),
-                emails=[
-                    Email(
-                        uid=m.uid,
-                        sender=str(m.from_address),
-                        subject=m.subject,
-                        body=m.preview or "",
-                        date=m.date or "",
-                        flags=["\\Seen"] if m.is_read else [],
-                        has_attachments=m.has_attachments,
-                    )
-                    for m in messages
-                ],
-                folder=folder or "nostr",
-            )
+        adapter = (
+            nostr_handler.get_adapter(account)
+            if nostr_handler.has_adapter(account)
+            else None
+        )
+        has_imap = client_handler.is_client_exists(account)
+
+        if adapter is None and not has_imap:
             return Response(
-                success=True,
-                message="Nostr mailbox fetched successfully.",
-                data={account: mailbox_data},
+                success=False,
+                message=f"No mail transport available for {account}.",
             )
 
-        # IMAP/SMTP path (existing)
-        response = check_openmail_connection_availability(account)
-        if isinstance(response, Response):
-            return response
+        # --- IMAP side (optional) ------------------------------------
+        imap_mailbox: Optional[Mailbox] = None
+        if has_imap:
+            imap_started = time.perf_counter()
+            connection = check_openmail_connection_availability(account)
+            if isinstance(connection, Response):
+                if adapter is None:
+                    return connection
+                # IMAP is down but Nostr still works: degrade, don't fail.
+                uvicorn_logger.error(connection.message)
+            else:
+                search_criteria = _parse_search_criteria(search)
+                client_handler.get_client(account).imap.search_emails(
+                    folder, search_criteria
+                )
+                imap_mailbox = client_handler.get_client(account).imap.get_emails(
+                    offset_start, offset_end
+                )
+                uvicorn_logger.debug(
+                    "get-mailbox IMAP stage took %.0f ms for %s",
+                    (time.perf_counter() - imap_started) * 1000,
+                    account,
+                )
 
-        search_criteria = search or ""
-        if search_criteria:
-            search_loaded = safe_json_loads(search_criteria)
-            if isinstance(search_loaded, dict):
-                search_criteria = SearchCriteria(**search_loaded)
+        # --- Nostr side (optional) -----------------------------------
+        nostr_emails: list[Email] = []
+        if adapter is not None:
+            criteria = _parse_search_criteria(search)
+            for record in adapter.fetch_records(limit=NOSTR_RECORD_PAGE_LIMIT):
+                if isinstance(criteria, SearchCriteria) and not _nostr_record_matches(
+                    record, criteria
+                ):
+                    continue
+                nostr_emails.append(_nostr_record_to_email(record))
 
-        client_handler.get_client(account).imap.search_emails(folder, search_criteria)
+        # --- Merge: tag routes, sort newest first --------------------
+        emails: list[Email] = []
+        if imap_mailbox is not None:
+            for email in imap_mailbox.emails:
+                email.route = _email_route(email.source, email.sender)
+                emails.append(email)
+        emails.extend(nostr_emails)
+        emails.sort(key=lambda e: _email_timestamp(e.date), reverse=True)
+
+        total = (imap_mailbox.total if imap_mailbox is not None else 0) + len(
+            nostr_emails
+        )
+        mailbox_folder = (
+            imap_mailbox.folder
+            if imap_mailbox is not None
+            else (folder or "nostr")
+        )
+
+        if imap_mailbox is not None and nostr_emails:
+            message = "Unified mailbox (IMAP + Nostr) fetched successfully."
+        elif imap_mailbox is not None:
+            message = "Emails fetched successfully."
+        else:
+            message = "Nostr mailbox fetched successfully."
+
+        uvicorn_logger.debug(
+            "get-mailbox total took %.0f ms for %s (%d emails)",
+            (time.perf_counter() - started_at) * 1000,
+            account,
+            len(emails),
+        )
 
         return Response(
             success=True,
-            message="Emails fetched successfully.",
-            data={account: client_handler.get_client(account).imap.get_emails(offset_start, offset_end)}
+            message=message,
+            data={
+                account: Mailbox(
+                    total=total,
+                    emails=emails,
+                    folder=mailbox_folder,
+                )
+            },
         )
     except Exception as e:
         return Response(success=False, message=err_msg("There was an error while fetching emails.", str(e)))
+
 
 @router.get("/paginate-mailbox/{account}/{offset_start}/{offset_end}")
 async def paginate_mailbox(
@@ -301,57 +487,132 @@ class SendEmailFormData(BaseModel):
     cc: Optional[str] = None # mail addresses separated by comma
     bcc: Optional[str] = None # mail addresses separated by comma
     attachments: list[UploadFile] = []
+    # Where to deliver: "auto" (smart per-recipient routing), "email"
+    # (SMTP only) or "nostr" (Nostr relays only).
+    transport: str = "auto"
+
+
+def _recipient_address(value: str) -> str:
+    """Strip a display name, leaving the bare address (email or npub)."""
+    if "<" in value and ">" in value:
+        return value.split("<", 1)[1].split(">", 1)[0].strip()
+    return value.strip()
+
+
+def _is_npub(value: str) -> bool:
+    """True for a bech32 npub or a raw 64-char hex public key."""
+    value = value.strip()
+    if value.startswith("npub1"):
+        return True
+    return len(value) == 64 and all(
+        char in "0123456789abcdefABCDEF" for char in value
+    )
+
+
+def _split_receivers(receivers: str) -> tuple[list[str], list[str]]:
+    """Split a comma-separated receiver list into (npubs, emails)."""
+    npub_recipients: list[str] = []
+    email_recipients: list[str] = []
+    for raw in receivers.split(","):
+        if not raw.strip():
+            continue
+        if _is_npub(_recipient_address(raw)):
+            npub_recipients.append(_recipient_address(raw))
+        else:
+            email_recipients.append(raw.strip())
+    return npub_recipients, email_recipients
+
 
 @router.post("/send-email")
 async def send_email(
     form_data: Annotated[SendEmailFormData, Form()],
 ) -> Response:
+    """
+    Send a message with transport selection:
+
+    - ``auto``: smart per-recipient routing — npub recipients go out over
+      Nostr relays (when this account has an identity), everything else
+      goes out over SMTP. Having a Nostr identity never hijacks plain
+      email sends anymore.
+    - ``email`` / ``nostr``: force a single transport.
+    """
     try:
         account = extract_email_address(form_data.sender)
+        transport = (form_data.transport or "auto").lower()
+        if transport not in ("auto", "email", "nostr"):
+            transport = "auto"
 
-        # Nostr adapter: send via Nostr relays
-        if nostr_handler.has_adapter(account):
-            adapter = nostr_handler.get_adapter(account)
-            from src.mail_abstraction.base import Address
-            from_addr = Address(address=adapter.identity.public_key_hex)
-            to_addrs = []
-            for recip in form_data.receivers.split(","):
-                recip = recip.strip()
-                if not recip:
-                    continue
-                # Resolve npub to hex if needed
-                if recip.startswith("npub1"):
-                    from src.nostr.identity import npub_decode
-                    raw = npub_decode(recip)
-                    to_addrs.append(Address(address=raw.hex()))
-                else:
-                    to_addrs.append(Address(address=recip))
-            ok, msg = adapter.send_message(
-                from_address=from_addr,
-                to_addresses=to_addrs,
-                subject=form_data.subject,
-                body=form_data.body,
+        npub_recipients, email_recipients = _split_receivers(form_data.receivers)
+        if not npub_recipients and not email_recipients:
+            return Response(success=False, message="No recipients provided.")
+        if transport == "email" and npub_recipients:
+            return Response(
+                success=False,
+                message="npub recipients can only be reached over Nostr — use Smart or Nostr routing.",
             )
-            return Response(success=ok, message=msg)
-
-        # IMAP/SMTP path (existing)
-        response = check_openmail_connection_availability(account)
-        if isinstance(response, Response):
-            return response
-
-        status, msg = client_handler.get_client(account).smtp.send_email(
-            Draft(
-                sender=form_data.sender,
-                receivers=form_data.receivers,
-                subject=form_data.subject,
-                body=form_data.body,
-                cc=form_data.cc,
-                bcc=form_data.bcc,
-                attachments=await convert_uploadfile_to_attachment(form_data.attachments),
+        if transport == "nostr" and email_recipients:
+            return Response(
+                success=False,
+                message="Email recipients can only be reached over SMTP — use Smart or Email routing.",
             )
+
+        legs: list[str] = []
+        ok_all = True
+
+        send_over_nostr = transport in ("auto", "nostr") and bool(npub_recipients)
+        send_over_smtp = transport in ("auto", "email") and bool(email_recipients)
+
+        if send_over_nostr:
+            if not nostr_handler.has_adapter(account):
+                ok_all = False
+                legs.append("Nostr: no identity is registered for this account.")
+            else:
+                adapter = nostr_handler.get_adapter(account)
+                from src.mail_abstraction.base import Address
+                from_addr = Address(address=adapter.identity.public_key_hex)
+                to_addrs = []
+                for recip in npub_recipients:
+                    if recip.startswith("npub1"):
+                        from src.nostr.identity import npub_decode
+                        raw = npub_decode(recip)
+                        to_addrs.append(Address(address=raw.hex()))
+                    else:
+                        to_addrs.append(Address(address=recip))
+                ok, msg = adapter.send_message(
+                    from_address=from_addr,
+                    to_addresses=to_addrs,
+                    subject=form_data.subject,
+                    body=form_data.body,
+                )
+                ok_all = ok_all and ok
+                legs.append(f"Nostr: {msg}")
+
+        if send_over_smtp:
+            response = check_openmail_connection_availability(account)
+            if isinstance(response, Response):
+                ok_all = False
+                legs.append(f"SMTP: {response.message}")
+            else:
+                status, msg = client_handler.get_client(account).smtp.send_email(
+                    Draft(
+                        sender=form_data.sender,
+                        receivers=", ".join(email_recipients),
+                        subject=form_data.subject,
+                        body=form_data.body,
+                        cc=form_data.cc,
+                        bcc=form_data.bcc,
+                        attachments=await convert_uploadfile_to_attachment(
+                            form_data.attachments
+                        ),
+                    )
+                )
+                ok_all = ok_all and status
+                legs.append(f"SMTP: {msg}")
+
+        return Response(
+            success=ok_all,
+            message=" | ".join(legs) if legs else "Nothing was sent.",
         )
-
-        return Response(success=status, message=msg)
     except Exception as e:
         return Response(success=False, message=err_msg("There was an error while sending email.", str(e)))
 

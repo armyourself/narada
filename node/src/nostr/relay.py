@@ -86,6 +86,13 @@ class NostrRelay:
         self._subscriptions: dict[str, dict[str, Any]] = {}
         self._event_callbacks: dict[str, Callable[[NostrEvent], None]] = {}
         self._lock = asyncio.Lock() if hasattr(asyncio, "Lock") else None
+        # Background listener state. One task per connection is the sole
+        # reader of the socket; publish()/receive_events() only wait on
+        # what it dispatches, so nobody races for recv().
+        self._listener: Optional[asyncio.Task] = None
+        self._closing = False
+        self._pending_ok: dict[str, asyncio.Future] = {}
+        self._incoming: asyncio.Queue = asyncio.Queue(maxsize=1000)
 
     @property
     def status(self) -> RelayStatus:
@@ -96,7 +103,15 @@ class NostrRelay:
         return self._status.connected
 
     async def connect(self) -> bool:
-        """Connect to the relay. Returns True on success."""
+        """Connect to the relay and start the background listener.
+
+        Returns True on success.  Successful connections re-send every
+        stored subscription (NIP-01 REQ), so a reconnect restores the
+        receive path without caller involvement.
+        """
+        if self._status.connected and self._ws is not None:
+            return True
+        self._closing = False
         try:
             import websockets
             self._ws = await asyncio.wait_for(
@@ -106,7 +121,10 @@ class NostrRelay:
             self._status.connected = True
             self._status.last_connected_at = int(time.time())
             self._status.last_error = None
+            self._status.reconnect_count = 0
             log.info("Connected to relay %s", self.url)
+            self._start_listener()
+            await self._resubscribe_all()
             return True
         except Exception as exc:
             self._status.connected = False
@@ -115,7 +133,17 @@ class NostrRelay:
             return False
 
     async def disconnect(self) -> None:
-        """Disconnect from the relay."""
+        """Disconnect from the relay and stop the background listener."""
+        self._closing = True
+        listener, self._listener = self._listener, None
+        if listener is not None and not listener.done() and listener is not asyncio.current_task():
+            listener.cancel()
+            try:
+                await listener
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
         if self._ws is not None:
             try:
                 await self._ws.close()
@@ -123,13 +151,17 @@ class NostrRelay:
                 pass
             self._ws = None
         self._status.connected = False
+        self._fail_pending("Disconnected from relay")
         log.info("Disconnected from relay %s", self.url)
 
     async def publish(self, event: NostrEvent) -> tuple[bool, str]:
-        """Publish an event to the relay.
+        """Publish an event to the relay and await its acknowledgement.
 
         NIP-01: Client sends ["EVENT", <event>]
         Relay responds: ["OK", <event_id>, <success>, <message>]
+
+        The background listener resolves the acknowledgement future, so
+        this coroutine never competes with it for socket reads.
 
         Returns (success, message).
         """
@@ -139,27 +171,26 @@ class NostrRelay:
                 return False, f"Not connected to {self.url}"
 
         message = json.dumps(["EVENT", event.to_dict()])
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._pending_ok[event.id] = future
         try:
             import websockets
             await asyncio.wait_for(
                 self._ws.send(message),
                 timeout=self._timeout,
             )
-            # Wait for OK response
-            response = await asyncio.wait_for(
-                self._ws.recv(),
-                timeout=self._timeout,
-            )
-            data = json.loads(response)
-            if isinstance(data, list) and len(data) >= 4 and data[0] == "OK":
-                success = data[2]
-                msg = data[3] if len(data) > 3 else ""
-                return success, msg
-            return False, f"Unexpected response: {data}"
+            success, msg = await asyncio.wait_for(future, timeout=self._timeout)
+            return success, msg
+        except asyncio.TimeoutError:
+            log.warning("Timed out waiting for OK from %s (event %s)",
+                        self.url, event.id[:12])
+            return False, f"Timed out waiting for acknowledgement from {self.url}"
         except Exception as exc:
             self._status.last_error = str(exc)
             log.warning("Publish failed to %s: %s", self.url, exc)
             return False, str(exc)
+        finally:
+            self._pending_ok.pop(event.id, None)
 
     async def subscribe(
         self,
@@ -236,48 +267,149 @@ class NostrRelay:
         except Exception:
             return False
 
-    async def receive_events(self, max_events: int = 100, timeout: float = 10.0) -> list[NostrEvent]:
-        """Receive events from active subscriptions.
+    # --- Background listener (NIP-01 frame dispatch) -----------------------
 
-        This is a simple polling approach for synchronous callers.
-        For production use, prefer the callback-based subscribe().
+    def _start_listener(self) -> None:
+        """Start the background reader task if one is not already running."""
+        try:
+            current = asyncio.current_task()
+        except RuntimeError:
+            current = None
+        if self._listener is current:
+            # We *are* the listener (reconnect path); our loop continues.
+            return
+        if self._listener is not None and not self._listener.done():
+            return
+        self._listener = asyncio.get_running_loop().create_task(
+            self._listen(), name=f"nostr-listen-{self.url}"
+        )
 
-        Returns up to ``max_events`` events within ``timeout`` seconds.
+    async def _listen(self) -> None:
+        """Sole reader of this socket: dispatch every NIP-01 frame.
+
+        EVENT frames go to subscription callbacks (and a buffer for
+        receive_events), OK frames resolve publish() futures.  On
+        connection loss the relay reconnects with exponential backoff
+        and stored subscriptions are re-sent, until disconnect() flips
+        ``_closing``.
         """
-        if not self._status.connected:
+        try:
+            while not self._closing:
+                ws = self._ws
+                if not self._status.connected or ws is None:
+                    if not await self.reconnect():
+                        continue  # reconnect() already backed off
+                    continue
+                try:
+                    raw = await ws.recv()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    self._status.connected = False
+                    self._status.last_error = str(exc)
+                    self._fail_pending(str(exc))
+                    log.warning("Relay %s connection lost: %s", self.url, exc)
+                    continue
+                self._dispatch_frame(raw)
+        finally:
+            if self._listener is asyncio.current_task():
+                self._listener = None
+
+    def _dispatch_frame(self, raw: str | bytes) -> None:
+        """Route one relay frame to its handler."""
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if not isinstance(data, list) or not data:
+            return
+
+        kind = data[0]
+        if kind == "OK" and len(data) >= 3:
+            future = self._pending_ok.get(str(data[1]))
+            if future is not None and not future.done():
+                future.set_result(
+                    (bool(data[2]), str(data[3]) if len(data) > 3 else "")
+                )
+        elif kind == "EVENT" and len(data) >= 3:
+            try:
+                event = NostrEvent.from_dict(data[2])
+            except Exception:
+                return
+            self._offer(event)
+            callback = self._event_callbacks.get(str(data[1]))
+            if callback is not None:
+                try:
+                    callback(event)
+                except Exception:
+                    log.exception("Event callback failed on %s", self.url)
+        elif kind == "EOSE":
+            log.debug("EOSE for %s on %s",
+                      data[1] if len(data) > 1 else "?", self.url)
+        elif kind == "NOTICE":
+            log.info("NOTICE from %s: %s", self.url,
+                     data[1:] if len(data) > 1 else "")
+
+    def _offer(self, event: NostrEvent) -> None:
+        """Buffer an incoming event for pull-based receive_events()."""
+        try:
+            self._incoming.put_nowait(event)
+        except asyncio.QueueFull:
+            try:
+                self._incoming.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                self._incoming.put_nowait(event)
+            except asyncio.QueueFull:
+                pass
+
+    def _fail_pending(self, message: str) -> None:
+        """Resolve outstanding publish acknowledgements with a failure."""
+        for future in list(self._pending_ok.values()):
+            if not future.done():
+                future.set_result((False, message))
+        self._pending_ok.clear()
+
+    async def _resubscribe_all(self) -> None:
+        """Re-send REQ for every stored subscription (after a connect)."""
+        for sub_id, sub in list(self._subscriptions.items()):
+            message = json.dumps(
+                ["REQ", sub_id] + [f.to_dict() for f in sub["filters"]]
+            )
+            try:
+                if self._ws is None:
+                    return
+                await asyncio.wait_for(
+                    self._ws.send(message),
+                    timeout=self._timeout,
+                )
+                log.debug("Re-subscribed to %s on %s", sub_id, self.url)
+            except Exception as exc:
+                log.warning("Re-subscribe failed on %s: %s", self.url, exc)
+
+    async def receive_events(self, max_events: int = 100, timeout: float = 10.0) -> list[NostrEvent]:
+        """Receive events buffered by the background listener.
+
+        Pull-based companion to callback-based subscribe(): the listener
+        task appends every EVENT frame here, this drains up to
+        ``max_events`` within ``timeout`` seconds.
+        """
+        if not self._status.connected and self._incoming.empty():
             return []
 
         events: list[NostrEvent] = []
-        try:
-            import websockets
-            deadline = time.time() + timeout
-            while len(events) < max_events and time.time() < deadline:
-                remaining = deadline - time.time()
-                if remaining <= 0:
-                    break
-                try:
-                    raw = await asyncio.wait_for(
-                        self._ws.recv(),
-                        timeout=remaining,
-                    )
-                    data = json.loads(raw)
-                    if isinstance(data, list) and len(data) >= 3:
-                        if data[0] == "EVENT":
-                            event = NostrEvent.from_dict(data[2])
-                            events.append(event)
-                            sub_id = data[1] if len(data) > 1 else None
-                            callback = self._event_callbacks.get(sub_id)
-                            if callback:
-                                try:
-                                    callback(event)
-                                except Exception:
-                                    pass
-                        elif data[0] == "EOSE":
-                            break
-                except asyncio.TimeoutError:
-                    break
-        except Exception as exc:
-            log.warning("Receive failed from %s: %s", self.url, exc)
+        deadline = time.time() + timeout
+        while len(events) < max_events:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            try:
+                events.append(
+                    await asyncio.wait_for(self._incoming.get(), timeout=remaining)
+                )
+            except asyncio.TimeoutError:
+                break
         return events
 
     async def reconnect(self) -> bool:
@@ -386,7 +518,11 @@ class RelayPool:
         """Publish with failover: try relays until one succeeds.
 
         Unlike publish(), this stops at the first successful relay.
+        If nothing is connected (e.g. network came up after boot) the
+        pool reconnects first instead of failing outright.
         """
+        if self.connected_count() == 0:
+            await self.connect_all()
         for relay in self._relays:
             if relay.is_connected:
                 success, msg = await relay.publish(event)
@@ -405,6 +541,8 @@ class RelayPool:
 
         Returns the number of relays that accepted the subscription.
         """
+        if self.connected_count() == 0:
+            await self.connect_all()
         subscribed = 0
         for relay in self._relays:
             if relay.is_connected:

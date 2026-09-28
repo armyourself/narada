@@ -28,6 +28,8 @@ The adapter supports:
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import json
 import threading
 import time
@@ -106,6 +108,15 @@ class NostrAdapter(MailAdapter):
         self._connected = False
         self._outbox = None
         self._subscription_id: Optional[str] = None
+        # Persistent background event loop: every relay socket this
+        # adapter opens must live on ONE loop for its whole lifetime.
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop_thread: Optional[threading.Thread] = None
+        self._loop_guard = threading.Lock()
+        # Event-id dedup: relays replay stored events on every REQ, so
+        # without this each restart/reconnect would re-append history.
+        self._seen_event_ids: Optional[set[str]] = None
+        self._persist_lock = threading.Lock()
 
     @staticmethod
     def _default_data_dir() -> Path:
@@ -122,40 +133,148 @@ class NostrAdapter(MailAdapter):
         self._identity = generate_nostr_identity()
         return self._identity
 
+    # --- Background event loop ---------------------------------------------
+
+    def _ensure_loop(self) -> asyncio.AbstractEventLoop:
+        """Return the adapter's persistent background event loop.
+
+        All relay I/O runs on this single loop for the adapter's
+        lifetime.  The previous pattern (``asyncio.new_event_loop()``
+        per call, then ``loop.close()``) left every opened WebSocket
+        bound to an already-closed loop: publishes and subscriptions
+        silently failed while ``status.connected`` still read True.
+        """
+        loop = self._loop
+        if (
+            loop is not None
+            and not loop.is_closed()
+            and self._loop_thread is not None
+            and self._loop_thread.is_alive()
+        ):
+            return loop
+
+        with self._loop_guard:
+            loop = self._loop
+            if (
+                loop is not None
+                and not loop.is_closed()
+                and self._loop_thread is not None
+                and self._loop_thread.is_alive()
+            ):
+                return loop
+
+            loop = asyncio.new_event_loop()
+            started = threading.Event()
+
+            def _run_loop() -> None:
+                asyncio.set_event_loop(loop)
+                started.set()
+                try:
+                    loop.run_forever()
+                finally:
+                    try:
+                        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                        for task in pending:
+                            task.cancel()
+                        if pending:
+                            loop.run_until_complete(
+                                asyncio.gather(*pending, return_exceptions=True)
+                            )
+                    finally:
+                        loop.close()
+
+            thread = threading.Thread(
+                target=_run_loop,
+                name=f"nostr-adapter-{_safe(self._account_id)}",
+                daemon=True,
+            )
+            thread.start()
+            started.wait(timeout=5)
+            self._loop = loop
+            self._loop_thread = thread
+            return loop
+
+    def _run(self, coro: Any, *, timeout: float = 60.0) -> Any:
+        """Run *coro* on the background loop and block for its result."""
+        loop = self._ensure_loop()
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        try:
+            return future.result(timeout)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            raise MailAdapterError(
+                f"Nostr operation timed out after {timeout:.0f}s"
+            ) from None
+
+    def _operation_timeout(self) -> float:
+        """Room for every relay in the pool to connect/publish in turn."""
+        return max(30.0, self._config.timeout_seconds * (len(self._relay_pool.relays) + 1))
+
+    def _shutdown_loop(self) -> None:
+        """Stop the background loop thread and release its resources."""
+        with self._loop_guard:
+            loop, thread = self._loop, self._loop_thread
+            self._loop = None
+            self._loop_thread = None
+        if loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(loop.stop)
+        except RuntimeError:
+            return  # loop already closed
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=5)
+
     # --- Lifecycle -------------------------------------------------------
 
     def connect(self) -> tuple[bool, str]:
-        """Connect to Nostr relays and start listening for messages."""
+        """Connect to Nostr relays and start listening for messages.
+
+        On success the inbox subscription is established immediately,
+        so events addressed to this identity are persisted as soon as
+        the application boots -- no caller has to trigger receiving.
+        """
         try:
             self._ensure_identity()
-            import asyncio
-            loop = asyncio.new_event_loop()
-            try:
-                connected = loop.run_until_complete(self._relay_pool.connect_all())
-            finally:
-                loop.close()
+            connected = self._run(
+                self._relay_pool.connect_all(),
+                timeout=self._operation_timeout(),
+            )
 
             if connected == 0:
+                self._shutdown_loop()
                 return False, "Could not connect to any Nostr relays"
 
             self._connected = True
+            try:
+                self.subscribe_for_messages()
+            except Exception as exc:
+                # Transport is up; receiving will be retried on the next
+                # explicit subscribe()/watch() call.
+                print(f"Nostr inbox subscription failed for {self._account_id}: {exc}")
             return True, f"Connected to {connected}/{len(self._relay_pool.relays)} Nostr relays"
         except Exception as exc:
             return False, f"Nostr connect failed: {exc}"
 
     def disconnect(self) -> tuple[bool, str]:
-        """Disconnect from all Nostr relays."""
+        """Disconnect from all Nostr relays and stop the background loop."""
         try:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            try:
-                loop.run_until_complete(self._relay_pool.disconnect_all())
-            finally:
-                loop.close()
+            if self._subscription_id is not None:
+                try:
+                    self._run(
+                        self._relay_pool.unsubscribe_all(self._subscription_id),
+                        timeout=30.0,
+                    )
+                except Exception:
+                    pass
+                self._subscription_id = None
+            self._run(self._relay_pool.disconnect_all(), timeout=30.0)
             self._connected = False
             return True, "Disconnected from Nostr relays"
         except Exception as exc:
             return False, f"Disconnect failed: {exc}"
+        finally:
+            self._shutdown_loop()
 
     def is_connected(self) -> bool:
         return self._connected and self._relay_pool.connected_count() > 0
@@ -164,6 +283,31 @@ class NostrAdapter(MailAdapter):
 
     def list_folders(self) -> list[Folder]:
         return [Folder(name="nostr", delimiter="/", is_selectable=True, children=[])]
+
+    def _read_records(self) -> list[dict]:
+        """All mailbox JSONL records, oldest first."""
+        if not self._mailbox_path.exists():
+            return []
+        try:
+            with self._mailbox_path.open("r", encoding="utf-8") as f:
+                lines = [ln for ln in f if ln.strip()]
+        except OSError:
+            return []
+        records: list[dict] = []
+        for line in lines:
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return records
+
+    def fetch_records(self, *, limit: int = 5000) -> list[dict]:
+        """Raw mailbox records (newest first) with full bodies.
+
+        Used by API projections that need the complete message text
+        (``fetch_messages`` only carries a 140-char preview).
+        """
+        return list(reversed(self._read_records()))[:limit]
 
     def fetch_messages(
         self,
@@ -177,20 +321,10 @@ class NostrAdapter(MailAdapter):
         Messages were received from Nostr relays and persisted to the
         mailbox JSONL file.
         """
-        if not self._mailbox_path.exists():
-            return []
-        out: list[Message] = []
-        try:
-            with self._mailbox_path.open("r", encoding="utf-8") as f:
-                lines = [ln for ln in f if ln.strip()]
-        except OSError:
-            return []
-        for line in reversed(lines):
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            out.append(_record_to_message(record, folder=folder or "nostr"))
+        out: list[Message] = [
+            _record_to_message(record, folder=folder or "nostr")
+            for record in reversed(self._read_records())
+        ]
         return out[offset:offset + limit]
 
     # --- Send -----------------------------------------------------------
@@ -264,10 +398,10 @@ class NostrAdapter(MailAdapter):
             "sent_at": int(time.time()),
         }
 
-        from .encryption import nip04_encrypt, nip44_encrypt, _x25519_public_from_ed25519
+        from .encryption import nip04_encrypt, nip44_encrypt, _x25519_public_from_ed25519_public
         body_json = json.dumps(email_body, separators=(",", ":"))
         sender_ed25519_seed = identity._private_key_bytes
-        recipient_x25519_pub = _x25519_public_from_ed25519(
+        recipient_x25519_pub = _x25519_public_from_ed25519_public(
             bytes.fromhex(recipient_pubkey_hex)
         )
 
@@ -292,14 +426,10 @@ class NostrAdapter(MailAdapter):
             tags=[["p", recipient_pubkey_hex]],
         )
 
-        import asyncio
-        loop = asyncio.new_event_loop()
-        try:
-            success, msg = loop.run_until_complete(
-                self._relay_pool.publish_with_failover(event)
-            )
-        finally:
-            loop.close()
+        success, msg = self._run(
+            self._relay_pool.publish_with_failover(event),
+            timeout=self._operation_timeout(),
+        )
 
         if success:
             return True, f"Published to Nostr relays for {recipient_pubkey_hex[:16]}..."
@@ -315,7 +445,13 @@ class NostrAdapter(MailAdapter):
         """Subscribe to incoming email events on Nostr relays.
 
         Returns a subscription ID that can be used to unsubscribe.
+        The inbox subscription (no callback) is established once and
+        reused; callers that want push notifications pass *on_message*
+        and get their own subscription.
         """
+        if on_message is None and self._subscription_id is not None:
+            return self._subscription_id
+
         identity = self._ensure_identity()
         sub_id = f"nostr_{self._account_id}_{int(time.time())}"
 
@@ -326,24 +462,33 @@ class NostrAdapter(MailAdapter):
             )
         ]
 
-        import asyncio
-        loop = asyncio.new_event_loop()
-        try:
-            def _on_event(event: NostrEvent) -> None:
-                self._handle_incoming_event(event, identity)
-                if on_message:
-                    msg = self._event_to_message(event)
-                    if msg:
-                        on_message(msg)
+        def _on_event(event: NostrEvent) -> None:
+            self._handle_incoming_event(event, identity)
+            if on_message:
+                msg = self._event_to_message(event)
+                if msg:
+                    on_message(msg)
 
-            loop.run_until_complete(
-                self._relay_pool.subscribe(sub_id, filters, on_event=_on_event)
-            )
-        finally:
-            loop.close()
-
-        self._subscription_id = sub_id
+        self._run(
+            self._relay_pool.subscribe(sub_id, filters, on_event=_on_event),
+            timeout=self._operation_timeout(),
+        )
+        if on_message is None:
+            self._subscription_id = sub_id
         return sub_id
+
+    def unsubscribe(self, subscription_id: str) -> bool:
+        """Unsubscribe a subscription created by subscribe_for_messages()."""
+        try:
+            self._run(
+                self._relay_pool.unsubscribe_all(subscription_id),
+                timeout=30.0,
+            )
+            if self._subscription_id == subscription_id:
+                self._subscription_id = None
+            return True
+        except Exception:
+            return False
 
     def _handle_incoming_event(self, event: NostrEvent, identity: NostrIdentity) -> None:
         """Handle an incoming Nostr event: verify, decrypt, persist."""
@@ -351,8 +496,8 @@ class NostrAdapter(MailAdapter):
             return
 
         try:
-            from .encryption import _x25519_public_from_ed25519
-            sender_x25519_pub = _x25519_public_from_ed25519(bytes.fromhex(event.pubkey))
+            from .encryption import _x25519_public_from_ed25519_public
+            sender_x25519_pub = _x25519_public_from_ed25519_public(bytes.fromhex(event.pubkey))
             recipient_ed25519_seed = identity._private_key_bytes
 
             if self._config.encryption == "nip44":
@@ -379,9 +524,9 @@ class NostrAdapter(MailAdapter):
     def _event_to_message(self, event: NostrEvent) -> Optional[Message]:
         """Convert a Nostr event to a MailAdapter Message."""
         try:
-            from .encryption import _x25519_public_from_ed25519
+            from .encryption import _x25519_public_from_ed25519_public
             identity = self._ensure_identity()
-            sender_x25519_pub = _x25519_public_from_ed25519(bytes.fromhex(event.pubkey))
+            sender_x25519_pub = _x25519_public_from_ed25519_public(bytes.fromhex(event.pubkey))
             recipient_ed25519_seed = identity._private_key_bytes
 
             if self._config.encryption == "nip44":
@@ -418,34 +563,68 @@ class NostrAdapter(MailAdapter):
             raw=None,
         )
 
+    def _load_seen_event_ids(self) -> set[str]:
+        """Collect event ids already present in the mailbox (once)."""
+        if self._seen_event_ids is not None:
+            return self._seen_event_ids
+        ids: set[str] = set()
+        if self._mailbox_path.exists():
+            try:
+                with self._mailbox_path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            record = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        event_id = record.get("nostr_event_id") or record.get("uid")
+                        if event_id:
+                            ids.add(str(event_id))
+            except OSError:
+                pass
+        self._seen_event_ids = ids
+        return ids
+
     def _persist_event(self, event: NostrEvent, body_data: dict) -> None:
-        """Persist a received Nostr event to the mailbox JSONL file."""
-        record = {
-            "uid": event.id,
-            "source": "nostr",
-            "sender": body_data.get("sender", ""),
-            "receivers": ", ".join(body_data.get("to", [])) or self._account_id,
-            "to": body_data.get("to", []),
-            "cc": body_data.get("cc", []),
-            "date": str(body_data.get("sent_at", "")),
-            "subject": body_data.get("subject", ""),
-            "body": body_data.get("body_text", ""),
-            "in_reply_to": "",
-            "references": "",
-            "list_unsubscribe": "",
-            "list_unsubscribe_post": "",
-            "flags": ["\\Seen"],
-            "attachments": [],
-            "message_id": f"<{event.id}@nostr>",
-            "nostr_event_id": event.id,
-            "nostr_pubkey": event.pubkey,
-            "nostr_kind": event.kind,
-            "received_at": int(time.time()),
-        }
-        line = json.dumps(record, separators=(",", ":"))
-        self._mailbox_dir.mkdir(parents=True, exist_ok=True)
-        with open(self._mailbox_path, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+        """Persist a received Nostr event to the mailbox JSONL file.
+
+        Relays replay stored events on every subscription (REQ), and a
+        single event may match several active subscriptions, so each
+        event id is persisted exactly once.
+        """
+        with self._persist_lock:
+            seen = self._load_seen_event_ids()
+            if event.id in seen:
+                return
+            record = {
+                "uid": event.id,
+                "source": "nostr",
+                "sender": body_data.get("sender", ""),
+                "receivers": ", ".join(body_data.get("to", [])) or self._account_id,
+                "to": body_data.get("to", []),
+                "cc": body_data.get("cc", []),
+                "date": str(body_data.get("sent_at", "")),
+                "subject": body_data.get("subject", ""),
+                "body": body_data.get("body_text", ""),
+                "in_reply_to": "",
+                "references": "",
+                "list_unsubscribe": "",
+                "list_unsubscribe_post": "",
+                "flags": ["\\Seen"],
+                "attachments": [],
+                "message_id": f"<{event.id}@nostr>",
+                "nostr_event_id": event.id,
+                "nostr_pubkey": event.pubkey,
+                "nostr_kind": event.kind,
+                "received_at": int(time.time()),
+            }
+            line = json.dumps(record, separators=(",", ":"))
+            self._mailbox_dir.mkdir(parents=True, exist_ok=True)
+            with open(self._mailbox_path, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+            seen.add(event.id)
 
     # --- Watch (polling) ------------------------------------------------
 

@@ -95,38 +95,35 @@ def add_account(request: AddAccountRequest) -> Response:
         return Response(success=False, message="Invalid email address format")
 
     try:
-        if account_manager.is_exists(request.email_address):
-            return Response(success=False, message="Email address already exists")
+        already_exists = account_manager.is_exists(request.email_address)
+        if already_exists and client_handler.is_client_exists(request.email_address):
+            return Response(success=False, message="This account has already been added.")
+
+        plain_password = RSACipher.decrypt_password(
+            request.encrypted_password,
+            secure_storage.get_key_value(SecureStorageKey.PrivatePem)["value"],
+        )
 
         openmail_client = Openmail()
-
-        status, msg = openmail_client.connect(
-            request.email_address,
-            RSACipher.decrypt_password(
-                request.encrypted_password,
-                secure_storage.get_key_value(SecureStorageKey.PrivatePem)["value"],
-            ),
-        )
+        status, msg = openmail_client.connect(request.email_address, plain_password)
 
         if not status:
-            return Response(
-                success=status, message=err_msg("Could not connect to email.", msg)
-            )
+            return Response(success=False, message=msg)
 
-        account_manager.add(
-            AccountWithPassword(
-                email_address=request.email_address,
-                encrypted_password=RSACipher.encrypt_password(
-                    RSACipher.decrypt_password(
-                        request.encrypted_password,
-                        secure_storage.get_key_value(SecureStorageKey.PrivatePem)["value"],
-                    ),
-                    secure_storage.get_key_value(SecureStorageKey.PublicPem)["value"],
-                ),
-                avatar=request.avatar,
-                fullname=request.fullname,
-            )
+        stored_account = AccountWithPassword(
+            email_address=request.email_address,
+            encrypted_password=RSACipher.encrypt_password(
+                plain_password,
+                secure_storage.get_key_value(SecureStorageKey.PublicPem)["value"],
+            ),
+            avatar=request.avatar,
+            fullname=request.fullname,
         )
+
+        if already_exists:
+            account_manager.edit(stored_account)
+        else:
+            account_manager.add(stored_account)
 
         client_handler.add_client(request.email_address, openmail_client)
         return Response(success=True, message="Account successfully added")
@@ -167,9 +164,7 @@ def edit_account(request: EditAccountRequest) -> Response:
             )
 
             if not status:
-                return Response(
-                    success=status, message=err_msg("Could not connect to email.", msg)
-                )
+                return Response(success=False, message=msg)
 
             account_manager.edit(
                 AccountWithPassword(

@@ -132,6 +132,9 @@ class NostrHandler:
         """
         secret_bytes = bytes.fromhex(nsec_hex)
         identity = NostrIdentity.from_secret_key(secret_bytes)
+        # Recovered identities used to be persisted with an empty npub;
+        # derive the real bech32 key so it always round-trips.
+        npub = npub or identity.public_key_bech32
 
         # Persist to data dir so adapters survive restarts.
         identity_path = self._identity_path(account_id)
