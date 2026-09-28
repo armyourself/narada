@@ -11,8 +11,10 @@ import { NotificationHandler } from "@/lib/notifications";
 import { local } from "@/lib/locales";
 import { DEFAULT_LANGUAGE, DEFAULT_SERVER_URL } from "@/lib/constants";
 import { isTauriRuntime, startLocalServer } from "@/lib/server/startLocalServer";
+import { nostrIdentity } from "@/lib/nostr/identity";
+import { NostrIdentityService } from "@/lib/services/NostrIdentityService";
 
-type Section = "setup" | "welcome" | "accounts";
+type Section = "setup" | "welcome" | "identity" | "accounts";
 
 function SetupServer({ onContinue }: { onContinue: () => void }) {
     const [starting, setStarting] = useState(false);
@@ -148,6 +150,233 @@ function Welcome({ onContinue }: { onContinue: () => void }) {
 }
 
 let autoInitMailboxesPromise: Promise<void> | null = null;
+
+type IdentityMode = "generate" | "mnemonic" | "recover";
+
+function IdentitySection({ onContinue }: { onContinue: () => void }) {
+    const accounts = useSharedStore((s) => s.accounts);
+    const defaultAccountId = accounts[0]?.email_address ?? "";
+    const [mode, setMode] = useState<IdentityMode>("generate");
+    const [busy, setBusy] = useState(false);
+    const [publicId, setPublicId] = useState<string | null>(null);
+    const [mnemonic, setMnemonic] = useState<string | null>(null);
+    const [mnemonicError, setMnemonicError] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    const handleGenerate = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (busy) return;
+        const formData = new FormData(e.currentTarget);
+        const accountId = String(formData.get("account_id") ?? "").trim();
+        if (!accountId) {
+            showMessage({ title: "Please enter an account ID." });
+            return;
+        }
+        setBusy(true);
+        try {
+            const result = await nostrIdentity.generateIdentity(accountId);
+            if (!result) {
+                showMessage({
+                    title: "Failed to generate identity. It may already exist.",
+                });
+                return;
+            }
+            setPublicId(result.publicId);
+            setMnemonic(null);
+            setMnemonicError(null);
+            const claim = await NostrIdentityService.claimMnemonic(
+                accountId,
+                result.mnemonicToken,
+            );
+            if (claim?.mnemonic) setMnemonic(claim.mnemonic);
+            else setMnemonicError("Mnemonic could not be retrieved. The token may have expired.");
+            setMode("mnemonic");
+        } catch {
+            showMessage({ title: "Connection error. Is the server running?" });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleRecover = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (busy) return;
+        const formData = new FormData(e.currentTarget);
+        const accountId = String(formData.get("account_id") ?? "").trim();
+        const phrase = String(formData.get("mnemonic") ?? "").trim();
+        if (!accountId) {
+            showMessage({ title: "Please enter an account ID." });
+            return;
+        }
+        if (!phrase) {
+            showMessage({ title: "Please enter your recovery mnemonic." });
+            return;
+        }
+        setBusy(true);
+        try {
+            const recovered = await nostrIdentity.recoverIdentity(accountId, phrase);
+            if (recovered) {
+                showToast({ content: "Identity recovered" });
+                onContinue();
+            } else {
+                showMessage({
+                    title: "Recovery failed. Check your mnemonic and try again.",
+                });
+            }
+        } catch {
+            showMessage({ title: "Connection error. Is the server running?" });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const copyMnemonic = async () => {
+        if (!mnemonic) return;
+        try {
+            await navigator.clipboard.writeText(mnemonic);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            /* clipboard unavailable — select-to-copy still works */
+        }
+    };
+
+    if (mode === "mnemonic") {
+        return (
+            <div className="flex flex-col gap-5">
+                <div className="text-center">
+                    <h3 className="text-base font-semibold text-notion-text mb-2">
+                        Your Nostr Identity
+                    </h3>
+                    <p className="text-xs text-notion-text-secondary mb-1">Public ID</p>
+                    <code className="block p-2 bg-notion-surface-sunken rounded text-xs break-all font-mono text-notion-text">
+                        {publicId}
+                    </code>
+                </div>
+
+                <div className="text-center">
+                    <h4 className="text-sm font-medium text-notion-text mb-2">
+                        Recovery Mnemonic
+                    </h4>
+                    {mnemonicError ? (
+                        <p className="text-xs text-notion-danger">{mnemonicError}</p>
+                    ) : mnemonic ? (
+                        <>
+                            <div className="p-2.5 mb-2 border border-dashed border-notion-border rounded bg-notion-surface-sunken">
+                                <code className="text-sm break-words font-mono text-notion-text select-all">
+                                    {mnemonic}
+                                </code>
+                            </div>
+                            <button type="button" className="btn btn-outline" onClick={() => void copyMnemonic()}>
+                                {copied ? "Copied!" : "Copy to clipboard"}
+                            </button>
+                        </>
+                    ) : (
+                        <p className="text-xs text-notion-text-secondary">Loading mnemonic…</p>
+                    )}
+                </div>
+
+                <div className="p-2.5 border border-notion-border rounded bg-notion-surface-sunken text-xs text-notion-text-secondary text-center">
+                    <strong className="text-notion-text">Write this down!</strong>{" "}
+                    This is the only way to recover your identity. If you lose it,
+                    your identity cannot be restored.
+                </div>
+
+                <div className="landing-body-footer">
+                    <button type="button" className="btn btn-cta" onClick={onContinue}>
+                        I have saved my mnemonic
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (mode === "recover") {
+        return (
+            <form className="form" onSubmit={handleRecover}>
+                <div className="form-group form-group-vertical">
+                    <label className="label" htmlFor="recovery_account_id">Account ID</label>
+                    <input
+                        className="input"
+                        type="text"
+                        name="account_id"
+                        id="recovery_account_id"
+                        placeholder="e.g. alice@example.com"
+                        defaultValue={defaultAccountId}
+                        autoComplete="off"
+                        autoFocus
+                        required
+                    />
+                </div>
+                <div className="form-group form-group-vertical">
+                    <label className="label" htmlFor="mnemonic">Recovery Mnemonic</label>
+                    <input
+                        className="input"
+                        type="text"
+                        name="mnemonic"
+                        id="mnemonic"
+                        placeholder="Enter your 12-word recovery phrase"
+                        autoComplete="off"
+                        required
+                    />
+                    <span className="text-xs text-notion-text-secondary">
+                        Enter the mnemonic you saved when generating your identity.
+                    </span>
+                </div>
+                <div className="landing-body-footer">
+                    <button type="submit" className="btn btn-cta" disabled={busy}>
+                        {busy ? "Recovering…" : "Recover Identity"}
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-inline"
+                        onClick={() => setMode("generate")}
+                    >
+                        Back to generate
+                    </button>
+                </div>
+            </form>
+        );
+    }
+
+    return (
+        <form className="form" onSubmit={handleGenerate}>
+            <div className="form-group form-group-vertical">
+                <label className="label" htmlFor="identity_account_id">Account ID</label>
+                <input
+                    className="input"
+                    type="text"
+                    name="account_id"
+                    id="identity_account_id"
+                    placeholder="e.g. alice@example.com"
+                    defaultValue={defaultAccountId}
+                    autoComplete="off"
+                    autoFocus
+                    required
+                />
+                <span className="text-xs text-notion-text-secondary">
+                    Your Nostr identity will be tied to this account.
+                </span>
+            </div>
+            <div className="landing-body-footer">
+                <button type="submit" className="btn btn-cta" disabled={busy}>
+                    {busy ? "Generating…" : "Generate Identity"}
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-inline"
+                    onClick={() => setMode("recover")}
+                >
+                    Recover from mnemonic
+                </button>
+                <button type="button" className="btn btn-inline" onClick={onContinue}>
+                    Skip for now
+                </button>
+            </div>
+        </form>
+    );
+}
+
 
 function AccountsSection() {
     const accounts = useSharedStore((s) => s.accounts);
@@ -385,7 +614,10 @@ export default function LandingFlow() {
         <Landing>
             {section === "setup" && <SetupServer onContinue={() => setSection("welcome")} />}
             {section === "welcome" && (
-                <Welcome onContinue={() => setSection("accounts")} />
+                <Welcome onContinue={() => setSection("identity")} />
+            )}
+            {section === "identity" && (
+                <IdentitySection onContinue={() => setSection("accounts")} />
             )}
             {section === "accounts" && <AccountsSection />}
         </Landing>

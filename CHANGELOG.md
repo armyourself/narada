@@ -34,6 +34,13 @@ Convention: [Semantic Versioning](https://semver.org/) via `bumpversion`.
   - `GET /nostr/relays` now also reports configured-but-not-yet-connected relays and includes `last_connected_at` / `reconnect_count`, so the UI list always matches config.
   - Settings → Nostr → Relays: "Add relay" input (Enter or Add button) and a per-relay remove (×) control, with refresh wired to the live status.
   - Tests: `tests/nostr/test_relay_management.py` (URL validation matrix, handler persistence round-trip incl. duplicate/unknown/last-relay guards, status merge, adapter pool add/remove without network) — Nostr suite +23.
+- **Identity lifecycle (generate → mnemonic → recover, real delete)**:
+  - New `DELETE /nostr/identity/{account}`: disconnects and drops the live adapter **and** removes the persisted `nostr_identity.<account>.json` key file. Previously the client only cleared `localStorage`, so the daemon kept the secret and the identity resurrected on every backend restart; delete now reports failure instead of silently "succeeding" when the server refuses.
+  - `NostrHandler.delete_identity()` (disconnect errors are logged but don't block the file removal) + `_identity_dir()` extracted so store/delete/load share one path.
+  - Fixed stored-identity filename parsing: account ids containing dots (`user.name@example.com`) used to reload under a truncated key (`name@example.com`) because the file name was `split(".", 2)`; parsing now strips the `nostr_identity.` prefix / `.json` suffix.
+  - Onboarding (landing flow): new **identity** step between Welcome and Accounts — generate (account id → server-side Ed25519 keypair) → one-shot mnemonic reveal with copy + "write this down" warning → "I have saved my mnemonic", plus a recover-from-mnemonic form (server re-derives via `POST /nostr/register-identity`) and a "Skip for now" escape hatch.
+  - `NostrIdentityService.deleteIdentity` now calls the server first and sweeps stale one-shot mnemonic tokens from `localStorage`.
+  - Tests: `tests/nostr/test_identity_lifecycle.py` (persist/adapter teardown/disconnect-error tolerance/no-resurrect reload, dotted-account round-trip, endpoint success/missing) — Nostr suite +11.
 
 ### Changed
 

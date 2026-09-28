@@ -182,7 +182,33 @@ export class NostrIdentityService {
     }
 
     static async deleteIdentity(accountId: string): Promise<boolean> {
+        // Server-side delete first: dropping only localStorage left the
+        // persisted key on the daemon, so the identity resurrected on the
+        // next backend restart.
+        try {
+            const res = await fetch(
+                `${SharedStore.server}/nostr/identity/${encodeURIComponent(accountId)}`,
+                { method: "DELETE" },
+            );
+            const json = await res.json();
+            if (json && json.success === false && json.message) {
+                console.error("Server identity delete failed:", json.message);
+                return false;
+            }
+        } catch (err) {
+            console.error("Server identity delete errored:", err);
+            return false;
+        }
+
         localStorage.removeItem(storeKey(accountId));
+        // Drop any unredeemed one-shot mnemonic tokens for this account.
+        const stalePrefix = storeKey(accountId) + "_mnemonic_";
+        const staleKeys: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(stalePrefix)) staleKeys.push(key);
+        }
+        staleKeys.forEach((key) => localStorage.removeItem(key));
         return true;
     }
 }

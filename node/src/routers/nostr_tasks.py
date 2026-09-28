@@ -136,6 +136,18 @@ async def get_identity(account: str) -> Response:
     )
 
 
+@router.delete("/nostr/identity/{account}")
+async def delete_identity(account: str) -> Response:
+    """Delete the Nostr identity for *account*.
+
+    Removes the persisted key file as well as the live adapter — the
+    client-side-only delete used to leave the server copy behind, so the
+    identity resurrected on the next backend restart.
+    """
+    ok, msg = nostr_handler.delete_identity(account)
+    return Response(success=ok, message=msg)
+
+
 @router.get("/nostr/status/{account}")
 async def nostr_status(account: str) -> Response:
     """Connection status for a Nostr account."""

@@ -253,6 +253,36 @@ class NostrHandler:
         )
         return adapter
 
+    def delete_identity(self, account_id: str) -> tuple[bool, str]:
+        """Delete a stored Nostr identity for *account_id*.
+
+        Disconnects and drops the live adapter **and** removes the
+        persisted ``nostr_identity.<account>.json`` file — without the
+        file removal the identity resurrects on the next boot when
+        ``load_stored_identities`` rescans the etc directory.
+        """
+        adapter = self._adapters.pop(account_id, None)
+        if adapter is not None:
+            try:
+                adapter.disconnect()
+            except Exception as exc:
+                uvicorn_logger.error(
+                    f"Failed to disconnect Nostr adapter for {account_id}: {exc}"
+                )
+
+        path = self._identity_path(account_id)
+        existed = path.exists()
+        if existed:
+            try:
+                path.unlink()
+            except OSError as exc:
+                return False, f"Failed to delete identity file: {exc}"
+
+        if adapter is None and not existed:
+            return False, f"No Nostr identity for {account_id}"
+        uvicorn_logger.info(f"Deleted Nostr identity for {account_id}")
+        return True, f"Identity deleted for {account_id}"
+
     def load_stored_identities(
         self, config: Optional[NostrConfig] = None
     ) -> dict[str, NostrAdapter]:
@@ -263,21 +293,20 @@ class NostrHandler:
 
         Returns a dict of account_id -> adapter.
         """
-        from src.consts import APP_NAME
-        data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
-        etc_dir = data_dir / "etc"
+        etc_dir = self._identity_dir()
 
         if not etc_dir.exists():
             return {}
 
         loaded: dict[str, NostrAdapter] = {}
-        for path in etc_dir.glob("nostr_identity.*.json"):
+        prefix, suffix = "nostr_identity.", ".json"
+        for path in etc_dir.glob(f"{prefix}*{suffix}"):
             # Extract account_id from filename: nostr_identity.<account_id>.json
-            stem = path.stem  # nostr_identity.<account_id>
-            parts = stem.split(".", 2)
-            if len(parts) < 3:
+            # (splitting on "." broke accounts whose address itself contains
+            # dots — e.g. "user.name@example.com" reloaded as "name@example")
+            account_id = path.name[len(prefix):-len(suffix)]
+            if not account_id:
                 continue
-            account_id = parts[2]
 
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
@@ -299,13 +328,16 @@ class NostrHandler:
 
         return loaded
 
-    def _identity_path(self, account_id: str) -> Path:
+    def _identity_dir(self) -> Path:
         from src.consts import APP_NAME
+        data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
+        return data_dir / "etc"
+
+    def _identity_path(self, account_id: str) -> Path:
         safe = "".join(
             c if c.isalnum() or c in "._@+-" else "_" for c in account_id
         ) or "unknown"
-        data_dir = Path(os.path.expanduser("~")) / f".{APP_NAME.lower()}"
-        return data_dir / "etc" / f"nostr_identity.{safe}.json"
+        return self._identity_dir() / f"nostr_identity.{safe}.json"
 
 
 __all__ = ["NostrHandler"]
