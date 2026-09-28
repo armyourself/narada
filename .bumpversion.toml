@@ -43,12 +43,12 @@ search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "gateway/pyproject.toml"
-search = 'version = "{current_version}"'
-replace = 'version = "{new_version}"'
+filename = "client/package.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "client/package.json"
+filename = "client-next/package.json"
 search = '"version": "{current_version}"'
 replace = '"version": "{new_version}"'
 
@@ -60,6 +60,17 @@ replace = '"version": "{new_version}"'
 
 [[tool.bumpversion.files]]
 filename = "client/src-tauri/Cargo.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "client-next/src-tauri/tauri.conf.json"
+serialize = ["{major}.{minor}.{patch}"]
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "client-next/src-tauri/Cargo.toml"
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
 

@@ -68,6 +68,9 @@ Version bumps via `bumpversion` (`.bumpversion.toml`). Updates files:
 - `client/package.json`
 - `client/src-tauri/tauri.conf.json`
 - `client/src-tauri/Cargo.toml`
+- `client-next/package.json`
+- `client-next/src-tauri/tauri.conf.json`
+- `client-next/src-tauri/Cargo.toml`
 - Documentation files
 
 ## Conventions

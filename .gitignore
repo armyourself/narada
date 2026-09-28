@@ -6,7 +6,7 @@
 .vscode/
 .idea/
 
-# Python (applies to node/ and gateway/)
+# Python (applies to node/)
 **/__pycache__/
 **/.venv/
 **/.pytest_cache/
@@ -15,11 +15,13 @@
 **/*.egg-info/
 **/*.egg
 
-# Node / Bun / Tauri (applies to client/)
+# Node / Bun / Tauri (applies to client/ and client-next/)
 **/node_modules/
 **/build/
 **/dist/
 **/.svelte-kit/
+**/.next/
+**/out/
 **/package/
 src-tauri/target/
 **/src-tauri/target/
@@ -33,4 +35,3 @@ vite.config.ts.timestamp-*
 
 # uv
 node/.venv/
-gateway/.venv/
