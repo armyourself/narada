@@ -240,7 +240,7 @@ export default function Sidebar() {
         mainNav.view === "inbox" && mainNav.folder === item.folder;
 
     const navButtonClass = (item: NavItem, baseActive: boolean) =>
-        `w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm transition-colors ${
+        `w-full flex items-center justify-between h-[30px] gap-2 pl-2 pr-[9px] rounded-md text-sm transition-colors ${
             baseActive
                 ? "bg-notion-active font-medium text-notion-text"
                 : "text-notion-text-secondary hover:bg-notion-hover"
@@ -250,31 +250,36 @@ export default function Sidebar() {
         <aside className="relative w-[234px] flex-shrink-0 bg-notion-sidebar border-r border-[#ffffff0e] flex flex-col justify-between h-full z-20">
             <div>
                 {/* Profile Switcher */}
-                <div className="p-3 pb-1">
-                    <div className="flex items-center justify-between group">
+                <div className="pt-1.5 px-2 pb-1">
+                    <div className="flex items-center justify-between group h-[39px] pl-2.5 pr-0.5 rounded-md">
                         <button
-                            className="flex items-center space-x-2 hover:bg-notion-hover p-1.5 rounded-md transition-colors text-left flex-1 min-w-0 mr-1"
+                            className="flex items-center gap-2 hover:bg-notion-hover p-0.5 rounded-md transition-colors text-left flex-1 min-w-0 mr-1"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setShowProfileMenu(!showProfileMenu);
                             }}
                         >
-                            <div className="w-6 h-6 rounded-full bg-notion-accent-tint text-notion-accent flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                            <div className="w-5 h-5 rounded-full bg-notion-accent-tint text-notion-accent flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
                                 {accountInitial}
                             </div>
-                            <span className="font-medium text-sm text-notion-text truncate">{accountName}</span>
-                            <svg className="w-3.5 h-3.5 text-notion-text-muted flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                            <span className="flex flex-col min-w-0 leading-none">
+                                <span className="font-medium text-sm leading-5 text-notion-text truncate">{accountName}</span>
+                                {accountEmail && (
+                                    <span className="text-[10px] leading-[13px] text-notion-text-secondary truncate">{accountEmail}</span>
+                                )}
+                            </span>
+                            <svg className="w-[15px] h-[15px] text-[#ffffff71] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                         </button>
 
                         <button
-                            className="p-1.5 text-notion-text-secondary hover:bg-notion-hover rounded-md transition-colors"
+                            className="w-7 h-7 flex items-center justify-center text-[#ffffffcf] hover:bg-notion-hover rounded transition-colors"
                             title="Compose new message (N)"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 openCompose();
                             }}
                         >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                            <svg className="w-[22px] h-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                         </button>
                     </div>
 
@@ -314,14 +319,14 @@ export default function Sidebar() {
                 {/* Search (mockup F14: palette popover under the row) */}
                 <div className="px-2 pt-2 pb-1">
                     <button
-                        className={`w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
+                        className={`w-full flex items-center gap-2 h-[30px] pl-2 pr-[9px] rounded-md text-sm transition-colors ${
                             mainNav.searchQuery
                                 ? "bg-notion-active font-medium text-notion-text"
                                 : "text-notion-text-secondary hover:bg-notion-hover"
                         }`}
                         onClick={() => setSearchOpen(true)}
                     >
-                        <NavIcon name="search" className="w-4 h-4 text-notion-text-muted" />
+                        <NavIcon name="search" className="w-5 h-5 text-notion-text-muted" />
                         <span>Search</span>
                     </button>
                     {searchOpen && (
@@ -330,18 +335,18 @@ export default function Sidebar() {
                                 className="fixed inset-0 z-40"
                                 onClick={() => setSearchOpen(false)}
                             />
-                            <div className="absolute left-2 top-[94px] w-[450px] max-w-[calc(100vw-16px)] bg-notion-surface border border-notion-border rounded-xl shadow-notion-popover overflow-hidden z-50">
-                                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-notion-border">
+                            <div className="absolute left-2 top-[94px] w-[450px] max-w-[calc(100vw-16px)] bg-notion-surface rounded-xl shadow-notion-float overflow-hidden z-50">
+                                <div className="flex items-center h-10 pl-3 pr-2 gap-[5px] border-b-[0.71px] border-notion-border">
                                     <NavIcon
                                         name="search"
-                                        className="w-4 h-4 text-notion-text-muted shrink-0"
+                                        className="w-[22px] h-[22px] text-notion-text-muted shrink-0"
                                     />
                                     <input
                                         autoFocus
                                         type="search"
                                         placeholder="Search mail"
                                         value={mainNav.searchQuery}
-                                        className="w-full bg-transparent text-sm text-notion-text placeholder:text-notion-text-muted focus:outline-none"
+                                        className="w-full bg-transparent text-sm leading-5 font-medium text-notion-text placeholder:text-notion-text-muted placeholder:font-medium focus:outline-none"
                                         onChange={(e) => mainNav.setSearchQuery(e.target.value)}
                                         onKeyDown={(e) => {
                                             if (e.key === "Escape") {
@@ -353,16 +358,18 @@ export default function Sidebar() {
                                 </div>
                                 <div className="max-h-80 overflow-y-auto py-1">
                                     {paletteResults.length === 0 ? (
-                                        <div className="px-3 py-3 text-xs text-notion-text-muted">
+                                        <div className="px-3 pt-[14px] pb-[7px] text-xs font-medium text-notion-text-secondary">
                                             {paletteQuery
                                                 ? "No messages match your search."
                                                 : "Start typing to search this folder."}
                                         </div>
                                     ) : (
-                                        paletteResults.map((email) => (
+                                        paletteResults.map((email, index) => (
                                             <button
                                                 key={`${email.uid}|${email.message_id}`}
-                                                className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-notion-hover"
+                                                className={`w-full text-left h-10 pl-2 pr-1.5 gap-2 rounded-lg flex items-center hover:bg-notion-hover ${
+                                                    index === 0 ? "bg-notion-active" : ""
+                                                }`}
                                                 onClick={() => {
                                                     openEmailInPane(email);
                                                     mainNav.setSearchQuery("");
@@ -378,18 +385,18 @@ export default function Sidebar() {
                                                 />
                                                 <span className="min-w-0 flex-1 flex flex-col">
                                                     <span className="flex items-baseline gap-2 min-w-0">
-                                                        <span className="text-sm font-semibold text-notion-text truncate">
+                                                        <span className="text-sm leading-5 font-semibold text-notion-text truncate">
                                                             {getSenderName(email)}
                                                         </span>
-                                                        <span className="text-sm text-notion-text truncate">
+                                                        <span className="text-sm leading-5 text-notion-text truncate">
                                                             {getSubject(email)}
                                                         </span>
                                                     </span>
-                                                    <span className="text-xs text-notion-text-muted truncate">
+                                                    <span className="text-sm leading-5 text-notion-text-muted truncate">
                                                         {getSnippet(email)}
                                                     </span>
                                                 </span>
-                                                <span className="text-xs text-notion-text-muted shrink-0">
+                                                <span className="text-sm text-notion-text-muted shrink-0">
                                                     {formatListTime(email.date)}
                                                 </span>
                                             </button>
@@ -403,23 +410,23 @@ export default function Sidebar() {
 
                 {/* Views Navigation */}
                 <div className="px-2 pt-3 pb-1">
-                    <div className="px-2 py-1 text-xs font-normal text-notion-text-muted">Views</div>
-                    <nav className="space-y-0.5 mt-0.5">
+                    <div className="h-[30px] flex items-center pl-2 rounded-md text-xs leading-4 font-semibold text-notion-text-muted">Views</div>
+                    <nav className="space-y-1.5 mt-0.5">
                         {views.map((item) => (
                             <button
                                 key={item.id}
                                 className={navButtonClass(item, isActive(item))}
                                 onClick={() => selectView(item)}
                             >
-                                <div className="flex items-center space-x-2.5 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
                                     <NavIcon
                                         name={item.icon}
-                                        className={`w-4 h-4 ${isActive(item) ? "text-notion-text" : "text-notion-text-muted"}`}
+                                        className={`w-5 h-5 ${isActive(item) ? "text-notion-text" : "text-notion-text-muted"}`}
                                     />
                                     <span className="truncate">{item.label}</span>
                                 </div>
                                 {item.id === "inbox" && unreadCount > 0 && (
-                                    <span className="text-xs text-notion-text-muted font-normal">{unreadCount}</span>
+                                    <span className="h-4 px-[3px] rounded-[3px] text-xs leading-4 text-notion-text-secondary font-medium">{unreadCount}</span>
                                 )}
                             </button>
                         ))}
@@ -428,18 +435,18 @@ export default function Sidebar() {
 
                 {/* Mail Section */}
                 <div className="px-2 pt-3 pb-1">
-                    <div className="px-2 py-1 text-xs font-normal text-notion-text-muted">Mail</div>
-                    <nav className="space-y-0.5 mt-0.5">
+                    <div className="h-[30px] flex items-center pl-2 rounded-md text-xs leading-4 font-semibold text-notion-text-muted">Mail</div>
+                    <nav className="space-y-1.5 mt-0.5">
                         {mailFolders.map((item) => (
                             <button
                                 key={item.id}
                                 className={navButtonClass(item, isActive(item))}
                                 onClick={() => selectView(item)}
                             >
-                                <div className="flex items-center space-x-2.5 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
                                     <NavIcon
                                         name={item.icon}
-                                        className={`w-4 h-4 ${isActive(item) ? "text-notion-text" : "text-notion-text-muted"}`}
+                                        className={`w-5 h-5 ${isActive(item) ? "text-notion-text" : "text-notion-text-muted"}`}
                                     />
                                     <span className="truncate">{item.label}</span>
                                 </div>
@@ -450,7 +457,7 @@ export default function Sidebar() {
             </div>
 
             {/* Sidebar Footer */}
-            <div className="p-3 border-t border-notion-border flex items-center justify-between text-notion-text-muted">
+            <div className="px-4 py-2.5 border-t-[0.71px] border-notion-border flex items-center justify-between text-notion-text-muted">
                 <div className="flex items-center space-x-1.5">
                     <div className="text-[10px] font-semibold text-notion-text-secondary">
                         {relaysConnected ? (

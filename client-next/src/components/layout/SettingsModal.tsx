@@ -85,9 +85,9 @@ function readNotificationPreference(): boolean {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <section className="mb-6">
+        <section>
             <h3 className="text-sm font-semibold text-notion-text mb-1">{title}</h3>
-            <div className="border border-notion-border rounded-lg bg-notion-surface divide-y divide-notion-border">
+            <div className="flex flex-col">
                 {children}
             </div>
         </section>
@@ -104,10 +104,10 @@ function Row({
     children: React.ReactNode;
 }) {
     return (
-        <div className="flex items-center justify-between gap-4 px-4 py-3">
+        <div className="flex items-center justify-between gap-8 py-2">
             <div className="min-w-0">
-                <div className="text-sm text-notion-text">{label}</div>
-                {desc && <div className="text-xs text-notion-text-muted mt-0.5">{desc}</div>}
+                <div className="text-sm leading-5 font-medium text-notion-text">{label}</div>
+                {desc && <div className="text-xs leading-4 text-notion-text-secondary mt-0.5">{desc}</div>}
             </div>
             <div className="shrink-0">{children}</div>
         </div>
@@ -130,15 +130,11 @@ function Toggle({
             aria-checked={checked}
             disabled={disabled}
             onClick={() => onChange(!checked)}
-            className={`w-9 h-5 rounded-full transition-colors relative ${
-                checked ? "bg-notion-accent" : "bg-white/15"
+            className={`w-[38px] h-[22px] p-[3px] rounded-full transition-colors flex items-center ${
+                checked ? "bg-notion-accent justify-end" : "bg-notion-active justify-start"
             } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
         >
-            <span
-                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${
-                    checked ? "left-[18px]" : "left-0.5"
-                }`}
-            />
+            <span className="w-4 h-4 rounded-full bg-white shadow transition-all" />
         </button>
     );
 }
@@ -159,10 +155,10 @@ function SettingsButton({
             type="button"
             disabled={disabled}
             onClick={onClick}
-            className={`px-3 py-1.5 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
+            className={`h-8 px-3 rounded-md text-sm font-medium transition-colors disabled:opacity-50 flex items-center ${
                 danger
-                    ? "border-notion-danger text-notion-danger hover:bg-notion-danger/10"
-                    : "border-notion-border text-notion-text-secondary hover:bg-notion-hover"
+                    ? "text-notion-danger hover:bg-notion-danger/10"
+                    : "text-notion-text-secondary hover:bg-notion-hover"
             }`}
         >
             {children}
@@ -325,29 +321,18 @@ export default function SettingsModal() {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/55" onClick={closeSettings} aria-hidden />
-            <div className="relative w-[760px] max-w-[calc(100vw-48px)] h-[560px] max-h-[calc(100vh-48px)] bg-notion-canvas border border-notion-border rounded-xl overflow-hidden shadow-[0_12px_30px_rgba(0,0,0,0.4)] flex">
+            <div className="relative w-[1040px] max-w-[calc(100vw-48px)] h-[575px] max-h-[calc(100vh-48px)] bg-notion-surface rounded-xl overflow-hidden flex">
                 {/* Left nav (mockup F3: w-248 dark rail) */}
-                <nav className="w-[248px] shrink-0 bg-notion-sidebar border-r border-notion-border flex flex-col p-3">
-                    <div className="flex items-center justify-between px-2 py-2 mb-1">
-                        <span className="text-sm font-semibold text-notion-text">Settings</span>
-                        <button
-                            type="button"
-                            aria-label="Close settings"
-                            className="w-6 h-6 rounded flex items-center justify-center text-notion-text-muted hover:bg-notion-hover hover:text-notion-text"
-                            onClick={closeSettings}
-                        >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M18 6 6 18" />
-                                <path d="m6 6 12 12" />
-                            </svg>
-                        </button>
+                <nav className="w-[248px] shrink-0 bg-notion-sidebar flex flex-col p-3">
+                    <div className="h-6 pl-3 flex items-center text-xs leading-4 font-semibold text-notion-text-secondary mb-1">
+                        Account
                     </div>
-                    <div className="space-y-0.5">
+                    <div className="space-y-1.5">
                         {TABS.map((item) => (
                             <button
                                 key={item.id}
                                 type="button"
-                                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
+                                className={`w-full flex items-center gap-2 h-7 pl-2.5 rounded-[4px] text-sm transition-colors ${
                                     tab === item.id
                                         ? "bg-notion-active font-medium text-notion-text"
                                         : "text-notion-text-secondary hover:bg-notion-hover"
@@ -355,7 +340,7 @@ export default function SettingsModal() {
                                 onClick={() => setTab(item.id)}
                             >
                                 <svg
-                                    className={`w-4 h-4 ${tab === item.id ? "text-notion-text" : "text-notion-text-muted"}`}
+                                    className={`w-5 h-5 ${tab === item.id ? "text-notion-text" : "text-notion-text-muted"}`}
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     stroke="currentColor"
@@ -372,7 +357,25 @@ export default function SettingsModal() {
                 </nav>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto px-6 py-5">
+                <div className="flex-1 overflow-y-auto px-12 py-[34px]">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-[17px]/[22px] font-semibold text-notion-text">
+                            {TABS.find((item) => item.id === tab)?.label}
+                        </h2>
+                        <button
+                            type="button"
+                            aria-label="Close settings"
+                            className="w-6 h-6 rounded flex items-center justify-center text-notion-text-muted hover:bg-notion-hover hover:text-notion-text"
+                            onClick={closeSettings}
+                        >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M18 6 6 18" />
+                                <path d="m6 6 12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="h-px bg-[#ffffff21] mb-4" />
+                    <div className="flex flex-col gap-4">
                     {tab === "inbox" && (
                         <>
                             <Section title="Appearance">
@@ -517,7 +520,7 @@ export default function SettingsModal() {
                                 {(relays ?? []).map((relay) => (
                                     <div
                                         key={relay.url}
-                                        className="flex items-center gap-2.5 px-4 py-2.5"
+                                        className="flex items-center gap-2.5 py-2"
                                     >
                                         <span
                                             className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -536,7 +539,7 @@ export default function SettingsModal() {
                                     </div>
                                 ))}
                                 {relays !== null && relays.length === 0 && (
-                                    <div className="px-4 py-3 text-xs text-notion-text-muted">
+                                    <div className="py-3 text-xs text-notion-text-muted">
                                         No relays reported — register a Nostr identity first.
                                     </div>
                                 )}
@@ -556,7 +559,7 @@ export default function SettingsModal() {
 
                     {tab === "signature" && (
                         <Section title="Signature">
-                            <div className="p-4">
+                            <div>
                                 <div className="text-sm text-notion-text mb-1">
                                     Default signature
                                 </div>
@@ -576,6 +579,7 @@ export default function SettingsModal() {
                             </div>
                         </Section>
                     )}
+                    </div>
                 </div>
             </div>
         </div>

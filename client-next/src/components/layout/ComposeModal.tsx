@@ -40,6 +40,9 @@ export default function ComposeModal({
     const [recipient, setRecipient] = useState(to);
     const [subjectValue, setSubjectValue] = useState(subject);
     const [bodyValue, setBodyValue] = useState(body);
+    const [showCcBcc, setShowCcBcc] = useState(false);
+    const [ccValue, setCcValue] = useState("");
+    const [bccValue, setBccValue] = useState("");
     const [isSending, setIsSending] = useState(false);
     const [transport, setTransport] = useState<SendTransport>("auto");
     const [sendMenuOpen, setSendMenuOpen] = useState(false);
@@ -108,6 +111,8 @@ export default function ComposeModal({
             formData.set("subject", subjectValue.trim());
             formData.set("body", bodyValue.trim());
             formData.set("transport", transport);
+            if (ccValue.trim()) formData.set("cc", ccValue.trim());
+            if (bccValue.trim()) formData.set("bcc", bccValue.trim());
             const response = await MailboxController.sendEmail(formData);
             if (response.success) {
                 showToast({
@@ -141,12 +146,23 @@ export default function ComposeModal({
                 className="bg-notion-surface w-full max-w-[600px] rounded-xl shadow-notion-popover border border-notion-border overflow-hidden flex flex-col"
                 onClick={(event) => event.stopPropagation()}
             >
-                {/* Header */}
-                <div className="px-4 py-3 border-b border-notion-border flex items-center justify-between bg-notion-surface-sunken">
-                    <span className="text-sm font-semibold text-notion-text">New Message</span>
+                {/* Header (mockup F24: sender identity, no title) */}
+                <div className="px-2 pt-2 pb-0 flex items-center justify-between gap-2">
+                    <div className="flex items-baseline gap-1.5 min-w-0 text-sm font-normal">
+                        <span className="text-notion-text truncate">
+                            {currentAccount?.fullname || "New message"}
+                        </span>
+                        {currentAccount?.email_address &&
+                            currentAccount.email_address !== currentAccount.fullname && (
+                                <span className="text-notion-text-secondary truncate">
+                                    {currentAccount.email_address}
+                                </span>
+                            )}
+                    </div>
                     <button
                         type="button"
-                        className="text-notion-text-muted hover:text-notion-text"
+                        aria-label="Close compose"
+                        className="w-6 h-6 rounded flex items-center justify-center text-notion-text-muted hover:text-notion-text hover:bg-notion-hover transition-colors shrink-0"
                         onClick={closeCompose}
                     >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -156,58 +172,90 @@ export default function ComposeModal({
                     </button>
                 </div>
 
-                {/* Form */}
-                <div className="p-4 space-y-3">
-                    <div className="flex items-center border-b border-notion-border pb-2">
-                        <span className="text-xs text-notion-text-muted w-16">To:</span>
+                {/* Form (mockup F24: borderless chip cells) */}
+                <div className="px-2 pt-2 flex flex-col gap-1">
+                    <div className="flex items-center gap-2 p-[3px] rounded">
                         <input
                             type="text"
                             value={recipient}
-                            placeholder="Recipient email or npub"
-                            className="w-full text-sm bg-transparent focus:outline-none text-notion-text placeholder:text-notion-text-muted"
+                            placeholder="Add recipient"
+                            className="h-[26px] flex-1 min-w-0 px-1 bg-transparent text-sm leading-5 focus:outline-none text-notion-text placeholder:text-notion-text-muted"
                             onChange={(event) => setRecipient(event.target.value)}
                         />
+                        <button
+                            type="button"
+                            className="h-6 px-2 rounded-md text-sm leading-5 text-notion-text-secondary hover:bg-notion-hover transition-colors shrink-0"
+                            onClick={() => setShowCcBcc((value) => !value)}
+                        >
+                            {showCcBcc ? "Hide Cc / Bcc" : "Cc / Bcc"}
+                        </button>
                     </div>
-                    <div className="flex items-center border-b border-notion-border pb-2">
-                        <span className="text-xs text-notion-text-muted w-16">Subject:</span>
+                    {showCcBcc && (
+                        <>
+                            <div className="flex items-center p-[3px] rounded">
+                                <input
+                                    type="text"
+                                    value={ccValue}
+                                    placeholder="Cc"
+                                    className="h-[26px] w-full px-1 bg-transparent text-sm leading-5 focus:outline-none text-notion-text placeholder:text-notion-text-muted"
+                                    onChange={(event) => setCcValue(event.target.value)}
+                                />
+                            </div>
+                            <div className="flex items-center p-[3px] rounded">
+                                <input
+                                    type="text"
+                                    value={bccValue}
+                                    placeholder="Bcc"
+                                    className="h-[26px] w-full px-1 bg-transparent text-sm leading-5 focus:outline-none text-notion-text placeholder:text-notion-text-muted"
+                                    onChange={(event) => setBccValue(event.target.value)}
+                                />
+                            </div>
+                        </>
+                    )}
+                    <div className="flex items-center p-[3px] rounded">
                         <input
                             type="text"
                             value={subjectValue}
-                            placeholder="Email subject"
-                            className="w-full text-sm bg-transparent focus:outline-none text-notion-text placeholder:text-notion-text-muted"
+                            placeholder="Add a subject"
+                            className="h-8 w-full px-1.5 bg-transparent text-sm leading-5 focus:outline-none text-notion-text placeholder:text-notion-text-muted"
                             onChange={(event) => setSubjectValue(event.target.value)}
                         />
                     </div>
                     <textarea
                         value={bodyValue}
                         placeholder="Write your email here..."
-                        className="w-full h-48 bg-transparent text-sm focus:outline-none resize-none pt-2 text-notion-text placeholder:text-notion-text-muted"
+                        className="w-full h-[318px] border-t-[0.71px] border-notion-border bg-transparent text-sm leading-5 px-3.5 py-3 resize-none focus:outline-none text-notion-text placeholder:text-notion-text-muted"
                         onChange={(event) => setBodyValue(event.target.value)}
                     />
                 </div>
 
-                {/* Footer */}
-                <div className="px-4 py-3 border-t border-notion-border bg-notion-surface-sunken flex items-center justify-between">
+                {/* Footer (mockup F24) */}
+                <div className="px-4 py-4 bg-notion-surface rounded-b-xl flex items-center justify-between">
                     <div></div>
                     <div className="flex items-center space-x-2 relative">
                         <button
                             type="button"
-                            className="px-3 py-1.5 text-xs text-notion-text-secondary hover:bg-notion-hover rounded transition-colors"
+                            className="flex items-center gap-1.5 h-7 px-2 rounded-md text-sm leading-5 text-notion-text hover:bg-notion-hover transition-colors"
                             onClick={discard}
                         >
+                            <svg className="w-3 h-3 text-[#ffffffcf]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
                             Discard
                         </button>
                         {/* Split Send: main button sends with the chosen
                             transport, caret opens the transport menu. */}
-                        <div className="flex items-stretch rounded overflow-hidden">
+                        <div className="flex items-stretch">
                             <button
                                 type="button"
-                                className="px-4 py-1.5 bg-notion-accent hover:opacity-90 text-white text-xs font-medium transition-opacity flex items-center space-x-1 disabled:opacity-50"
+                                className="h-7 pl-3 pr-3 rounded-l-md bg-notion-accent hover:opacity-90 text-white text-sm leading-5 font-medium transition-opacity flex items-center gap-1.5 border-r-[0.71px] border-[#2383e259] disabled:opacity-50"
                                 onClick={() => void sendEmail()}
                                 disabled={isSending}
                             >
                                 <span>{isSending ? "Sending..." : "Send"}</span>
-                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <line x1="22" y1="2" x2="11" y2="13" />
                                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                                 </svg>
@@ -217,11 +265,11 @@ export default function ComposeModal({
                                 aria-label="Choose send transport"
                                 aria-haspopup="menu"
                                 aria-expanded={sendMenuOpen}
-                                className="px-1.5 bg-notion-accent hover:opacity-90 text-white border-l border-white/30 disabled:opacity-50 flex items-center"
+                                className="h-7 w-6 rounded-r-md bg-notion-accent hover:opacity-90 text-white disabled:opacity-50 flex items-center justify-center"
                                 onClick={() => setSendMenuOpen((open) => !open)}
                                 disabled={isSending}
                             >
-                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="m6 9 6 6 6-6" />
                                 </svg>
                             </button>

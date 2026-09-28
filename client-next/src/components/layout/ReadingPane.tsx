@@ -245,7 +245,6 @@ export default function ReadingPane({ email, account, folder, onClose }: Props) 
 
     const senderName = extractFullname(email.sender) || extractEmailAddress(email.sender) || "Unknown";
     const senderEmail = extractEmailAddress(email.sender);
-    const initial = senderName[0]?.toUpperCase() || "?";
 
     const subject = email.subject || "";
     const reply = () =>
@@ -263,9 +262,17 @@ export default function ReadingPane({ email, account, folder, onClose }: Props) 
             <div className="absolute inset-0 bg-black/55" onClick={onClose} aria-hidden />
 
             <div className="relative w-[900px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-48px)] bg-[#252525] rounded-xl overflow-hidden shadow-[0_12px_30px_rgba(0,0,0,0.4)] flex flex-col">
-                {/* Toolbar */}
-                <div className="flex items-center justify-between px-2 pt-1.5 pb-2 shrink-0">
-                    <div className="flex items-center gap-2">
+                {/* Toolbar — close is the leftmost control (mockup F2) */}
+                <div className="flex items-center px-2 pt-1.5 pb-2 shrink-0 gap-1">
+                    <button
+                        type="button"
+                        title="Close (Esc)"
+                        className="w-6 h-6 rounded-full bg-[#373737] flex items-center justify-center text-[#ffffff71] hover:text-[#d3d3d3] transition-colors"
+                        onClick={onClose}
+                    >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                    <div className="flex items-center gap-1 p-1">
                         <ToolbarButton title="Archive" onClick={() => comingSoon("Archive")}>
                             <>
                                 <rect x="3" y="3" width="18" height="5" rx="1" />
@@ -314,16 +321,10 @@ export default function ReadingPane({ email, account, folder, onClose }: Props) 
                             </>
                         </ToolbarButton>
                     </div>
-                    <ToolbarButton title="Close (Esc)" onClick={onClose}>
-                        <>
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </>
-                    </ToolbarButton>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto px-5 pb-4">
+                <div className="flex-1 overflow-y-auto px-[42px] pb-4">
                     <div className="max-w-[800px] flex flex-col gap-3">
                         <h2 className="text-[22px]/[26px] font-semibold text-[#d3d3d3] py-0.5">
                             {email.subject || "(no subject)"}
@@ -332,18 +333,16 @@ export default function ReadingPane({ email, account, folder, onClose }: Props) 
                         {/* Labels row (mockup F2: dimmed Add label + chips) */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <LabelsRow key={uid} labels={labels} onChange={setLabels} />
-                            <RouteBadge route={emailDeliveryRoute(email)} hollow />
                         </div>
 
+                        {/* Message card (mockup F2: raised rounded-10 card) */}
+                        <div className="pt-3 px-4 pb-4 rounded-[10px] shadow-notion-btn bg-notion-surface flex flex-col gap-3">
                         {/* Sender row */}
-                        <div className="relative flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4a9eff] to-[#2383e2] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                                {initial}
-                            </div>
-                            <div className="min-w-0">
-                                <div className="text-sm font-medium text-[#d3d3d3] truncate">{senderName}</div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-baseline gap-1 min-w-0">
+                                <span className="text-sm font-medium text-[#d3d3d3] truncate">{senderName}</span>
                                 {senderEmail && senderEmail !== senderName && (
-                                    <div className="text-sm text-[#7f7f7f] truncate">{senderEmail}</div>
+                                    <span className="text-sm text-[#7f7f7f] truncate">{senderEmail}</span>
                                 )}
                             </div>
                             <div className="ml-auto flex items-center gap-2 pr-1">
@@ -373,16 +372,18 @@ export default function ReadingPane({ email, account, folder, onClose }: Props) 
                                         </>
                                     </Icon>
                                 </button>
-                                <span className="text-xs text-[#7f7f7f] whitespace-nowrap">
+                                <RouteBadge route={emailDeliveryRoute(email)} hollow />
+                                <span className="text-sm text-[#7f7f7f] whitespace-nowrap">
                                     {formatFullDate(email.date)}
                                 </span>
                             </div>
                         </div>
 
                         {/* Recipients */}
-                        <div className="flex items-center gap-2 text-sm">
-                            <span className="text-[#7f7f7f]">To</span>
-                            <span className="text-[#d3d3d3] truncate">{email.receivers}</span>
+                        <div className="flex items-center gap-1 text-sm text-[#9b9b9b]">
+                            <span>To</span>
+                            <span className="truncate">{email.receivers}</span>
+                            <svg className="w-3.5 h-3.5 shrink-0 text-[#ffffff48]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                         </div>
 
                         {/* Body — the list preview renders INSTANTLY while the
@@ -462,6 +463,7 @@ export default function ReadingPane({ email, account, folder, onClose }: Props) 
                                 </Icon>
                                 Forward
                             </button>
+                        </div>
                         </div>
                     </div>
                 </div>

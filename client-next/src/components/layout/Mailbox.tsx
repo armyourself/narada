@@ -18,7 +18,7 @@ import { local } from "@/lib/locales";
 import { DEFAULT_LANGUAGE } from "@/lib/constants";
 import type { Account, Email, SearchCriteria } from "@/lib/types";
 import type { DeliveryRoute } from "@/lib/stores/mainNav";
-import RouteBadge, { emailDeliveryRoute, routeMeta } from "@/components/views/RouteBadge";
+import { emailDeliveryRoute, routeMeta } from "@/components/views/RouteBadge";
 import ReadingPane from "./ReadingPane";
 import SearchPanel from "./SearchPanel";
 
@@ -32,54 +32,59 @@ interface ChipProps {
 function Chip({ label, active, chevron, onClick }: ChipProps) {
     return (
         <button
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+            className={`flex items-center gap-[3px] h-6 px-2 rounded-full text-sm font-medium transition-colors ${
                 active
-                    ? "border-notion-accent text-notion-accent bg-notion-accent-tint"
-                    : "border-notion-border text-notion-text-secondary hover:bg-notion-hover"
+                    ? "text-notion-accent bg-notion-accent-tint"
+                    : "text-notion-text-secondary hover:bg-notion-hover"
             }`}
             onClick={onClick}
         >
             <span>{label}</span>
             {chevron && (
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
             )}
         </button>
     );
 }
 
-function EmailRow({ email, onOpen }: { email: Email; onOpen: (email: Email) => void }) {
+function EmailRow({
+    email,
+    selected,
+    onOpen,
+}: {
+    email: Email;
+    selected: boolean;
+    onOpen: (email: Email) => void;
+}) {
     const unread = isUnread(email);
     const snippet = getSnippet(email);
 
     return (
         <button
-            className="group flex items-center justify-between py-2.5 px-2 hover:bg-notion-hover rounded-md cursor-pointer transition-colors w-full text-left"
+            className={`group flex items-center gap-1.5 h-10 pl-[7px] pr-10 rounded-lg cursor-pointer transition-colors w-full text-left ${
+                selected ? "bg-notion-active" : "hover:bg-notion-hover"
+            }`}
             onClick={() => onOpen(email)}
         >
-            <div className="flex items-center space-x-3 min-w-0 pr-4 w-full">
+            <span className="w-5 shrink-0 flex items-center pl-0.5">
                 <span
-                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${unread ? "bg-notion-accent" : "bg-transparent"}`}
+                    className={`w-1.5 h-1.5 rounded-full ${unread ? "bg-notion-accent" : "bg-transparent"}`}
                 ></span>
-                <span
-                    className={`${unread ? "font-semibold" : "font-medium"} text-sm text-notion-text w-44 truncate flex-shrink-0`}
-                >
-                    {getSenderName(email)}
+            </span>
+            <span className="w-[204px] shrink-0 truncate text-sm font-semibold text-notion-text">
+                {getSenderName(email)}
+            </span>
+            <span className={`flex-1 min-w-0 truncate text-sm text-notion-text ${unread ? "font-semibold" : "font-normal"}`}>
+                {getSubject(email)}
+            </span>
+            {snippet && (
+                <span className="hidden lg:block w-[180px] shrink-0 truncate text-sm text-notion-text-muted opacity-90 pl-0.5" title={snippet}>
+                    {snippet}
                 </span>
-                <span className="text-sm truncate min-w-0 flex-1">
-                    <span className={unread ? "font-semibold text-notion-text" : "font-medium text-notion-text"}>
-                        {getSubject(email)}
-                    </span>
-                    {snippet && (
-                        <span className="text-notion-text-muted font-normal" title={snippet}>
-                            {" "}{snippet}
-                        </span>
-                    )}
-                </span>
-            </div>
-            <div className="flex items-center space-x-3 flex-shrink-0">
-                <RouteBadge route={emailDeliveryRoute(email)} />
-                <span className="text-xs text-notion-text-muted w-16 text-right">{formatTime(email.date)}</span>
-            </div>
+            )}
+            <span className="w-[117px] shrink-0 pl-9 text-right text-sm text-notion-text-muted">
+                {formatTime(email.date)}
+            </span>
         </button>
     );
 }
@@ -284,15 +289,15 @@ export default function Mailbox() {
     return (
         <>
             {/* Header Toolbar */}
-            <header className="h-[50px] border-b border-notion-border px-6 flex items-center justify-between flex-shrink-0 bg-notion-canvas">
+            <header className="h-[50px] pl-5 pr-11 gap-4 flex items-center justify-between flex-shrink-0 bg-notion-canvas">
                 <div className="flex items-center space-x-2.5">
                     <div className="w-6 h-6 rounded flex items-center justify-center">
                         <svg className="w-5 h-5 text-notion-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></svg>
                     </div>
-                    <h1 className="text-base font-semibold text-notion-text">{folderTitle}</h1>
+                    <h1 className="text-[17px] leading-[22px] font-semibold text-notion-text">{folderTitle}</h1>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <button className="flex items-center space-x-1.5 px-3 py-1 rounded-md border border-notion-border hover:bg-notion-hover text-xs font-medium text-notion-text-secondary shadow-notion-btn transition-colors">
+                    <button className="flex items-center gap-1.5 h-7 px-2 rounded-lg hover:bg-notion-hover text-xs font-medium text-notion-text-secondary shadow-notion-btn transition-colors">
                         <svg className="w-3.5 h-3.5 text-notion-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
                         <span>Auto label</span>
                     </button>
@@ -349,7 +354,7 @@ export default function Mailbox() {
             )}
 
             {/* Filter Chips */}
-            <div className="h-[42px] border-b border-notion-border px-6 flex items-center gap-2 flex-shrink-0 bg-notion-canvas">
+            <div className="h-[46px] px-6 pb-1.5 gap-1.5 flex items-center flex-shrink-0 bg-notion-canvas">
                 <Chip label="Categories" chevron onClick={() => comingSoon("Categories")} />
                 <Chip label="Labels" chevron onClick={() => comingSoon("Labels")} />
                 <Chip
@@ -390,11 +395,12 @@ export default function Mailbox() {
                 className="flex-1 overflow-y-auto px-6 py-3"
             >
                 {emails.length > 0 ? (
-                    <div className="space-y-0.5">
+                    <div>
                         {emails.map((email) => (
                             <EmailRow
                                 key={`${email.uid}-${email.message_id}`}
                                 email={email}
+                                selected={selected?.uid === email.uid}
                                 onOpen={openEmailInPane}
                             />
                         ))}

@@ -33,13 +33,16 @@ from cryptography.hazmat.primitives.serialization import (
 
 
 # --- NIP-19 bech32 encoding ------------------------------------------------
+# NIP-19 uses plain bech32 (checksum constant 1), NOT bech32m
+# (0x2bc830a3), and carries no witness-version prefix: the string is
+# hrp + "1" + convertbits(bytes, 8, 5) + 6-char checksum.
 
 _BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
-_BECH32M_CONST = 0x2BC830A3
+_BECH32_CONST = 1
 
 
-def _bech32m_polymod(values: list[int]) -> int:
-    """Internal function that computes the Bech32m polymod."""
+def _bech32_polymod(values: list[int]) -> int:
+    """Internal function that computes the Bech32 polymod."""
     GEN = [0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3]
     chk = 1
     for v in values:
@@ -54,13 +57,13 @@ def _bech32_hrp_expand(hrp: str) -> list[int]:
     return [ord(x) >> 5 for x in hrp] + [0] + [ord(x) & 31 for x in hrp]
 
 
-def _bech32m_verify_checksum(hrp: str, data: list[int]) -> bool:
-    return _bech32m_polymod(_bech32_hrp_expand(hrp) + data) == _BECH32M_CONST
+def _bech32_verify_checksum(hrp: str, data: list[int]) -> bool:
+    return _bech32_polymod(_bech32_hrp_expand(hrp) + data) == _BECH32_CONST
 
 
-def _bech32m_create_checksum(hrp: str, data: list[int]) -> list[int]:
+def _bech32_create_checksum(hrp: str, data: list[int]) -> list[int]:
     values = _bech32_hrp_expand(hrp) + data
-    polymod = _bech32m_polymod(values + [0] * 6) ^ _BECH32M_CONST
+    polymod = _bech32_polymod(values + [0] * 6) ^ _BECH32_CONST
     return [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
 
 
@@ -88,60 +91,64 @@ def _convertbits(data: list[int], frombits: int, tobits: int, pad: bool = True) 
     return ret
 
 
-def bech32_encode(hrp: str, witver: int, witprog: list[int]) -> str:
-    """Encode a bech32m string (NIP-19 uses witness version 0)."""
-    data = _convertbits(witprog, 8, 5)
-    combined = [witver] + data + _bech32m_create_checksum(hrp, [witver] + data)
+def bech32_encode(hrp: str, witprog: list[int]) -> str:
+    """Encode raw bytes as a NIP-19 bech32 string (no witness version)."""
+    converted = _convertbits(witprog, 8, 5)
+    combined = converted + _bech32_create_checksum(hrp, converted)
     return hrp + "1" + "".join(_BECH32_CHARSET[d] for d in combined)
 
 
-def bech32_decode(bech: str) -> tuple[str, int, list[int]]:
-    """Decode a bech32m string. Returns (hrp, witness_version, witness_program)."""
+def bech32_decode(bech: str) -> tuple[str, list[int]]:
+    """Decode a NIP-19 bech32 string. Returns (hrp, raw bytes)."""
+    if bech.lower() != bech and bech.upper() != bech:
+        raise ValueError("Mixed-case bech32 string")
+    bech = bech.lower()
     pos = bech.rfind("1")
-    if pos < 1:
+    if pos < 1 or pos + 7 > len(bech):
         raise ValueError("Invalid bech32 string")
     hrp = bech[:pos]
-    data = [_BECH32_CHARSET.index(c) for c in bech[pos + 1:]]
-    if not _bech32m_verify_checksum(hrp, data):
-        raise ValueError("Invalid bech32m checksum")
-    data = data[:-6]
-    witver = data[0]
-    witprog = _convertbits(data[1:], 5, 8, pad=False)
-    return hrp, witver, witprog
+    try:
+        data = [_BECH32_CHARSET.index(c) for c in bech[pos + 1:]]
+    except ValueError as exc:
+        raise ValueError("Invalid bech32 character") from exc
+    if not _bech32_verify_checksum(hrp, data):
+        raise ValueError("Invalid bech32 checksum")
+    payload = _convertbits(data[:-6], 5, 8, pad=False)
+    return hrp, payload
 
 
 def npub_encode(pubkey_bytes: bytes) -> str:
-    """Encode a 32-byte public key as an npub bech32m string (NIP-19)."""
+    """Encode a 32-byte public key as an npub bech32 string (NIP-19)."""
     if len(pubkey_bytes) != 32:
         raise ValueError(f"Public key must be 32 bytes, got {len(pubkey_bytes)}")
-    return bech32_encode("npub", 0, list(pubkey_bytes))
+    return bech32_encode("npub", list(pubkey_bytes))
 
 
 def npub_decode(npub: str) -> bytes:
-    """Decode an npub bech32m string to raw 32-byte public key."""
-    hrp, witver, witprog = bech32_decode(npub)
+    """Decode an npub bech32 string to raw 32-byte public key."""
+    hrp, payload = bech32_decode(npub)
     if hrp != "npub":
         raise ValueError(f"Expected npub prefix, got {hrp}")
-    if witver != 0:
-        raise ValueError(f"Expected witness version 0, got {witver}")
-    return bytes(witprog)
+    if len(payload) != 32:
+        raise ValueError(f"Expected 32-byte public key, got {len(payload)} bytes")
+    return bytes(payload)
 
 
 def nsec_encode(seckey_bytes: bytes) -> str:
-    """Encode a 32-byte secret key as an nsec bech32m string (NIP-19)."""
+    """Encode a 32-byte secret key as an nsec bech32 string (NIP-19)."""
     if len(seckey_bytes) != 32:
         raise ValueError(f"Secret key must be 32 bytes, got {len(seckey_bytes)}")
-    return bech32_encode("nsec", 0, list(seckey_bytes))
+    return bech32_encode("nsec", list(seckey_bytes))
 
 
 def nsec_decode(nsec: str) -> bytes:
-    """Decode an nsec bech32m string to raw 32-byte secret key."""
-    hrp, witver, witprog = bech32_decode(nsec)
+    """Decode an nsec bech32 string to raw 32-byte secret key."""
+    hrp, payload = bech32_decode(nsec)
     if hrp != "nsec":
         raise ValueError(f"Expected nsec prefix, got {hrp}")
-    if witver != 0:
-        raise ValueError(f"Expected witness version 0, got {witver}")
-    return bytes(witprog)
+    if len(payload) != 32:
+        raise ValueError(f"Expected 32-byte secret key, got {len(payload)} bytes")
+    return bytes(payload)
 
 
 # --- NostrIdentity ----------------------------------------------------------
