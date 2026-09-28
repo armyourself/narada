@@ -11,7 +11,12 @@ import pytest
 
 from src.nostr.adapter import NostrAdapter
 from src.nostr.config import NostrConfig
-from src.nostr.events import KIND_EMAIL, create_event, verify_event
+from src.nostr.events import (
+    KIND_EMAIL,
+    NostrEvent,
+    create_event,
+    verify_event,
+)
 from src.nostr.identity import generate_nostr_identity
 from src.nostr.relay import RelayPool
 from src.mail_abstraction.base import Address, MessageSource
@@ -34,6 +39,30 @@ def _make_adapter(
         config=config,
         relay_pool=pool,
         data_dir=data_dir,
+    )
+
+
+def _encrypted_email_event(identity, plaintext_json: str) -> NostrEvent:
+    """Build a NIP-04 encrypted KIND_EMAIL event addressed to *identity*
+    (self-message), the shape `_handle_incoming_event()` expects."""
+    from src.nostr.encryption import (
+        _x25519_public_from_ed25519_public,
+        nip04_encrypt,
+    )
+
+    own_x25519 = _x25519_public_from_ed25519_public(
+        bytes.fromhex(identity.public_key_hex)
+    )
+    ciphertext = nip04_encrypt(
+        plaintext_json,
+        identity._private_key_bytes,
+        own_x25519,
+    )
+    return create_event(
+        identity,
+        kind=KIND_EMAIL,
+        content=ciphertext,
+        tags=[["p", identity.public_key_hex]],
     )
 
 
@@ -178,6 +207,63 @@ class TestNostrAdapterEventHandling:
         assert record["subject"] == "Test"
         assert record["source"] == "nostr"
         assert record["nostr_event_id"] == event.id
+
+    def test_persist_event_reports_newness(self, tmp_path):
+        adapter = _make_adapter(data_dir=tmp_path)
+        identity = generate_nostr_identity()
+        adapter.set_identity(identity)
+        event = create_event(
+            identity,
+            kind=KIND_EMAIL,
+            content="{}",
+            tags=[["p", identity.public_key_hex]],
+        )
+        body_data = {"subject": "Test", "sender": "A", "to": ["B"], "body_text": "x"}
+
+        assert adapter._persist_event(event, body_data) is True
+        assert adapter._persist_event(event, body_data) is False  # replayed
+
+    def test_handle_incoming_event_returns_newness(self, tmp_path):
+        adapter = _make_adapter(data_dir=tmp_path)
+        identity = generate_nostr_identity()
+        adapter.set_identity(identity)
+        payload = json.dumps({
+            "subject": "Test",
+            "sender": "Alice",
+            "to": ["Bob"],
+            "body_text": "Hello",
+            "sent_at": 1700000000,
+        })
+        event = _encrypted_email_event(identity, payload)
+
+        assert adapter._handle_incoming_event(event, identity) is True
+        assert adapter._handle_incoming_event(event, identity) is False
+
+    def test_handle_incoming_event_rejects_bad_signature(self, tmp_path):
+        adapter = _make_adapter(data_dir=tmp_path)
+        identity = generate_nostr_identity()
+        adapter.set_identity(identity)
+        event = create_event(identity, kind=KIND_EMAIL, content="{}")
+        forged = NostrEvent(
+            id=event.id,
+            pubkey=event.pubkey,
+            created_at=event.created_at,
+            kind=event.kind,
+            tags=event.tags,
+            content=event.content,
+            sig="0" * 128,
+        )
+        assert adapter._handle_incoming_event(forged, identity) is False
+
+    def test_is_fresh_window(self):
+        import time as _time
+
+        now = int(_time.time())
+        fresh = NostrEvent(created_at=now - 10)
+        stale = NostrEvent(created_at=now - 4000)
+        assert NostrAdapter._is_fresh(fresh) is True
+        assert NostrAdapter._is_fresh(stale) is False
+        assert NostrAdapter._is_fresh(fresh, window_seconds=5) is False
 
 
 class TestNostrAdapterMessageSource:

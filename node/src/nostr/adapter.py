@@ -54,6 +54,7 @@ from .events import (
     filter_for_email,
     KIND_EMAIL,
     KIND_ENCRYPTED_DM,
+    KIND_META,
 )
 from .identity import NostrIdentity, generate_nostr_identity
 from .relay import RelayPool
@@ -436,6 +437,38 @@ class NostrAdapter(MailAdapter):
         else:
             return False, f"Failed to publish to Nostr relays: {msg}"
 
+    # --- Profile (kind 0) -------------------------------------------------
+
+    def build_profile_event(self, profile: dict[str, Any]) -> NostrEvent:
+        """Sign a NIP-01 kind-0 metadata event for this identity.
+
+        Pure construction — no I/O — so it is unit-testable offline.
+        """
+        identity = self._ensure_identity()
+        content = json.dumps(profile, separators=(",", ":"), ensure_ascii=False)
+        return create_event(
+            identity,
+            kind=KIND_META,
+            content=content,
+            tags=[],
+        )
+
+    def publish_profile(self, profile: dict[str, Any]) -> tuple[bool, str]:
+        """Publish a kind-0 profile (name/about/picture…) to the relays."""
+        if not profile:
+            return False, "Profile is empty"
+        event = self.build_profile_event(profile)
+        try:
+            success, msg = self._run(
+                self._relay_pool.publish_with_failover(event),
+                timeout=self._operation_timeout(),
+            )
+        except Exception as exc:
+            return False, f"Profile publish failed: {exc}"
+        if success:
+            return True, f"Profile published ({event.id[:12]}…): {msg}"
+        return False, f"Profile publish failed: {msg}"
+
     # --- Receive --------------------------------------------------------
 
     def subscribe_for_messages(
@@ -463,8 +496,14 @@ class NostrAdapter(MailAdapter):
         ]
 
         def _on_event(event: NostrEvent) -> None:
-            self._handle_incoming_event(event, identity)
+            persisted = self._handle_incoming_event(event, identity)
             if on_message:
+                # Relays replay up to `limit` stored events on every REQ;
+                # only forward something that is either newly written or
+                # fresh off the wire, so a reconnect does not re-toast the
+                # whole mailbox history.
+                if not persisted and not self._is_fresh(event):
+                    return
                 msg = self._event_to_message(event)
                 if msg:
                     on_message(msg)
@@ -579,10 +618,13 @@ class NostrAdapter(MailAdapter):
         self._relay_pool.remove_relay(target.url)
         return True, f"Removed {target.url}"
 
-    def _handle_incoming_event(self, event: NostrEvent, identity: NostrIdentity) -> None:
-        """Handle an incoming Nostr event: verify, decrypt, persist."""
+    def _handle_incoming_event(self, event: NostrEvent, identity: NostrIdentity) -> bool:
+        """Handle an incoming Nostr event: verify, decrypt, persist.
+
+        Returns True when the event was newly written to the mailbox.
+        """
         if not verify_event(event):
-            return
+            return False
 
         try:
             from .encryption import _x25519_public_from_ed25519_public
@@ -606,9 +648,9 @@ class NostrAdapter(MailAdapter):
                 )
             body_data = json.loads(plaintext)
         except Exception:
-            return
+            return False
 
-        self._persist_event(event, body_data)
+        return self._persist_event(event, body_data)
 
     def _event_to_message(self, event: NostrEvent) -> Optional[Message]:
         """Convert a Nostr event to a MailAdapter Message."""
@@ -652,6 +694,14 @@ class NostrAdapter(MailAdapter):
             raw=None,
         )
 
+    @staticmethod
+    def _is_fresh(event: NostrEvent, window_seconds: int = 300) -> bool:
+        """True when the event was created within *window_seconds*."""
+        try:
+            return (int(time.time()) - int(event.created_at)) <= window_seconds
+        except (TypeError, ValueError):
+            return False
+
     def _load_seen_event_ids(self) -> set[str]:
         """Collect event ids already present in the mailbox (once)."""
         if self._seen_event_ids is not None:
@@ -676,17 +726,19 @@ class NostrAdapter(MailAdapter):
         self._seen_event_ids = ids
         return ids
 
-    def _persist_event(self, event: NostrEvent, body_data: dict) -> None:
+    def _persist_event(self, event: NostrEvent, body_data: dict) -> bool:
         """Persist a received Nostr event to the mailbox JSONL file.
 
         Relays replay stored events on every subscription (REQ), and a
         single event may match several active subscriptions, so each
         event id is persisted exactly once.
+
+        Returns True when the record was newly written.
         """
         with self._persist_lock:
             seen = self._load_seen_event_ids()
             if event.id in seen:
-                return
+                return False
             record = {
                 "uid": event.id,
                 "source": "nostr",
@@ -714,6 +766,7 @@ class NostrAdapter(MailAdapter):
             with open(self._mailbox_path, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
             seen.add(event.id)
+            return True
 
     # --- Watch (polling) ------------------------------------------------
 
@@ -736,6 +789,10 @@ class NostrAdapter(MailAdapter):
     @property
     def relay_pool(self) -> RelayPool:
         return self._relay_pool
+
+    @property
+    def subscription_id(self) -> Optional[str]:
+        return self._subscription_id
 
     @property
     def identity(self) -> Optional[NostrIdentity]:

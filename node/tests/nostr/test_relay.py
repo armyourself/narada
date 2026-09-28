@@ -46,6 +46,16 @@ class TestRelayPool:
         assert pool._is_duplicate("event1") is True
         assert pool._is_duplicate("event2") is False
 
+    def test_dedup_scoped_per_subscription(self):
+        """The same event id reaching two subscriptions (durable inbox
+        sub + live WebSocket sub) must be delivered to both; only
+        relay-level duplicates *within* a subscription collapse."""
+        pool = RelayPool()
+        assert pool._is_duplicate("sub_a:event1") is False
+        assert pool._is_duplicate("sub_b:event1") is False
+        assert pool._is_duplicate("sub_a:event1") is True
+        assert pool._is_duplicate("sub_b:event1") is True
+
     def test_clear_dedup_cache(self):
         pool = RelayPool()
         pool._is_duplicate("event1")

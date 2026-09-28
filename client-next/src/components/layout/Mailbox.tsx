@@ -14,9 +14,16 @@ import {
     isUnread,
 } from "@/lib/mailbox/display";
 import { MailboxController } from "@/lib/mailbox";
+import {
+    startNostrLive,
+    stopNostrLive,
+    subscribeNostrLive,
+} from "@/lib/nostr/subscribe";
 import { local } from "@/lib/locales";
 import { DEFAULT_LANGUAGE } from "@/lib/constants";
 import type { Account, Email, SearchCriteria } from "@/lib/types";
+import { Folder } from "@/lib/types";
+import { isStandardFolder } from "@/lib/utils/folder.utils";
 import type { DeliveryRoute } from "@/lib/stores/mainNav";
 import { emailDeliveryRoute, routeMeta } from "@/components/views/RouteBadge";
 import ReadingPane from "./ReadingPane";
@@ -240,6 +247,38 @@ export default function Mailbox() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
     }, []);
 
+    // Live Nostr feed: one socket per app (module-managed). Incoming
+    // events arrive server-persisted, so a refresh re-reads them; only
+    // the currently viewed folder matters, others pick the mail up on
+    // the next navigation.
+    const server = useSharedStore((s) => s.server);
+    const refreshRef = useRef<() => void>(() => {});
+
+    useEffect(() => {
+        const account =
+            currentAccountState !== "home" ? currentAccountState : accounts[0];
+        if (!server || !account) return;
+
+        startNostrLive(server, account.email_address);
+        const unsubscribe = subscribeNostrLive(() => {
+            const state = useSharedStore.getState();
+            const active =
+                state.currentAccount !== "home"
+                    ? state.currentAccount
+                    : state.accounts[0];
+            if (!active || active.email_address !== account.email_address) return;
+            const mailbox = state.mailboxes[active.email_address];
+            if (!mailbox) return;
+            if (isStandardFolder(mailbox.folder, Folder.Inbox)) {
+                refreshRef.current();
+            }
+        });
+        return () => {
+            unsubscribe();
+            stopNostrLive();
+        };
+    }, [server, currentAccountState, accounts]);
+
     const refresh = async () => {
         const currentAccount: Account | undefined =
             currentAccountState !== "home" ? currentAccountState : accounts[0];
@@ -258,6 +297,14 @@ export default function Mailbox() {
             setRefreshing(false);
         }
     };
+
+    // Keep the live-feed listener pointed at the latest refresh closure
+    // without re-opening the socket on every render.
+    useEffect(() => {
+        refreshRef.current = () => {
+            void refresh();
+        };
+    });
 
     // Advanced search: builds a SearchCriteria the backend applies to
     // every transport (IMAP SEARCH + local Nostr record filtering).

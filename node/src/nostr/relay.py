@@ -93,6 +93,10 @@ class NostrRelay:
         self._closing = False
         self._pending_ok: dict[str, asyncio.Future] = {}
         self._incoming: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        # Backoff state is separate from the cumulative reconnect counter:
+        # the counter must survive a successful connect (it is telemetry),
+        # while the backoff exponent resets once the relay comes back.
+        self._backoff_attempt = 0
 
     @property
     def status(self) -> RelayStatus:
@@ -121,7 +125,7 @@ class NostrRelay:
             self._status.connected = True
             self._status.last_connected_at = int(time.time())
             self._status.last_error = None
-            self._status.reconnect_count = 0
+            self._backoff_attempt = 0
             log.info("Connected to relay %s", self.url)
             self._start_listener()
             await self._resubscribe_all()
@@ -413,8 +417,14 @@ class NostrRelay:
         return events
 
     async def reconnect(self) -> bool:
-        """Attempt to reconnect with exponential backoff."""
-        delay = min(1.0 * (2 ** self._status.reconnect_count), self._max_reconnect_delay)
+        """Attempt to reconnect with exponential backoff.
+
+        ``reconnect_count`` is cumulative telemetry (it is never reset on
+        success); the backoff exponent uses a separate counter that resets
+        once the relay is reachable again.
+        """
+        delay = min(1.0 * (2 ** self._backoff_attempt), self._max_reconnect_delay)
+        self._backoff_attempt += 1
         self._status.reconnect_count += 1
         log.info("Reconnecting to %s in %.1fs (attempt %d)",
                  self.url, delay, self._status.reconnect_count)
@@ -550,8 +560,13 @@ class RelayPool:
                     evt: NostrEvent,
                     _relay: NostrRelay = relay,
                     _cb: Optional[Callable[[NostrEvent], None]] = on_event,
+                    _sub: str = subscription_id,
                 ) -> None:
-                    if not self._is_duplicate(evt.id):
+                    # Dedup is scoped per subscription: the same event may
+                    # legitimately reach several subscriptions (the durable
+                    # inbox sub and a live WebSocket sub), and only relays
+                    # duplicating it *within* one subscription must collapse.
+                    if not self._is_duplicate(f"{_sub}:{evt.id}"):
                         if _cb:
                             _cb(evt)
 

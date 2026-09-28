@@ -60,6 +60,14 @@ class RelayManageRequest(BaseModel):
     url: str
 
 
+class PublishProfileRequest(BaseModel):
+    account: str
+    name: str | None = None
+    display_name: str | None = None
+    about: str | None = None
+    picture: str | None = None
+
+
 # ── routes ────────────────────────────────────────────────────────────────
 
 
@@ -150,24 +158,68 @@ async def delete_identity(account: str) -> Response:
 
 @router.get("/nostr/status/{account}")
 async def nostr_status(account: str) -> Response:
-    """Connection status for a Nostr account."""
+    """Connection status for a Nostr account.
+
+    Includes a per-relay breakdown (connected / last error / reconnects)
+    so the UI can explain *why* a pool reports fewer live connections,
+    plus the identity and inbox-subscription state.
+    """
     adapter = nostr_handler.get_adapter(account)
     if adapter is None:
         return Response(
             success=False,
             message=f"No Nostr adapter for {account}",
         )
-    relay_count = adapter.relay_pool.connected_count()
-    total_relays = len(adapter.relay_pool.relays)
+    relays = [
+        {
+            "url": relay.url,
+            "connected": relay.is_connected,
+            "last_connected_at": relay.status.last_connected_at,
+            "last_error": relay.status.last_error,
+            "reconnect_count": relay.status.reconnect_count,
+        }
+        for relay in adapter.relay_pool.relays
+    ]
     return Response(
         success=True,
         message="Nostr status",
         data={
             "connected": adapter.is_connected(),
-            "relays_connected": relay_count,
-            "relays_total": total_relays,
+            "relays_connected": adapter.relay_pool.connected_count(),
+            "relays_total": len(adapter.relay_pool.relays),
+            "relays": relays,
+            "npub": (
+                adapter.identity.public_key_bech32 if adapter.identity else None
+            ),
+            "subscribed": adapter.subscription_id is not None,
         },
     )
+
+
+@router.post("/nostr/publish-profile")
+async def publish_profile(request: PublishProfileRequest) -> Response:
+    """Publish a NIP-01 kind-0 profile event (name/about/picture…) for
+    *account* to the configured relays."""
+    adapter = nostr_handler.get_adapter(request.account)
+    if adapter is None:
+        return Response(
+            success=False,
+            message=f"No Nostr identity for {request.account}",
+        )
+    profile = {
+        key: value
+        for key, value in {
+            "name": request.name,
+            "about": request.about,
+            "picture": request.picture,
+            "display_name": request.display_name,
+        }.items()
+        if value
+    }
+    if not profile:
+        return Response(success=False, message="Profile is empty")
+    ok, msg = adapter.publish_profile(profile)
+    return Response(success=ok, message=msg, data={"profile": profile} if ok else None)
 
 
 @router.get("/nostr/relays")
